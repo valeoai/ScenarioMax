@@ -3,7 +3,7 @@ import logging
 import os
 
 from scenariomax.logger_utils import get_logger, setup_logger
-from scenariomax.raw_to_unified.converter.write import merge_and_clean_tfrecord_files, write_to_directory
+from scenariomax.raw_to_unified.converter.write import merge_and_clean_tfrecord_files, write_to_directory, write_tf_record, write_gpudrive_json
 from scenariomax.unified_to_tfrecord.shard_tfexample import shard_tfrecord
 
 
@@ -12,13 +12,14 @@ logger = get_logger(__name__)
 
 def convert_dataset(args, dataset):
     logger.info(f"Starting conversion for dataset: {dataset}")
-
+    write_json = False
     if dataset == "waymo":
         from scenariomax.raw_to_unified.converter import waymo
 
         logger.info(f"Loading Waymo scenarios from {args.waymo_src}")
         scenarios = waymo.get_waymo_scenarios(args.waymo_src)
         convert_func = waymo.convert_waymo_scenario
+        write_func = write_tf_record
         preprocess_func = waymo.preprocess_waymo_scenarios
         dataset_name = "womd"
         dataset_version = "v1.3"
@@ -29,6 +30,7 @@ def convert_dataset(args, dataset):
         logger.info(f"Loading nuScenes scenarios from {args.nuscenes_src} (split: {args.split})")
         scenarios, nuscs = nuscenes.get_nuscenes_scenarios(args.nuscenes_src, args.split, args.num_workers)
         convert_func = nuscenes.convert_nuscenes_scenario
+        write_func = write_tf_record
         preprocess_func = None
         dataset_name = "nuscenes"
         dataset_version = "v1.0"
@@ -43,6 +45,7 @@ def convert_dataset(args, dataset):
         logger.info(f"Loading Argoverse2 scenarios from {args.argoverse2_src}")
         scenarios = get_av2_scenarios(args.argoverse2_src)
         convert_func = convert_av2_scenario
+        write_func = write_tf_record
         preprocess_func = preprocess_av2_scenarios
         dataset_name = "argoverse"
         dataset_version = "v2.0"
@@ -53,6 +56,12 @@ def convert_dataset(args, dataset):
         logger.info(f"Loading NuPlan scenarios from {args.nuplan_src} (maps: {os.getenv('NUPLAN_MAPS_ROOT', 'N/A')})")
         scenarios = nuplan.get_nuplan_scenarios(args.nuplan_src, os.getenv("NUPLAN_MAPS_ROOT"))
         convert_func = nuplan.convert_nuplan_scenario
+        if args.target_format == "tfrecord":
+            write_func = write_tf_record
+            write_json = False
+        elif args.target_format == "gpudrive":
+            write_func = write_gpudrive_json
+            write_json = True
         preprocess_func = None
         dataset_name = "nuplan"
         dataset_version = "v1.1"
@@ -69,12 +78,14 @@ def convert_dataset(args, dataset):
 
     write_to_directory(
         convert_func=convert_func,
+        write_func=write_func,
         scenarios=scenarios,
         output_path=output_path,
         dataset_name=dataset_name,
         dataset_version=dataset_version,
         num_workers=args.num_workers,
         preprocess=preprocess_func,
+        write_json=write_json,
         **additional_args,
     )
 
@@ -119,6 +130,12 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="A directory, the path to place the converted data",
+    )
+    parser.add_argument(
+        "--target_format",
+        type=str,
+        default=None,
+        help="The target format for nuplan (tfrecord or gpudrive).",
     )
     parser.add_argument(
         "--shard",
@@ -184,8 +201,9 @@ if __name__ == "__main__":
     for dataset in datasets_to_process:
         convert_dataset(args, dataset)
 
-    logger.info("Merging final TFRecord files")
-    merge_and_clean_tfrecord_files(args.dst, f"{args.tfrecord_name}.tfrecord")
+    if args.target == "tfrecord":
+        logger.info("Merging final TFRecord files")
+        merge_and_clean_tfrecord_files(args.dst, f"{args.tfrecord_name}.tfrecord")
 
     if args.shard > 1:
         logger.info(f"Sharding output into {args.shard} shards")
