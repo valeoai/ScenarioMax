@@ -46,11 +46,6 @@ if __name__ == "__main__":
         help="Control how many files to use. We will list all files in the raw data folder "
         "and select files[start_file_index: start_file_index+num_files]",
     )
-    parser.add_argument(
-        "--write-pickle",
-        action="store_true",
-        help="Write the converted data to pickle file",
-    )
     args = parser.parse_args()
 
     output_path = args.dst
@@ -71,5 +66,4 @@ if __name__ == "__main__":
         dataset_name="argoverse",
         num_workers=args.num_workers,
         preprocess=preprocess_av2_scenarios,
-        write_pickle=args.write_pickle,
     )

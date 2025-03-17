@@ -1,6 +1,6 @@
 # ScenarioMax
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ScenarioMax is an extension to [ScenarioNet](https://github.com/metadriverse/scenarionet) that transforms converted data from [ScenarioNet](https://github.com/metadriverse/scenarionet) into a standardized TFRecord format. It currently supports real-world datasets like Waymo, nuPlan, and nuScenes through a unified interface, making the data compatible with both [Waymax](https://github.com/waymo-research/waymax) and [V-Max](https://github.com/valeoai/V-Max).
@@ -27,27 +27,23 @@ For dataset setup, you can see the complete [ScenarioNet documention](https://sc
 
 ## Installation && Usage
 
-Support Python 3.9, 3.10
+Support 3.10
 
 ### Basic Installation
 ```bash
-pip install -r requirements.txt
-pip install protobuf==3.20.0
 pip install -e .
 ```
 
 ### With nuPlan Support
 ```bash
-pip install -r requirements.txt
-pip install protobuf==3.20.0
-pip install -e .[nuplan]
-pip install -r nuplan-devkit/requirements.txt
+pip install -e devkit/nuplan-devkit
+pip install -r devkit/nuplan-devkit/requirements.txt
 ```
 
 ### Usage
 
 ```bash
-python scenariomax/convert_dataset.py --waymo_src /data/datasets/womd/training/ --dst /data/test --log-level DEBUG --shard 10 --num-workers 10
+python scenariomax/convert_dataset.py --waymo_src /data/datasets/womd/training/ --dst /data/test --log-level DEBUG --shard 10 --num-workers 10 --format tfexample
 ```
 
 ## Data Pipeline

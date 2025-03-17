@@ -6,7 +6,7 @@ from scenariomax.raw_to_unified.converter.nuscenes import (
     get_nuscenes_scenarios,
 )
 from scenariomax.raw_to_unified.converter.write import write_to_directory
-from scenariomax.unified_to_tfrecord.constants import NUM_TS_FUTURE, NUM_TS_PAST
+from scenariomax.unified_to_tfexample.constants import NUM_TS_FUTURE, NUM_TS_PAST
 
 
 if __name__ == "__main__":
@@ -42,11 +42,6 @@ if __name__ == "__main__":
         default=8,
         help="number of workers to use",
     )
-    parser.add_argument(
-        "--write-pickle",
-        action="store_true",
-        help="Write the converted data to pickle file",
-    )
     args = parser.parse_args()
 
     map_radius = 300
@@ -75,5 +70,4 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
         nuscenes=nuscs,
         prediction=[version in prediction_split for _ in range(args.num_workers)],
-        write_pickle=args.write_pickle,
     )

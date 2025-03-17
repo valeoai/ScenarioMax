@@ -23,5 +23,5 @@ setup(
     packages=["scenariomax"],
     install_requires=get_requirements(),
     description="A toolkit for scenario-based autonomous vehicle testing",
-    python_requires=">=3.9",
+    python_requires=">=3.10",
 )

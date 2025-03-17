@@ -1,13 +1,15 @@
 import argparse
+import json
 import os
+
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from tqdm import tqdm
-import json
-from typing import Dict
 
-from build_gpudrive_example import build_gpudrive_example
+from scenariomax.unified_to_gpudrive import utils
+from scenariomax.unified_to_gpudrive.build_gpudrive_example import build_gpudrive_example
+
 
 def arg_parser():
     parser = argparse.ArgumentParser(description="Convert Scenarionet data to TFRecord")
@@ -16,16 +18,8 @@ def arg_parser():
         type=str,
         help="Root directory of data to convert",
     )
-    parser.add_argument(
-        "--dataset",
-        type=str,
-        help="Name of dataset to convert i.e. Nuplan etc."
-    )
-    parser.add_argument(
-        "--split",
-        type=str,
-        help="Split of dataset to convert, i.e. train, test, mini etc."
-    )
+    parser.add_argument("--dataset", type=str, help="Name of dataset to convert i.e. Nuplan etc.")
+    parser.add_argument("--split", type=str, help="Split of dataset to convert, i.e. train, test, mini etc.")
     parser.add_argument(
         "--num_files",
         type=int,
@@ -46,7 +40,7 @@ def arg_parser():
     return parser.parse_args()
 
 
-def process_scenario(path_to_scenario: str, debug: bool = False) -> Dict | None:
+def process_scenario(path_to_scenario: str, debug: bool = False) -> dict | None:
     try:
         scenario_to_convert = pd.read_pickle(path_to_scenario)
     except Exception as e:
@@ -65,33 +59,24 @@ def process_scenario(path_to_scenario: str, debug: bool = False) -> Dict | None:
 
     return dict_to_convert
 
-def convert_numpy(obj):
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, np.float32) or isinstance(obj, np.float64):
-        return float(obj)
-    elif isinstance(obj, np.int32) or isinstance(obj, np.int64):
-        return int(obj)
-    elif isinstance(obj, dict):
-        return {key: convert_numpy(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_numpy(item) for item in obj]
-    else:
-        return obj
 
 def process_and_save_scenario_chunk(pkle_files_chunk: list[str], output_dir: str, file_prefix: str, chunk_index: int):
     for path_to_scenario in tqdm(pkle_files_chunk, desc=f"Chunk {chunk_index}"):
         example = process_scenario(path_to_scenario)
         gpudrive_json_file = os.path.join(output_dir, f"{file_prefix}_{example['scenario_id']}.json")
         if example is not None:
-            with open(gpudrive_json_file, 'w') as f:
-                json.dump(convert_numpy(example), f)
+            with open(gpudrive_json_file, "w") as f:
+                json.dump(utils.convert_numpy(example), f)
 
     print(f"Chunk {chunk_index} saved to {gpudrive_json_file}")
 
 
 def write_gpudrive_from_scenariomax_files(
-    pkle_files: list[str], output_dir: str, file_prefix:str, num_files: int = None, n_jobs: int = -1,
+    pkle_files: list[str],
+    output_dir: str,
+    file_prefix: str,
+    num_files: int = None,
+    n_jobs: int = -1,
 ) -> None:
     os.makedirs(output_dir, exist_ok=True)
 
@@ -118,6 +103,7 @@ def write_gpudrive_from_scenariomax_files(
 
     print(f"GPUDrive files created in {output_dir}")
 
+
 def list_files(dir):
     r = []
     for root, dirs, files in os.walk(dir):
@@ -125,6 +111,7 @@ def list_files(dir):
             if name.endswith(".pkl"):
                 r.append(os.path.join(root, name))
     return r
+
 
 if __name__ == "__main__":
     args = arg_parser()
