@@ -3,6 +3,7 @@ import os
 import pickle
 import shutil
 from functools import partial
+import json
 
 import tensorflow as tf
 from joblib import Parallel, delayed
@@ -12,6 +13,7 @@ from scenariomax.logger_utils import get_logger
 from scenariomax.raw_to_unified.converter.description import ScenarioDescription as SD
 from scenariomax.raw_to_unified.converter.utils import contains_explicit_return, process_memory
 from scenariomax.unified_to_tfrecord.build_tfexample import build_tfexample
+from scenariomax.unified_to_gpudrive.build_gpudrive_example import build_gpudrive_example
 
 
 logger = get_logger(__name__)
@@ -31,6 +33,7 @@ def single_worker_preprocess(x, worker_index):
 
 def write_to_directory(
     convert_func,
+    write_func,
     scenarios,
     output_path,
     dataset_version,
@@ -38,6 +41,7 @@ def write_to_directory(
     num_workers=8,
     write_pickle=False,
     preprocess=None,
+    write_json=False,
     **kwargs,
 ):
     if preprocess is None:
@@ -86,6 +90,7 @@ def write_to_directory(
     func = partial(
         writing_to_directory_wrapper,
         convert_func=convert_func,
+        write_func=write_func,
         dataset_version=dataset_version,
         dataset_name=dataset_name,
         preprocess=preprocess,
@@ -104,8 +109,9 @@ def write_to_directory(
             raise ValueError(err_msg)
 
     # Merge tfrecord files into one
-    if not write_pickle:
-        logger.info(f"Merging TFRecord files for {dataset_name}")
+    if write_json:
+        merge_json_files(save_path)
+    elif not write_pickle:
         merge_and_clean_tfrecord_files(save_path, f"{dataset_name}.tfrecord")
 
 
@@ -172,10 +178,28 @@ def shuffle_tfrecord_file(tfrecord_file: str, buffer_size: int = 10000) -> None:
     os.replace(temp_file, tfrecord_file)
     logger.debug("Replaced original file with shuffled file")
 
+def merge_json_files(output_dir: str):
+    json_files = []
+
+    for out_dir in os.listdir(output_dir):
+        if os.path.isdir(os.path.join(output_dir, out_dir)):
+            list_dir = os.listdir(os.path.join(output_dir, out_dir))
+            json_files += [os.path.join(output_dir, out_dir, f) for f in list_dir if f.endswith(".json")]
+    
+    logger.info(f"Found {len(json_files)} JSON files to merge")
+    logger.info(f"Merging files into: {output_dir}")
+    for file in json_files:
+        shutil.move(file, output_dir)
+    
+    for out_dir in os.listdir(output_dir):
+        shutil.rmtree(os.path.join(output_dir, out_dir))
+
+    logger.info(f"All json files moved to {output_dir} and subdirs deleted.")
 
 def writing_to_directory_wrapper(
     args,
     convert_func,
+    write_func,
     dataset_version,
     dataset_name,
     write_pickle,
@@ -183,6 +207,7 @@ def writing_to_directory_wrapper(
 ):
     return write_to_directory_single_worker(
         convert_func=convert_func,
+        write_func=write_func,
         scenarios=args[0],
         output_path=args[3],
         dataset_version=dataset_version,
@@ -196,6 +221,7 @@ def writing_to_directory_wrapper(
 
 def write_to_directory_single_worker(
     convert_func,
+    write_func,
     scenarios,
     output_path,
     dataset_version,
@@ -253,33 +279,8 @@ def write_to_directory_single_worker(
             except Exception as e:
                 error_count += 1
                 logger.error(f"Worker {worker_index} failed to process scenario: {e}")
-
     else:
-        tf_record_file = os.path.join(output_path, "training.tfrecord")
-        logger.info(f"Worker {worker_index} writing to TFRecord: {tf_record_file}")
-
-        with tf.io.TFRecordWriter(tf_record_file) as writer:
-            for scenario in scenarios:
-                try:
-                    sd_scenario, _ = process_scenario(
-                        scenario,
-                        convert_func,
-                        dataset_version,
-                        dataset_name,
-                        **kwargs,
-                    )
-
-                    dict_to_convert = build_tfexample(sd_scenario)
-                    example = tf.train.Example(features=tf.train.Features(feature=dict_to_convert))
-
-                    if example is not None:
-                        writer.write(example.SerializeToString())
-                        processed_count += 1
-                        pbar.update(1)
-                        pbar.set_postfix({"processed": processed_count, "errors": error_count})
-                except Exception as e:
-                    error_count += 1
-                    logger.error(f"Worker {worker_index} failed to process scenario: {str(e)}")
+        write_func(output_path, worker_index, scenarios, convert_func, dataset_version, dataset_name, pbar, **kwargs)
 
     memory_final = process_memory()
     logger.info(
@@ -311,3 +312,57 @@ def process_scenario(scenario, convert_func, dataset_version, dataset_name, **kw
     SD.sanity_check(sd_scenario, check_self_type=True)
 
     return sd_scenario, export_file_name
+
+def write_tf_record(output_path, worker_index, scenarios, convert_func, dataset_version, dataset_name, pbar, **kwargs):
+    processed_count = 0
+    error_count = 0
+    tf_record_file = os.path.join(output_path, "training.tfrecord")
+    logger.info(f"Worker {worker_index} writing to TFRecord: {tf_record_file}")
+
+    with tf.io.TFRecordWriter(tf_record_file) as writer:
+        for scenario in scenarios:
+            try:
+                sd_scenario, _ = process_scenario(
+                    scenario,
+                    convert_func,
+                    dataset_version,
+                    dataset_name,
+                    **kwargs,
+                )
+
+                dict_to_convert = build_tfexample(sd_scenario)
+                example = tf.train.Example(features=tf.train.Features(feature=dict_to_convert))
+
+                if example is not None:
+                    writer.write(example.SerializeToString())
+                    processed_count += 1
+                    pbar.update(1)
+                    pbar.set_postfix({"processed": processed_count, "errors": error_count})
+            except Exception as e:
+                error_count += 1
+                logger.error(f"Worker {worker_index} failed to process scenario: {str(e)}")
+
+def write_gpudrive_json(output_path, worker_index, scenarios, convert_func, dataset_version, dataset_name, pbar, **kwargs):
+    logger.info(f"Worker {worker_index} writing to JSON: {output_path}")
+    processed_count = 0
+    error_count = 0
+    for scenario in scenarios:
+        try:
+            sd_scenario, export_file_name = process_scenario(
+                scenario, 
+                convert_func, 
+                dataset_version, 
+                dataset_name, 
+                **kwargs
+            )
+            gpudrive_json_file = os.path.join(output_path, f"{dataset_name}_{sd_scenario[SD.ID]}.json")
+            example = build_gpudrive_example(os.path.basename(export_file_name), sd_scenario)
+            if example is not None:
+                with open(gpudrive_json_file, "w") as f:
+                    json.dump(example, f)
+                processed_count += 1
+                pbar.update(1)
+                pbar.set_postfix({"processed": processed_count, "errors": error_count})
+        except Exception as e:
+            error_count += 1
+            logger.error(f"Worker {worker_index} failed to process scenario: {str(e)}")

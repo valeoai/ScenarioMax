@@ -1,6 +1,6 @@
 import logging
 import os
-
+from typing import Optional
 from google.cloud import logging as gcp_logging
 
 
@@ -47,7 +47,7 @@ def get_logger(name: str = "scenariomax") -> Logger:
     return Logger(name)
 
 
-def setup_logger(log_level: int | None = None, log_file: str | None = None):
+def setup_logger(log_level: Optional[int] = None, log_file: Optional[str] = None):
     """Set up the logger with proper configuration.
 
     Args:
