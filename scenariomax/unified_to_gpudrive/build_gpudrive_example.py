@@ -376,6 +376,8 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
         sdc_index = [index for index, object in enumerate(objects) if object["is_sdc"]]
         metadata = {
             "sdc_track_index": sdc_index[0],
+            "log_name": metadata["log_name"],
+            "ts": metadata["ts"], 
             "objects_of_interest" : [],
             "tracks_to_predict" : [],
         }
