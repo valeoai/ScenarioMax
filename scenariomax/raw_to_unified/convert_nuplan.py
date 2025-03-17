@@ -1,6 +1,10 @@
 import argparse
 import os
 
+
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 from scenariomax.raw_to_unified.converter.nuplan import convert_nuplan_scenario, get_nuplan_scenarios
 from scenariomax.raw_to_unified.converter.write import write_to_directory
 from scenariomax.raw_to_unified.utils import setup_logging
@@ -30,11 +34,6 @@ if __name__ == "__main__":
         action="store_true",
         help="for test use only. convert one log",
     )
-    parser.add_argument(
-        "--write-pickle",
-        action="store_true",
-        help="Write the converted data to pickle file",
-    )
     args = parser.parse_args()
 
     setup_logging()
@@ -55,5 +54,4 @@ if __name__ == "__main__":
         dataset_version="v1.1",
         dataset_name="nuplan",
         num_workers=args.num_workers,
-        write_pickle=args.write_pickle,
     )

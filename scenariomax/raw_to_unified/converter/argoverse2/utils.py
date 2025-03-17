@@ -36,22 +36,22 @@ _HIGHWAY_SPEED_LIMIT_MPH: Final[float] = 85.0
 
 
 def extract_tracks(tracks, sdc_idx, track_length):
-    ret = dict()
+    ret = {}
 
     def _object_state_template(object_id):
-        return dict(
-            type=None,
-            state=dict(  # Never add extra dim if the value is scalar.
-                position=np.zeros([track_length, 3], dtype=np.float32),
-                length=np.zeros([track_length], dtype=np.float32),
-                width=np.zeros([track_length], dtype=np.float32),
-                height=np.zeros([track_length], dtype=np.float32),
-                heading=np.zeros([track_length], dtype=np.float32),
-                velocity=np.zeros([track_length, 2], dtype=np.float32),
-                valid=np.zeros([track_length], dtype=bool),
-            ),
-            metadata=dict(track_length=track_length, type=None, object_id=object_id, dataset="av2"),
-        )
+        return {
+            "type": None,
+            "state": {  # Never add extra dim if the value is scalar.
+                "position": np.zeros([track_length, 3], dtype=np.float32),
+                "length": np.zeros([track_length], dtype=np.float32),
+                "width": np.zeros([track_length], dtype=np.float32),
+                "height": np.zeros([track_length], dtype=np.float32),
+                "heading": np.zeros([track_length], dtype=np.float32),
+                "velocity": np.zeros([track_length, 2], dtype=np.float32),
+                "valid": np.zeros([track_length], dtype=bool),
+            },
+            "metadata": {"track_length": track_length, "type": None, "object_id": object_id, "dataset": "av2"},
+        }
 
     track_category = []
 
@@ -107,9 +107,10 @@ def extract_tracks(tracks, sdc_idx, track_length):
 
 
 def extract_lane_mark(lane_mark):
-    line = dict()
+    line = {}
     line["type"] = get_lane_mark_type(lane_mark.mark_type)
     line["polyline"] = lane_mark.polyline.astype(np.float32)
+
     return line
 
 
@@ -180,7 +181,7 @@ def extract_map_features(map_features):
     polygons = [geom if geom.is_valid else geom.buffer(0) for geom in polygons]
     boundaries = gpd.GeoSeries(unary_union(polygons)).boundary.explode(index_parts=True)
     for idx, boundary in enumerate(boundaries[0]):
-        block_points = np.array(list(i for i in zip(boundary.coords.xy[0], boundary.coords.xy[1])))
+        block_points = np.array(list(zip(boundary.coords.xy[0], boundary.coords.xy[1])))
         # id = f'boundary_{idx}'
         # ret[id] = {SD.TYPE: ScenarioType.BOUNDARY_LINE, SD.POLYLINE: block_points}
 
@@ -189,7 +190,7 @@ def extract_map_features(map_features):
             ret[id] = {SD.TYPE: ScenarioType.BOUNDARY_LINE, SD.POLYLINE: block_points[i : i + 20]}
 
     for cross in ped_crossings:
-        bound = dict()
+        bound = {}
         bound["type"] = ScenarioType.CROSSWALK
         bound["polygon"] = cross.polygon.astype(np.float32)
         ret[str(cross.id)] = bound

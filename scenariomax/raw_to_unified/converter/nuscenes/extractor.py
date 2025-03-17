@@ -167,7 +167,7 @@ def get_map_features(scene_info, nuscenes: NuScenes, map_center, radius=500, poi
         polygons = [geom if geom.is_valid else geom.buffer(0) for geom in polygons]
         boundaries = gpd.GeoSeries(unary_union(polygons)).boundary.explode(index_parts=True)
         for idx, boundary in enumerate(boundaries[0]):
-            block_points = np.array(list(i for i in zip(boundary.coords.xy[0], boundary.coords.xy[1])))
+            block_points = np.array(list(zip(boundary.coords.xy[0], boundary.coords.xy[1])))
             mask = np.linalg.norm(block_points - map_center[:2], axis=-1) < radius
 
             if np.sum(mask) == 0:
@@ -280,19 +280,19 @@ def get_tracks_from_frames(nuscenes: NuScenes, scene_info, frames, num_to_interp
     for frame in frames:
         all_objs.update(frame.keys())
     tracks = {
-        k: dict(
-            type=ScenarioType.UNSET,
-            state=dict(
-                position=np.zeros(shape=(episode_len, 3)),
-                heading=np.zeros(shape=(episode_len,)),
-                velocity=np.zeros(shape=(episode_len, 2)),
-                valid=np.zeros(shape=(episode_len,)),
-                length=np.zeros(shape=(episode_len, 1)),
-                width=np.zeros(shape=(episode_len, 1)),
-                height=np.zeros(shape=(episode_len, 1)),
-            ),
-            metadata=dict(track_length=episode_len, type=ScenarioType.UNSET, object_id=k, original_id=k),
-        )
+        k: {
+            "type": ScenarioType.UNSET,
+            "state": {
+                "position": np.zeros(shape=(episode_len, 3)),
+                "heading": np.zeros(shape=(episode_len,)),
+                "velocity": np.zeros(shape=(episode_len, 2)),
+                "valid": np.zeros(shape=(episode_len,)),
+                "length": np.zeros(shape=(episode_len, 1)),
+                "width": np.zeros(shape=(episode_len, 1)),
+                "height": np.zeros(shape=(episode_len, 1)),
+            },
+            "metadata": {"track_length": episode_len, "type": ScenarioType.UNSET, "object_id": k, "original_id": k},
+        }
         for k in list(all_objs)
     }
 
@@ -356,7 +356,9 @@ def get_tracks_from_frames(nuscenes: NuScenes, scene_info, frames, num_to_interp
 
         # position
         interpolate_tracks[id]["state"]["position"] = interpolate(
-            track["state"]["position"], track["state"]["valid"], new_valid,
+            track["state"]["position"],
+            track["state"]["valid"],
+            new_valid,
         )
         if id == "ego" and not scene_info.get("prediction", False):
             assert "prediction" not in scene_info
@@ -366,12 +368,14 @@ def get_tracks_from_frames(nuscenes: NuScenes, scene_info, frames, num_to_interp
                 imu_pos = np.asarray([state["pos"] for state in canbus.get_messages(scene_info["name"], "pose")[::5]])
                 min_len = min(len(imu_pos), new_episode_len)
                 interpolate_tracks[id]["state"]["position"][:min_len] = imu_pos[:min_len]
-            except:
-                logger.info("Fail to get canbus data for {}".format(scene_info["name"]))
+            except Exception as e:
+                logger.info("Fail to get canbus data for {} - Error: {}".format(scene_info["name"], e))
 
         # velocity
         interpolate_tracks[id]["state"]["velocity"] = interpolate(
-            track["state"]["velocity"], track["state"]["valid"], new_valid,
+            track["state"]["velocity"],
+            track["state"]["valid"],
+            new_valid,
         )
         vel = interpolate_tracks[id]["state"]["position"][1:] - interpolate_tracks[id]["state"]["position"][:-1]
         interpolate_tracks[id]["state"]["velocity"][:-1] = vel[..., :2] / 0.1
@@ -401,8 +405,8 @@ def get_tracks_from_frames(nuscenes: NuScenes, scene_info, frames, num_to_interp
                 )
                 min_len = min(len(imu_heading), new_episode_len)
                 interpolate_tracks[id]["state"]["heading"][:min_len] = imu_heading[:min_len]
-            except:
-                logger.info("Fail to get canbus data for {}".format(scene_info["name"]))
+            except Exception as e:
+                logger.info("Fail to get canbus data for {} - Error: {}".format(scene_info["name"], e))
 
         for k, v in track["state"].items():
             if k in ["valid", "heading", "position", "velocity"]:

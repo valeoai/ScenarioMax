@@ -84,20 +84,20 @@ def extract_tracks(tracks, sdc_idx, track_length):
     tracks_dict = {}
 
     def _object_state_template(object_id):
-        return dict(
-            type=None,
-            state=dict(
+        return {
+            "type": None,
+            "state": {
                 # Never add extra dim if the value is scalar.
-                position=np.zeros([track_length, 3], dtype=np.float32),
-                length=np.zeros([track_length], dtype=np.float32),
-                width=np.zeros([track_length], dtype=np.float32),
-                height=np.zeros([track_length], dtype=np.float32),
-                heading=np.zeros([track_length], dtype=np.float32),
-                velocity=np.zeros([track_length, 2], dtype=np.float32),
-                valid=np.zeros([track_length], dtype=bool),
-            ),
-            metadata=dict(track_length=track_length, type=None, object_id=object_id, dataset="waymo"),
-        )
+                "position": np.zeros([track_length, 3], dtype=np.float32),
+                "length": np.zeros([track_length], dtype=np.float32),
+                "width": np.zeros([track_length], dtype=np.float32),
+                "height": np.zeros([track_length], dtype=np.float32),
+                "heading": np.zeros([track_length], dtype=np.float32),
+                "velocity": np.zeros([track_length, 2], dtype=np.float32),
+                "valid": np.zeros([track_length], dtype=bool),
+            },
+            "metadata": {"track_length": track_length, "type": None, "object_id": object_id, "dataset": "waymo"},
+        }
 
     for obj in tracks:
         object_id = str(obj.id)
@@ -223,18 +223,18 @@ def extract_dynamic_map_states(dynamic_map_states, track_length):
     processed_dynamics_map_states = {}
 
     def _traffic_light_state_template(object_id):
-        return dict(
-            type=ScenarioType.TRAFFIC_LIGHT,
-            state=dict(object_state=[None] * track_length),
-            lane=None,
-            stop_point=np.zeros([3], dtype=np.float32),
-            metadata=dict(
-                track_length=track_length,
-                type=ScenarioType.TRAFFIC_LIGHT,
-                object_id=object_id,
-                dataset="waymo",
-            ),
-        )
+        return {
+            "type": ScenarioType.TRAFFIC_LIGHT,
+            "state": {"object_state": [None] * track_length},
+            "lane": None,
+            "stop_point": np.zeros([3], dtype=np.float32),
+            "metadata": {
+                "track_length": track_length,
+                "type": ScenarioType.TRAFFIC_LIGHT,
+                "object_id": object_id,
+                "dataset": "waymo",
+            },
+        }
 
     for step_count, step_states in enumerate(dynamic_map_states):
         # Each step_states is the state of all objects in one time step

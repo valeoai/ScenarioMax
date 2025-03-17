@@ -1,5 +1,6 @@
 import enum
 
+
 class MapElementIds(enum.IntEnum):
     """Ids for different map elements to be mapped into a tensor to be consistent with
     https://github.com/waymo-research/waymax/blob/main/waymax/datatypes/roadgraph.py.
@@ -31,6 +32,7 @@ class MapElementIds(enum.IntEnum):
     DRIVEWAY = 20  # New datatype in v1.2.0: Driveway entrances
     UNKNOWN = -1
 
+
 TYPE_TO_MAP_ID = {
     "ROAD_EDGE_UNKNOWN": MapElementIds.ROAD_EDGE_UNKNOWN,
     "ROAD_EDGE_BOUNDARY": MapElementIds.ROAD_EDGE_BOUNDARY,
@@ -48,11 +50,11 @@ TYPE_TO_MAP_ID = {
     "ROAD_LINE_SOLID_SINGLE_YELLOW": MapElementIds.ROAD_LINE_SOLID_SINGLE_YELLOW,
     "ROAD_LINE_SOLID_DOUBLE_YELLOW": MapElementIds.ROAD_LINE_SOLID_DOUBLE_YELLOW,
     "ROAD_LINE_PASSING_DOUBLE_YELLOW": MapElementIds.ROAD_LINE_PASSING_DOUBLE_YELLOW,
-    "STOP_SIGN":MapElementIds.STOP_SIGN,
-    "CROSSWALK":MapElementIds.CROSSWALK,
-    "SPEED_BUMP":MapElementIds.SPEED_BUMP,
+    "STOP_SIGN": MapElementIds.STOP_SIGN,
+    "CROSSWALK": MapElementIds.CROSSWALK,
+    "SPEED_BUMP": MapElementIds.SPEED_BUMP,
     # New in WOMD v1.2.0: Driveway entrances
-    "DRIVEWAY":MapElementIds.DRIVEWAY,
+    "DRIVEWAY": MapElementIds.DRIVEWAY,
 }
 
 TYPE_TO_MAP_FEATURE_NAME = {
@@ -61,4 +63,4 @@ TYPE_TO_MAP_FEATURE_NAME = {
     "LANE": "lane",
 }
 
-FILTERED_TYPES = ['TRAFFIC_CONE', 'TRAFFIC_BARRIER']
+FILTERED_TYPES = ["TRAFFIC_CONE", "TRAFFIC_BARRIER"]

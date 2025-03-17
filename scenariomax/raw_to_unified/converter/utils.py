@@ -21,7 +21,7 @@ def dict_recursive_remove_array_and_set(d):
     if isinstance(d, set):
         return tuple(d)
     if isinstance(d, dict):
-        for k in d.keys():
+        for k in d:
             d[k] = dict_recursive_remove_array_and_set(d[k])
     return d
 

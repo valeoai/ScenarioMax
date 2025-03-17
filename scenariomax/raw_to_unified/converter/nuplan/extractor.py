@@ -99,7 +99,13 @@ def extract_traffic_light(scenario, center):
             "state": {SD.TRAFFIC_LIGHT_STATUS: [ScenarioType.LIGHT_UNKNOWN] * length},
             SD.TRAFFIC_LIGHT_POSITION: None,
             SD.TRAFFIC_LIGHT_LANE: str(k),
-            "metadata": dict(track_length=length, type=None, object_id=str(k), lane_id=str(k), dataset="nuplan"),
+            "metadata": {
+                "track_length": length,
+                "type": None,
+                "object_id": str(k),
+                "lane_id": str(k),
+                "dataset": "nuplan",
+            },
         }
         for k in list(all_lights)
     }
@@ -168,19 +174,25 @@ def extract_traffic(scenario: NuPlanScenario, center):
         detection_ret.append(new_frame_data)
 
     tracks = {
-        k: dict(
-            type=ScenarioType.UNSET,
-            state=dict(
-                position=np.zeros(shape=(episode_len, 3)),
-                heading=np.zeros(shape=(episode_len,)),
-                velocity=np.zeros(shape=(episode_len, 2)),
-                valid=np.zeros(shape=(episode_len,)),
-                length=np.zeros(shape=(episode_len, 1)),
-                width=np.zeros(shape=(episode_len, 1)),
-                height=np.zeros(shape=(episode_len, 1)),
-            ),
-            metadata=dict(track_length=episode_len, nuplan_type=None, type=None, object_id=k, nuplan_id=k),
-        )
+        k: {
+            "type": ScenarioType.UNSET,
+            "state": {
+                "position": np.zeros(shape=(episode_len, 3)),
+                "heading": np.zeros(shape=(episode_len,)),
+                "velocity": np.zeros(shape=(episode_len, 2)),
+                "valid": np.zeros(shape=(episode_len,)),
+                "length": np.zeros(shape=(episode_len, 1)),
+                "width": np.zeros(shape=(episode_len, 1)),
+                "height": np.zeros(shape=(episode_len, 1)),
+            },
+            "metadata": {
+                "track_length": episode_len,
+                "nuplan_type": None,
+                "type": None,
+                "object_id": k,
+                "nuplan_id": k,
+            },
+        }
         for k in list(all_objs)
     }
 
@@ -188,7 +200,7 @@ def extract_traffic(scenario: NuPlanScenario, center):
 
     for frame_idx, frame in enumerate(detection_ret):
         for nuplan_id, obj_state in frame.items():
-            assert isinstance(obj_state, Agent) or isinstance(obj_state, StaticObject)
+            assert isinstance(obj_state, Agent | StaticObject)
             obj_type = get_traffic_obj_type(obj_state.tracked_object_type)
             if obj_type is None:
                 tracks_to_remove.add(nuplan_id)
@@ -406,7 +418,7 @@ def process_boundary(map_features, nearest_vector_map, center, block_polygons):
     boundaries = gpd.GeoSeries(unary_union(interpolygons + block_polygons)).boundary.explode(index_parts=True)
 
     for idx, boundary in enumerate(boundaries[0]):
-        block_points = np.array(list(i for i in zip(boundary.coords.xy[0], boundary.coords.xy[1])))
+        block_points = np.array(list(zip(boundary.coords.xy[0], boundary.coords.xy[1])))
         block_points = get_center_vector(block_points, center)[::-1]
         id = f"boundary_{idx}"
         map_features[id] = {SD.TYPE: "ROAD_EDGE_BOUNDARY", SD.POLYLINE: block_points}

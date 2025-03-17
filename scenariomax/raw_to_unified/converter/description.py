@@ -151,7 +151,7 @@ class ScenarioDescription(dict):
         for id, feature in map_feature.items():
             if ScenarioType.is_lane(feature[ScenarioDescription.TYPE]):
                 assert ScenarioDescription.POLYLINE in feature, "No lane center line in map feature"
-                assert isinstance(feature[ScenarioDescription.POLYLINE], (np.ndarray, list, tuple)), (
+                assert isinstance(feature[ScenarioDescription.POLYLINE], np.ndarray | list | tuple), (
                     "lane center line is in invalid type"
                 )
 
@@ -178,7 +178,7 @@ class ScenarioDescription(dict):
         # Check state arrays temporal consistency
         assert isinstance(obj_state[cls.STATE], dict)
         for state_key, state_array in obj_state[cls.STATE].items():
-            assert isinstance(state_array, (np.ndarray, list, tuple))
+            assert isinstance(state_array, np.ndarray | list | tuple)
             assert len(state_array) == scenario_length
 
             if not isinstance(state_array, np.ndarray):
@@ -286,7 +286,7 @@ class ScenarioDescription(dict):
         return os.path.basename(file_name)[:3] == "sd_" or all(char.isdigit() for char in file_name)
 
     @staticmethod
-    def _calculate_num_moving_objects(scenario):
+    def calculate_num_moving_objects(scenario):
         """Calculate the number of moving objects, whose moving distance > 1m in this scenario."""
         # moving object
         number_summary_dict = {
@@ -351,9 +351,9 @@ class ScenarioDescription(dict):
 
         # object
         number_summary_dict[ScenarioDescription.SUMMARY.NUM_OBJECTS] = len(scenario[ScenarioDescription.TRACKS])
-        number_summary_dict[ScenarioDescription.SUMMARY.OBJECT_TYPES] = set(
+        number_summary_dict[ScenarioDescription.SUMMARY.OBJECT_TYPES] = {
             v["type"] for v in scenario[ScenarioDescription.TRACKS].values()
-        )
+        }
         object_types_counter = defaultdict(int)
         for v in scenario[ScenarioDescription.TRACKS].values():
             object_types_counter[v["type"]] += 1
@@ -366,7 +366,7 @@ class ScenarioDescription(dict):
         scenario[scenario.METADATA][scenario.SUMMARY.OBJECT_SUMMARY] = object_summaries
 
         # moving object
-        number_summary_dict.update(ScenarioDescription._calculate_num_moving_objects(scenario))
+        number_summary_dict.update(ScenarioDescription.calculate_num_moving_objects(scenario))
 
         # Number of different dynamic object states
         dynamic_object_states_types = set()
@@ -465,7 +465,7 @@ class ScenarioDescription(dict):
         SD = ScenarioDescription
         metadata = scenario[SD.METADATA]
         if SD.SUMMARY.NUM_MOVING_OBJECTS not in metadata[SD.SUMMARY.NUMBER_SUMMARY]:
-            num_summary = SD._calculate_num_moving_objects(scenario)
+            num_summary = SD.calculate_num_moving_objects(scenario)
         else:
             num_summary = metadata[SD.SUMMARY.NUMBER_SUMMARY]
 
