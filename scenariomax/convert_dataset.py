@@ -20,13 +20,10 @@ def convert_dataset(args, dataset):
 
     if args.target_format == "tfexample":
         postprocess_func = postprocess_tfexample
-        write_json = False
     elif args.target_format == "gpudrive":
         postprocess_func = postprocess_gpudrive
-        write_json = True
     elif args.target_format == "pickle":
         postprocess_func = None
-        write_json = False
     else:
         raise ValueError(f"Unsupported target format: {args.target_format}")
 
@@ -101,7 +98,6 @@ def convert_dataset(args, dataset):
         dataset_version=dataset_version,
         num_workers=args.num_workers,
         preprocess=preprocess_func,
-        write_json=write_json,
         **additional_args,
     )
 
@@ -148,7 +144,7 @@ if __name__ == "__main__":
         help="A directory, the path to place the converted data",
     )
     parser.add_argument(
-        "--format",
+        "--target_format",
         type=str,
         default="pickle",
         help="The target format for conversion (pickle, tfexample or gpudrive).",

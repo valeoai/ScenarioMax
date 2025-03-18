@@ -192,7 +192,7 @@ def write_to_directory_single_worker(
         f"Worker {worker_index} memory after preprocessing: {memory_after:.2f} MB (delta: {memory_after - memory_before:.2f} MB)",
     )
 
-    pbar = tqdm(desc=f"Worker {worker_index} processing scenarios", total=len(scenarios))
+    pbar = tqdm(desc=f"Worker {worker_index} processing scenarios")
     processed_count = 0
     error_count = 0
 
