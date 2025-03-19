@@ -43,7 +43,7 @@ pip install -r devkit/nuplan-devkit/requirements.txt
 ### Usage
 
 ```bash
-python scenariomax/convert_dataset.py --waymo_src /data/datasets/womd/training/ --dst /data/test --log-level INFO --shard 10 --num-workers 10 --format tfexample
+python scenariomax/convert_dataset.py --waymo_src /data/datasets/womd/training/ --dst /data/test --log_level INFO --shard 10 --num_workers 10 --format tfexample
 ```
 
 ## Data Pipeline
