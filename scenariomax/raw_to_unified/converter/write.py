@@ -73,7 +73,7 @@ def write_to_directory(
     kwargs_for_workers = [{} for _ in range(num_workers)]
     for key, value in kwargs.items():
         for i in range(num_workers):
-            kwargs_for_workers[i][key] = value[i]
+            kwargs_for_workers[i][key] = value
 
     save_path = copy.deepcopy(output_path)
     if os.path.exists(output_path):
@@ -192,7 +192,7 @@ def write_to_directory_single_worker(
         f"Worker {worker_index} memory after preprocessing: {memory_after:.2f} MB (delta: {memory_after - memory_before:.2f} MB)",
     )
 
-    pbar = tqdm(desc=f"Worker {worker_index} processing scenarios", total=len(scenarios))
+    pbar = tqdm(desc=f"Worker {worker_index} processing scenarios")
     processed_count = 0
     error_count = 0
 

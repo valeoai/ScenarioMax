@@ -20,13 +20,10 @@ def convert_dataset(args, dataset):
 
     if args.target_format == "tfexample":
         postprocess_func = postprocess_tfexample
-        write_json = False
     elif args.target_format == "gpudrive":
         postprocess_func = postprocess_gpudrive
-        write_json = True
     elif args.target_format == "pickle":
         postprocess_func = None
-        write_json = False
     else:
         raise ValueError(f"Unsupported target format: {args.target_format}")
 
@@ -34,7 +31,7 @@ def convert_dataset(args, dataset):
         from scenariomax.raw_to_unified.converter import waymo
 
         logger.info(f"Loading Waymo scenarios from {args.waymo_src}")
-        scenarios = waymo.get_waymo_scenarios(args.waymo_src)
+        scenarios = waymo.get_waymo_scenarios(args.waymo_src, num=args.num_files)
 
         preprocess_func = waymo.preprocess_waymo_scenarios
         convert_func = waymo.convert_waymo_scenario
@@ -74,7 +71,7 @@ def convert_dataset(args, dataset):
         from scenariomax.raw_to_unified.converter import nuplan
 
         logger.info(f"Loading NuPlan scenarios from {args.nuplan_src} (maps: {os.getenv('NUPLAN_MAPS_ROOT', 'N/A')})")
-        scenarios = nuplan.get_nuplan_scenarios(args.nuplan_src, os.getenv("NUPLAN_MAPS_ROOT"))
+        scenarios = nuplan.get_nuplan_scenarios(args.nuplan_src, os.getenv("NUPLAN_MAPS_ROOT"), num_files=args.num_files)
 
         preprocess_func = None
         convert_func = nuplan.convert_nuplan_scenario
@@ -101,7 +98,6 @@ def convert_dataset(args, dataset):
         dataset_version=dataset_version,
         num_workers=args.num_workers,
         preprocess=preprocess_func,
-        write_json=write_json,
         **additional_args,
     )
 
@@ -148,7 +144,7 @@ if __name__ == "__main__":
         help="A directory, the path to place the converted data",
     )
     parser.add_argument(
-        "--format",
+        "--target_format",
         type=str,
         default="pickle",
         help="The target format for conversion (pickle, tfexample or gpudrive).",
@@ -160,13 +156,13 @@ if __name__ == "__main__":
         help="Number of shards to split the output into",
     )
     parser.add_argument(
-        "--num-workers",
+        "--num_workers",
         type=int,
         default=8,
         help="Number of workers to use",
     )
     parser.add_argument(
-        "--tfrecord-name",
+        "--tfrecord_name",
         type=str,
         default="training",
         help="Name of the output tfrecord file",
@@ -177,16 +173,22 @@ if __name__ == "__main__":
         help="Which splits of nuScenes data should be used. Only applicable for nuScenes dataset.",
     )
     parser.add_argument(
-        "--log-level",
+        "--log_level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging level",
     )
     parser.add_argument(
-        "--log-file",
+        "--log_file",
         type=str,
         default=None,
         help="Optional log file path",
+    )
+    parser.add_argument(
+        "--num_files",
+        type=int,
+        default=None,
+        help="Optional number of files to convert", 
     )
     args = parser.parse_args()
 
@@ -217,7 +219,7 @@ if __name__ == "__main__":
     for dataset in datasets_to_process:
         convert_dataset(args, dataset)
 
-    if args.target == "tfrecord":
+    if args.target_format == "tfrecord":
         logger.info("Merging final TFRecord files")
         merge_tfrecord_files(args.dst, f"{args.tfrecord_name}.tfrecord")
 
