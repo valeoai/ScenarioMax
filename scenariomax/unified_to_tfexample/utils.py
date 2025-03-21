@@ -20,7 +20,7 @@ def int64_feature(value):
 
 def list_files(dir):
     r = []
-    for root, dirs, files in os.walk(dir):
+    for root, _, files in os.walk(dir):
         for name in files:
             if name.endswith(".pkl"):
                 r.append(os.path.join(root, name))

@@ -1,4 +1,3 @@
-import logging
 import os
 
 import geopandas as gpd
@@ -7,7 +6,6 @@ from shapely.geometry.linestring import LineString
 from shapely.geometry.multilinestring import MultiLineString
 from shapely.ops import unary_union
 
-from scenariomax.raw_to_unified.converter.description import ScenarioDescription as SD
 from scenariomax.raw_to_unified.converter.nuplan.types import get_line_type, get_traffic_obj_type, set_light_status
 from scenariomax.raw_to_unified.converter.nuplan.utils import (
     compute_angular_velocity,
@@ -16,11 +14,8 @@ from scenariomax.raw_to_unified.converter.nuplan.utils import (
     get_points_from_boundary,
     set_light_position,
 )
-from scenariomax.raw_to_unified.converter.type import ScenarioType
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from scenariomax.raw_to_unified.description import ScenarioDescription as SD
+from scenariomax.raw_to_unified.type import ScenarioType
 
 
 try:
@@ -36,7 +31,7 @@ try:
 
     NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 except ImportError as e:
-    raise RuntimeError(e)
+    raise RuntimeError("NuPlan package not found. Please install NuPlan to use this module.") from e
 
 
 EGO = "ego"

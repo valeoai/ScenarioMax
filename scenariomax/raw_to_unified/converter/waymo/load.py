@@ -1,13 +1,12 @@
 import logging
 import os
 
-import tqdm
-
 import scenariomax.raw_to_unified.converter.waymo.waymo_protos.scenario_pb2 as scenario_pb2
+from scenariomax.logger_utils import get_logger
 from scenariomax.raw_to_unified.converter.waymo.utils import SPLIT_KEY
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 try:
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # FATAL
@@ -15,10 +14,10 @@ try:
     import tensorflow as tf
 
 except ImportError as e:
-    logger.info(e)
+    raise RuntimeError("TensorFlow package not found. Please install TensorFlow to use this module.") from e
 
 
-def get_waymo_scenarios(waymo_data_directory, start_index: int = 0, num: int = None):
+def get_waymo_scenarios(waymo_data_directory, start_index: int = 0, num: int | None = None):
     # parse raw data from input path to output path,
     # there is 1000 raw data in google cloud, each of them produce about 500 pkl file
     logger.info("Reading raw data")
@@ -50,7 +49,7 @@ def preprocess_waymo_scenarios(files, worker_index):
         Generator of scenario_pb2.Scenario
     """
 
-    for file in tqdm.tqdm(files, leave=False, position=0, desc=f"Worker {worker_index} Number of raw file"):
+    for file in files:
         file_path = os.path.join(file)
         if ("tfrecord" not in file_path) or (not os.path.isfile(file_path)):
             continue

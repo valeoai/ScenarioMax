@@ -1,14 +1,9 @@
-import logging
-
-
-logger = logging.getLogger(__name__)
-
 try:
     from nuscenes import NuScenes
     from nuscenes.eval.prediction.splits import get_prediction_challenge_split
 
 except ImportError as e:
-    logger.warning(f"Can not import nuscenes-devkit: {e}")
+    raise RuntimeError("NuScenes package not found. Please install NuScenes to use this module.") from e
 
 
 def get_nuscenes_scenarios(dataroot, version, num_workers=2):

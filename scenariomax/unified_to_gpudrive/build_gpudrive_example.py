@@ -324,7 +324,7 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
 
     # Construct the traffic light states
     tl_dict = {"state": [], "x": [], "y": [], "z": [], "time_index": []}
-    all_keys = ["state", "x", "y", "z"]
+    # all_keys = ["state", "x", "y", "z"]
     # Skip traffic lights for the time being
 
     scenario_net_map_features = scenario_net_scene["map_features"]

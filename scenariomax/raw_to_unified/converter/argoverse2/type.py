@@ -1,16 +1,11 @@
-import logging
+from scenariomax.raw_to_unified.type import ScenarioType
 
-from scenariomax.raw_to_unified.converter.type import ScenarioType
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 try:
     from av2.datasets.motion_forecasting.data_schema import ObjectType
     from av2.map.lane_segment import LaneMarkType, LaneType
 except ImportError as e:
-    logger.warning(f"Can not import av2-devkit: {e}")
+    raise RuntimeError("Argoverse2 dependencies not found. Please install Argoverse2 to use this module.") from e
 
 
 def get_traffic_obj_type(av2_obj_type):

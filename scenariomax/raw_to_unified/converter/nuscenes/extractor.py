@@ -5,7 +5,7 @@ import geopandas as gpd
 import numpy as np
 from shapely.ops import unary_union
 
-from scenariomax.raw_to_unified.converter.description import ScenarioDescription as SD
+from scenariomax.logger_utils import get_logger
 from scenariomax.raw_to_unified.converter.nuscenes.types import get_scenarionet_type
 from scenariomax.raw_to_unified.converter.nuscenes.utils import (
     convert_id_to_int,
@@ -14,10 +14,11 @@ from scenariomax.raw_to_unified.converter.nuscenes.utils import (
     interpolate_heading,
     parse_frame,
 )
-from scenariomax.raw_to_unified.converter.type import ScenarioType
+from scenariomax.raw_to_unified.description import ScenarioDescription as SD
+from scenariomax.raw_to_unified.type import ScenarioType
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 try:
     import logging
@@ -31,7 +32,7 @@ try:
     from nuscenes.map_expansion.arcline_path_utils import discretize_lane
     from nuscenes.map_expansion.map_api import NuScenesMap
 except ImportError as e:
-    logger.warning(f"Can not import nuscenes-devkit: {e}")
+    raise RuntimeError("NuScenes package not found. Please install NuScenes to use this module.") from e
 
 
 def convert_nuscenes_scenario(
