@@ -7,7 +7,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 from scenariomax.logger_utils import get_logger, setup_logger
-from scenariomax.raw_to_unified.converter.write import (
+from scenariomax.raw_to_unified.write import (
     merge_tfrecord_files,
     postprocess_gpudrive,
     postprocess_tfexample,
