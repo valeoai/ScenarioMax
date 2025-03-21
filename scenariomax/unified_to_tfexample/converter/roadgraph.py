@@ -6,6 +6,7 @@ import numpy as np
 
 from scenariomax.unified_to_tfexample.constants import DEFAULT_NUM_ROADMAPS, DIST_INTERPOLATION
 from scenariomax.unified_to_tfexample.converter.datatypes import RoadGraphSamples
+from scenariomax.unified_to_tfexample.exceptions import OverpassException
 
 
 warnings.filterwarnings("ignore")
@@ -136,7 +137,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
     roadgraph_samples.valid[:num_points] = 1
 
     if _detect_overpass(roadgraph_samples.xyz[:num_points], roadgraph_samples.type[:num_points]):
-        raise ValueError("Overpass detected in the roadgraph. Skip scenario.")
+        raise OverpassException()
 
     return roadgraph_samples, num_points, cropped
 

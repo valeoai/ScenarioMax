@@ -2,6 +2,7 @@ import numpy as np
 
 from scenariomax.unified_to_tfexample.constants import DEFAULT_NUM_OBJECTS, NUM_TS_ALL, NUM_TS_PAST
 from scenariomax.unified_to_tfexample.converter.datatypes import State
+from scenariomax.unified_to_tfexample.exceptions import NotEnoughValidObjectsException
 
 
 def get_distance(sdc_track, other_track):
@@ -150,8 +151,8 @@ def get_state(scenario, multiagent, debug):
     if not multiagent:
         return state
 
-    if np.sum(state.tracks_to_predict) < 4:
-        raise ValueError("Not enough tracks to predict.")
+    if np.sum(state.tracks_to_predict) < 8:
+        raise NotEnoughValidObjectsException()
 
     # Sort objects to put those with tracks_to_predict=1 first (after SDC)
     if np.sum(state.tracks_to_predict) > 0:
