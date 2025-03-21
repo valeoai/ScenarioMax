@@ -53,7 +53,9 @@ def shard_tfrecord(src: str, filename: str, num_threads: int, num_shards: int = 
     shard_width = max(5, int(math.log10(num_shards) + 1))
     format_str = src_path + "-%0" + str(shard_width) + "d-of-%05d"
 
-    with Parallel(n_jobs=num_threads) as parallel:
+    # Process shards in parallel using thread-based parallelism for I/O operations
+    logger.info(f"Starting parallel sharding with {num_threads} threads")
+    with Parallel(n_jobs=num_threads, prefer="threads", verbose=5) as parallel:
         parallel(
             delayed(process_shard)(i, src_path, format_str, num_shards)
             for i in tqdm(range(num_shards), desc="Sharding TFRecord")
