@@ -109,6 +109,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
             break
 
         dir_points_to_add = _compute_dir_points(points_to_add)
+        speed_limit = feature.get("speed_limit_mph", -1)
 
         if debug:
             _plot_debug_info(points_to_add, dir_points_to_add, points_type_to_add)
@@ -128,6 +129,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
         roadgraph_samples.type[num_points : num_points + num_points_to_add] = points_type_to_add
         roadgraph_samples.id[num_points : num_points + num_points_to_add] = block_id
         roadgraph_samples.dir[num_points : num_points + num_points_to_add] = dir_points_to_add
+        roadgraph_samples.speed_limit[num_points : num_points + num_points_to_add] = speed_limit
         num_points += num_points_to_add
 
     if debug:

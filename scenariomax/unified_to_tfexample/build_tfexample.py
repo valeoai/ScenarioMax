@@ -136,6 +136,7 @@ def build_tfexample(scenario_net_scene, multiagents=False, debug=False):
         # Roadgraph samples
         "roadgraph_samples/id": int64_feature(roadgraph_samples.id.flatten()),
         "roadgraph_samples/dir": float_feature(roadgraph_samples.dir.flatten()),
+        "roadgraph_samples/speed_limit": float_feature(roadgraph_samples.speed_limit.flatten()),
         "roadgraph_samples/valid": int64_feature(roadgraph_samples.valid.flatten()),
         "roadgraph_samples/xyz": float_feature(roadgraph_samples.xyz.flatten()),
         "roadgraph_samples/type": int64_feature(roadgraph_samples.type.flatten()),
