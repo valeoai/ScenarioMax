@@ -3,6 +3,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.spatial import KDTree
 
 from scenariomax.unified_to_tfexample.constants import DEFAULT_NUM_ROADMAPS, DIST_INTERPOLATION
 from scenariomax.unified_to_tfexample.converter.datatypes import RoadGraphSamples
@@ -80,6 +81,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
     num_points = 0
     count_types = {}
     mean_distances_types = {}
+    std_distances_types = {}
     cropped = False
 
     for mp_block in map_features_keys:
@@ -100,7 +102,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
         points_to_add = np.array(feature["position"]) if feature_type == "STOP_SIGN" else np.array(feature[key])
 
         points_type_to_add = _scenariomax_type_to_waymax_type(feature_type)
-        points_to_add = _prepare_points(points_to_add, points_type_to_add)
+        points_to_add = _prepare_points(points_to_add, feature_type)
 
         # Check if adding these points would exceed the limit
         num_points_to_add = points_to_add.shape[0]
@@ -112,15 +114,19 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
         speed_limit = feature.get("speed_limit_mph", -1)
 
         if debug:
-            _plot_debug_info(points_to_add, dir_points_to_add, points_type_to_add)
+            _plot_debug_info(points_to_add, dir_points_to_add, speed_limit, points_type_to_add)
 
         # Track mean distances for each feature type
-        mean_distance = np.mean(np.linalg.norm(points_to_add[1:] - points_to_add[:-1], axis=1))
+        dist_inter_points = np.linalg.norm(points_to_add[1:] - points_to_add[:-1], axis=1)
+        mean_distance = np.mean(dist_inter_points)
+        std_distance = np.std(dist_inter_points)
 
         if feature_type not in mean_distances_types:
             mean_distances_types[feature_type] = mean_distance
+            std_distances_types[feature_type] = std_distance
         else:
             mean_distances_types[feature_type] = (mean_distances_types[feature_type] + mean_distance) / 2
+            std_distances_types[feature_type] = (std_distances_types[feature_type] + std_distance) / 2
 
         block_id = _extract_block_id(mp_block)
 
@@ -134,7 +140,10 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
 
     if debug:
         for key, value in mean_distances_types.items():
-            print(f"- {key} - Num types: {count_types[key]}, Mean distance: {round(value, 2)} ({value})")
+            print(
+                f"- {key} - Num types: {count_types[key]}, "
+                f"Mean distance: {round(value, 2)} - std: {round(std_distances_types[key], 2)}",
+            )
 
     roadgraph_samples.valid[:num_points] = 1
 
@@ -183,94 +192,6 @@ def _scenariomax_type_to_waymax_type(road_object_type: str) -> int:
     return TYPE_MAPPING.get(road_object_type, 0)
 
 
-def _prepare_points(points_to_add: np.ndarray, type: int) -> np.ndarray:
-    """
-    Prepare points by ensuring correct shape and dimensions.
-
-    Args:
-        points_to_add: Array of points
-        type: The type identifier for the points
-
-    Returns:
-        Properly formatted and calibrated points
-    """
-    if len(points_to_add.shape) == 1:
-        points_to_add = np.expand_dims(points_to_add, axis=0)
-    if points_to_add.shape[1] == 2:
-        points_to_add = np.hstack([points_to_add, np.zeros((points_to_add.shape[0], 1))])
-
-    return _calibrate(points_to_add, type)
-
-
-def _calibrate(points: np.ndarray, type: int, target_distance: float = DIST_INTERPOLATION) -> np.ndarray:
-    """
-    Calibrates a list of points to have a consistent distance between them.
-
-    Args:
-        points: A NumPy array of points, where each point is a 2D or 3D coordinate
-        target_distance: The desired distance between consecutive points
-
-    Returns:
-        A new array of points with a consistent distance between them
-    """
-    points = np.array(points)
-    calibrated_points = [points[0]]
-
-    for i in range(1, len(points)):
-        prev_point = calibrated_points[-1]
-        curr_point = points[i]
-        segment_vector = curr_point - prev_point
-        distance = np.linalg.norm(segment_vector)
-
-        while distance >= target_distance:
-            unit_vector = segment_vector / distance
-            new_point = prev_point + unit_vector * target_distance
-            calibrated_points.append(new_point)
-            prev_point = new_point
-            segment_vector = curr_point - prev_point
-            distance = np.linalg.norm(segment_vector)
-
-    # Ensure the last point in the input is included
-    if not np.array_equal(calibrated_points[-1], points[-1]):
-        calibrated_points.append(points[-1])
-
-    return np.array(calibrated_points)
-
-
-def _detect_overpass(xyz: np.ndarray, type: np.ndarray) -> bool:
-    """
-    Detect if the points form an overpass.
-
-    Args:
-        points: A NumPy array of points, where each point is a 2D or 3D coordinate
-        type: A NumPy array of road types
-
-    Returns:
-        Boolean indicating if the points form an overpass
-    """
-    # Get points that are closed in XY by less than 1m
-    road_edge_points = xyz[type == 15]
-
-    xy_distances = np.linalg.norm(
-        road_edge_points[:, :2].reshape(-1, 1, 2) - road_edge_points[:, :2].reshape(1, -1, 2),
-        axis=2,
-    )
-
-    # Find pairs of points (use lower triangle to avoid duplicates)
-    mask = np.tril(xy_distances < 0.8, k=-1)
-    paired_indices = np.argwhere(mask)
-
-    # If no close pairs found, return False
-    if len(paired_indices) == 0:
-        return False
-
-    # Calculate z-differences
-    z_diffs = np.abs(road_edge_points[paired_indices[:, 0], 2] - road_edge_points[paired_indices[:, 1], 2])
-    max_z_diff = np.max(z_diffs) if len(z_diffs) > 0 else 0.0
-
-    return max_z_diff > 4.0
-
-
 def _compute_dir_points(points: np.ndarray) -> np.ndarray:
     """
     Computes the direction vectors between consecutive points.
@@ -289,7 +210,9 @@ def _compute_dir_points(points: np.ndarray) -> np.ndarray:
     # Compute direction vectors
     vectors = points[1:] - points[:-1]
     magnitudes = np.linalg.norm(vectors, axis=1, keepdims=True)
-    dir_points = vectors / magnitudes
+    # Avoid division by zero
+    safe_magnitudes = np.where(magnitudes > 1e-6, magnitudes, 1e-6)
+    dir_points = vectors / safe_magnitudes
 
     # Append the last direction vector to maintain the same length
     dir_points = np.vstack([dir_points, dir_points[-1]])
@@ -297,17 +220,296 @@ def _compute_dir_points(points: np.ndarray) -> np.ndarray:
     return dir_points
 
 
-def _plot_debug_info(points_to_add: np.ndarray, dir_points_to_add: np.ndarray, points_type_to_add: int) -> None:
+def _detect_overpass(xyz: np.ndarray, type: np.ndarray) -> bool:
+    """
+    Detect if the points form an overpass using KD-tree for efficient neighbor search.
+
+    Args:
+        xyz: A NumPy array of points, where each point is a 3D coordinate (x, y, z)
+        type: A NumPy array of road types
+
+    Returns:
+        Boolean indicating if the points form an overpass
+    """
+    # Get road edge points
+    road_edge_points = xyz[type == 15]
+
+    # If not enough points, return False
+    if len(road_edge_points) < 2:
+        return False
+
+    # Build KD-tree on XY coordinates for efficient nearest neighbor search
+    tree = KDTree(road_edge_points[:, :2])
+
+    # For each point, find all neighbors within 0.8 distance in XY plane
+    for i, point in enumerate(road_edge_points):
+        # Get indices of neighbors (excluding the point itself)
+        neighbors = tree.query_ball_point(point[:2], 0.8)
+        neighbors = [idx for idx in neighbors if idx > i]  # Only check each pair once
+
+        if not neighbors:
+            continue
+
+        # Check Z differences
+        z_differences = np.abs(point[2] - road_edge_points[neighbors, 2])
+        if np.any(z_differences > 4.0):
+            return True
+
+    return False
+
+
+def _add_interpolated_roadgraph_samples(points: np.ndarray, target_distance: float = DIST_INTERPOLATION) -> np.ndarray:
+    """
+    Interpolate points along a polyline with handling for unevenly spaced input points.
+
+    Args:
+        points: Array of source points
+        target_distance: The desired distance between interpolated points
+
+    Returns:
+        Interpolated points with consistent spacing
+    """
+    if len(points.shape) == 1:
+        points = np.expand_dims(points, axis=0)
+    if points.shape[1] == 2:
+        points = np.hstack([points, np.zeros((points.shape[0], 1))])
+
+    if len(points) <= 1:
+        return points.copy()
+
+    # Calculate segment distances and cumulative distances along the polyline
+    segment_vectors = points[1:] - points[:-1]
+    segment_distances = np.linalg.norm(segment_vectors, axis=1)
+    cumulative_distances = np.zeros(len(points))
+    cumulative_distances[1:] = np.cumsum(segment_distances)
+
+    # Total length of the polyline
+    total_length = cumulative_distances[-1]
+
+    if total_length <= 0.0:
+        return points.copy()
+
+    # Add the first point
+    result_points = [points[0]]
+
+    # Interpolate at regular intervals
+    current_distance = target_distance
+    while current_distance < total_length:
+        # Find the segment containing the current distance
+        segment_idx = np.searchsorted(cumulative_distances, current_distance) - 1
+
+        # Calculate interpolation factor within this segment
+        segment_start_dist = cumulative_distances[segment_idx]
+        segment_length = segment_distances[segment_idx]
+        alpha = (current_distance - segment_start_dist) / segment_length
+
+        # Choose interpolation method based on position
+        if segment_idx < 1 or segment_idx > len(points) - 3:
+            # Linear interpolation for boundary segments
+            interpolated_point = _interpolate_point(points[segment_idx], points[segment_idx + 1], alpha)
+        else:
+            # Cubic spline for interior segments
+            interpolated_point = _interpolate_cubic_spline(
+                points[segment_idx - 1],
+                points[segment_idx],
+                points[segment_idx + 1],
+                points[segment_idx + 2],
+                alpha,
+            )
+
+        result_points.append(interpolated_point)
+        current_distance += target_distance
+
+    # Add the last point if it's not too close to the previous point
+    last_point = points[-1]
+    if result_points:
+        threshold = 0.01
+        if np.sum((last_point - result_points[-1]) ** 2) > threshold * threshold:
+            result_points.append(last_point)
+    else:
+        result_points.append(last_point)
+
+    return np.array(result_points)
+
+
+def _interpolate_point(p1: np.ndarray, p2: np.ndarray, alpha: float) -> np.ndarray:
+    """
+    Linear interpolation between two points.
+
+    Args:
+        p1: First point
+        p2: Second point
+        alpha: Interpolation factor (0-1)
+
+    Returns:
+        Interpolated point
+    """
+    return p1 + alpha * (p2 - p1)
+
+
+def _interpolate_cubic_spline(
+    p0: np.ndarray,
+    p1: np.ndarray,
+    p2: np.ndarray,
+    p3: np.ndarray,
+    alpha: float,
+) -> np.ndarray:
+    """
+    Cubic spline interpolation among four points.
+
+    Args:
+        p0: First control point
+        p1: Second control point (start point)
+        p2: Third control point (end point)
+        p3: Fourth control point
+        alpha: Interpolation factor (0-1)
+
+    Returns:
+        Interpolated point
+    """
+    # Catmull-Rom spline coefficients
+    alpha2 = alpha * alpha
+    alpha3 = alpha2 * alpha
+
+    coef0 = -0.5 * alpha3 + alpha2 - 0.5 * alpha
+    coef1 = 1.5 * alpha3 - 2.5 * alpha2 + 1.0
+    coef2 = -1.5 * alpha3 + 2 * alpha2 + 0.5 * alpha
+    coef3 = 0.5 * alpha3 - 0.5 * alpha2
+
+    return coef0 * p0 + coef1 * p1 + coef2 * p2 + coef3 * p3
+
+
+def _add_polygon_samples(points: np.ndarray, target_distance: float = DIST_INTERPOLATION) -> np.ndarray:
+    """
+    Process polygon points with proper segment handling and ensure the polygon is closed.
+
+    Args:
+        points: Array of polygon vertices
+        type: The type identifier for the points
+        target_distance: The desired distance between consecutive points
+
+    Returns:
+        Properly processed and closed polygon points
+    """
+    if len(points.shape) == 1:
+        points = np.expand_dims(points, axis=0)
+    if points.shape[1] == 2:
+        points = np.hstack([points, np.zeros((points.shape[0], 1))])
+
+    if len(points) <= 1:
+        return points.copy()
+
+    # Collect all processed points
+    result_points = []
+    num_points = len(points)
+
+    # Add the first N-1 segments of the polygon
+    for i in range(num_points - 1):
+        left_point = points[i]
+        right_point = points[i + 1]
+
+        segment_points = _add_sampled_polygon_segment(left_point, right_point, target_distance)
+        result_points.extend(segment_points)
+
+    # Add the last polygon segment from the last point to the first point
+    last_segment = _add_sampled_polygon_segment(points[-1], points[0], target_distance)
+    result_points.extend(last_segment)
+
+    # Add the first point to complete the polygon
+    result_points.append(points[0])
+
+    return np.array(result_points)
+
+
+def _add_sampled_polygon_segment(
+    left_point: np.ndarray,
+    right_point: np.ndarray,
+    target_distance: float,
+) -> list[np.ndarray]:
+    """
+    Sample points along a line segment with the desired spacing.
+
+    Args:
+        left_point: Starting point of the segment
+        right_point: Ending point of the segment
+        target_distance: The desired distance between consecutive points
+
+    Returns:
+        List of sampled points along the segment (excluding the endpoint)
+    """
+    segment_vector = right_point - left_point
+    segment_length = np.linalg.norm(segment_vector)
+
+    # If the segment is very short, just return the left point
+    if segment_length < 1e-6:
+        return [left_point]
+
+    # Calculate number of sampled points needed
+    num_samples = max(1, int(segment_length / target_distance))
+
+    # Create evenly spaced points along the segment
+    sampled_points = []
+    for i in range(num_samples):
+        # Using actual distance-based interpolation
+        distance = i * target_distance
+        # Ensure we don't exceed segment length
+        if distance > segment_length:
+            break
+        alpha = distance / segment_length
+        point = left_point + alpha * segment_vector
+        sampled_points.append(point)
+
+    return sampled_points
+
+
+def _prepare_points(points_to_add: np.ndarray, type: str) -> np.ndarray:
+    """
+    Prepare points by ensuring correct shape and dimensions, and applying
+    appropriate interpolation based on the point type.
+
+    Args:
+        points_to_add: Array of points
+        type: The type identifier for the points
+
+    Returns:
+        Properly formatted and interpolated points
+    """
+    if len(points_to_add.shape) == 1:
+        points_to_add = np.expand_dims(points_to_add, axis=0)
+    if points_to_add.shape[1] == 2:
+        points_to_add = np.hstack([points_to_add, np.zeros((points_to_add.shape[0], 1))])
+
+    if type in ["CROSSWALK", "SPEED_BUMP"]:
+        return _add_polygon_samples(points_to_add)
+    else:
+        return _add_interpolated_roadgraph_samples(points_to_add)
+
+
+def _plot_debug_info(
+    points_to_add: np.ndarray,
+    dir_points_to_add: np.ndarray,
+    speed_limit: int,
+    points_type_to_add: int,
+) -> None:
     """
     Plot debug visualization of the points and directions.
 
     Args:
         points_to_add: Array of points to plot
         dir_points_to_add: Array of direction vectors
+        speed_limit: Speed limit for the points
         points_type_to_add: Type of the points for coloring
     """
     ax = plt.gca()
     ax.scatter(points_to_add[:, 0], points_to_add[:, 1], s=2, c=DEBUG_COLORS[points_type_to_add])
+    if speed_limit > 0:
+        ax.text(
+            points_to_add[0, 0],
+            points_to_add[0, 1],
+            f"Speed limit: {speed_limit} mph",
+            fontsize=8,
+            color="black",
+        )
     # Uncomment to show direction arrows:
     # for i in range(len(dir_points_to_add)):
     #     ax.arrow(
