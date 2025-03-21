@@ -1,4 +1,4 @@
-from scenariomax.raw_to_unified.converter.type import ScenarioType
+from scenariomax.raw_to_unified.type import ScenarioType
 
 
 ALL_TYPE = {

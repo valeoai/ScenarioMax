@@ -35,6 +35,8 @@ analyze/figures/*
 /wandb*
 events.out.tfevents.*
 /runs*
+*.png
+*.mp4
 
 ### C++ ###
 # Prerequisites

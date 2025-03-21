@@ -19,7 +19,8 @@ def build_tfexample(scenario_net_scene, multiagents=False, debug=False):
 
     Args:
         scenario_net_scene: The scenario to process
-        debug: Whether to print debug information
+        multiagents: Whether to use multi-agent processing
+        debug: Whether to print debug information and create plots
 
     Returns:
         Dictionary containing TF features
@@ -58,15 +59,6 @@ def build_tfexample(scenario_net_scene, multiagents=False, debug=False):
             "r",
             label=f"a_xy: {a_xy}, v_yaw: {d_yaw}",
         )
-
-        # for i in range(state.tracks_to_predict.shape[0]):
-        #     if state.tracks_to_predict[i] == 1:
-        #         trajectory = get_object_trajectory(state, index=i)
-        #         ax.plot(
-        #             trajectory[:, 0],
-        #             trajectory[:, 1],
-        #             "skyblue",
-        #         )
 
     return {
         # Scenario metadata
@@ -144,6 +136,7 @@ def build_tfexample(scenario_net_scene, multiagents=False, debug=False):
         # Roadgraph samples
         "roadgraph_samples/id": int64_feature(roadgraph_samples.id.flatten()),
         "roadgraph_samples/dir": float_feature(roadgraph_samples.dir.flatten()),
+        "roadgraph_samples/speed_limit": float_feature(roadgraph_samples.speed_limit.flatten()),
         "roadgraph_samples/valid": int64_feature(roadgraph_samples.valid.flatten()),
         "roadgraph_samples/xyz": float_feature(roadgraph_samples.xyz.flatten()),
         "roadgraph_samples/type": int64_feature(roadgraph_samples.type.flatten()),

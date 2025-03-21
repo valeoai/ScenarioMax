@@ -75,7 +75,7 @@ def write_gpudrive_from_scenariomax_files(
     pkle_files: list[str],
     output_dir: str,
     file_prefix: str,
-    num_files: int = None,
+    num_files: int | None = None,
     n_jobs: int = -1,
 ) -> None:
     os.makedirs(output_dir, exist_ok=True)

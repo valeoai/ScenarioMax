@@ -42,8 +42,10 @@ pip install -r devkit/nuplan-devkit/requirements.txt
 
 ### Usage
 
+Example usage if you want to proceed the WOMD training dataset in a format compatible with V-Max.
+
 ```bash
-python scenariomax/convert_dataset.py --waymo_src /data/datasets/womd/training/ --dst /data/test --log_level INFO --shard 10 --num_workers 10 --format tfexample
+python scenariomax/convert_dataset.py --waymo_src /data/womd/training/ --dst /data/scenariomax/womd/training/ --log_level INFO --shard 1000 --num_workers 10 --target_format tfexample  --tfrecord_name training
 ```
 
 ## Data Pipeline

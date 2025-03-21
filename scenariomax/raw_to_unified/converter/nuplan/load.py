@@ -1,12 +1,7 @@
-import logging
 import os
 import tempfile
 from dataclasses import dataclass
 from os.path import join
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 try:
@@ -22,10 +17,16 @@ try:
 
     NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 except ImportError as e:
-    raise RuntimeError(e)
+    raise RuntimeError("NuPlan package not found. Please install NuPlan to use this module.") from e
 
 
-def get_nuplan_scenarios(data_root, map_root, num_files: int = None, logs: list | None = None, builder="nuplan_mini"):
+def get_nuplan_scenarios(
+    data_root,
+    map_root,
+    num_files: int | None = None,
+    logs: list | None = None,
+    builder="nuplan_mini",
+):
     """Gets NuPlan scenarios based on provided parameters.
 
     Retrieves scenarios from the NuPlan dataset using the specified parameters.

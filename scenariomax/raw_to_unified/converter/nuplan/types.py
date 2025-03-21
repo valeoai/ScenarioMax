@@ -1,11 +1,6 @@
-import logging
 import os
 
-from scenariomax.raw_to_unified.converter.type import ScenarioType
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from scenariomax.raw_to_unified.type import ScenarioType
 
 
 try:
@@ -17,7 +12,7 @@ try:
 
     NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 except ImportError as e:
-    raise RuntimeError(e)
+    raise RuntimeError("NuPlan package not found. Please install NuPlan to use this module.") from e
 
 
 def get_line_type(nuplan_type):

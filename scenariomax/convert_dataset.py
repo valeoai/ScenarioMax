@@ -2,8 +2,12 @@ import argparse
 import logging
 import os
 
+
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 from scenariomax.logger_utils import get_logger, setup_logger
-from scenariomax.raw_to_unified.converter.write import (
+from scenariomax.raw_to_unified.write import (
     merge_tfrecord_files,
     postprocess_gpudrive,
     postprocess_tfexample,
@@ -71,7 +75,11 @@ def convert_dataset(args, dataset):
         from scenariomax.raw_to_unified.converter import nuplan
 
         logger.info(f"Loading NuPlan scenarios from {args.nuplan_src} (maps: {os.getenv('NUPLAN_MAPS_ROOT', 'N/A')})")
-        scenarios = nuplan.get_nuplan_scenarios(args.nuplan_src, os.getenv("NUPLAN_MAPS_ROOT"), num_files=args.num_files)
+        scenarios = nuplan.get_nuplan_scenarios(
+            args.nuplan_src,
+            os.getenv("NUPLAN_MAPS_ROOT"),
+            num_files=args.num_files,
+        )
 
         preprocess_func = None
         convert_func = nuplan.convert_nuplan_scenario
@@ -105,9 +113,6 @@ def convert_dataset(args, dataset):
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
     # Set up logging first thing
     setup_logger()
     logger.info("Starting dataset conversion process")
@@ -188,7 +193,7 @@ if __name__ == "__main__":
         "--num_files",
         type=int,
         default=None,
-        help="Optional number of files to convert", 
+        help="Optional number of files to convert",
     )
     args = parser.parse_args()
 
@@ -219,12 +224,17 @@ if __name__ == "__main__":
     for dataset in datasets_to_process:
         convert_dataset(args, dataset)
 
-    if args.target_format == "tfrecord":
+    if args.target_format == "tfexample":
         logger.info("Merging final TFRecord files")
         merge_tfrecord_files(args.dst, f"{args.tfrecord_name}.tfrecord")
 
-    if args.shard > 1:
-        logger.info(f"Sharding output into {args.shard} shards")
-        shard_tfrecord(src=args.dst, filename=args.tfrecord_name, num_threads=args.num_workers, num_shards=args.shard)
+        if args.shard > 1:
+            logger.info(f"Sharding output into {args.shard} shards")
+            shard_tfrecord(
+                src=args.dst,
+                filename=args.tfrecord_name,
+                num_threads=args.num_workers,
+                num_shards=args.shard,
+            )
 
     logger.info("Dataset conversion completed successfully")

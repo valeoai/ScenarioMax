@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 from typing import Final
 
@@ -10,17 +9,18 @@ from av2.map.map_api import ArgoverseStaticMap
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
+from scenariomax.logger_utils import get_logger
 from scenariomax.raw_to_unified.converter.argoverse2.type import (
     get_lane_mark_type,
     get_lane_type,
     get_traffic_obj_type,
 )
-from scenariomax.raw_to_unified.converter.description import ScenarioDescription as SD
-from scenariomax.raw_to_unified.converter.type import ScenarioType
 from scenariomax.raw_to_unified.converter.utils import mph_to_kmh
+from scenariomax.raw_to_unified.description import ScenarioDescription as SD
+from scenariomax.raw_to_unified.type import ScenarioType
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 _ESTIMATED_VEHICLE_LENGTH_M: Final[float] = 4.0
@@ -120,9 +120,8 @@ def extract_map_features(map_features):
     vector_drivable_areas = map_features.get_scenario_vector_drivable_areas()
     ped_crossings = map_features.get_scenario_ped_crossings()
 
-    ids = map_features.get_scenario_lane_segment_ids()
-
-    max_id = max(ids)
+    # ids = map_features.get_scenario_lane_segment_ids()
+    # max_id = max(ids)
     for seg in vector_lane_segments:
         center = {}
         lane_id = str(seg.id)

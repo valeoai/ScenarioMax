@@ -1,12 +1,7 @@
-import logging
 import math
 import os
 
 import numpy as np
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 try:
@@ -18,7 +13,7 @@ try:
 
     NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 except ImportError as e:
-    raise RuntimeError(e)
+    raise RuntimeError("NuPlan package not found. Please install NuPlan to use this module.") from e
 
 
 def get_center_vector(vector, nuplan_center=(0, 0)):

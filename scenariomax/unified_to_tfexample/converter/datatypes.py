@@ -106,6 +106,9 @@ class RoadGraphSamples:
     valid: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS,), 0, dtype=np.int64))
     id: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS,), -1, dtype=np.int64))
     dir: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS, 3), -1.0, dtype=np.float64))
+    speed_limit: np.ndarray = field(
+        default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS,), -1.0, dtype=np.float64),
+    )
     type: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS,), -1, dtype=np.int64))
 
 

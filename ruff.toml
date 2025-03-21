@@ -8,26 +8,22 @@ select = [
     "F",  # Pyflakes
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
-    #"C90",  # mccabe
+    "C90",  # mccabe
     "I",  # isort
-    #"N",  # pep8-naming
     "UP",  # pyupgrade
+    "COM",  # flake8-commas
+    "C40",  # flake8-comprehensions
+    "ISC",  # flake8-implicit-str-concat
+    "ICN",  # flake8-import-conventions
+    "PIE",  # flake8-pie
+    "PYI",  # flake8-pyi
+    "SIM",  # flake8-simplify
+    "TID",  # flake8-tidy-imports
+    "TCH",  # flake8-type-checking
+    "NPY",  # numpy
+    # "RUF"  # ruff
     # "B",  # flake8-bugbear
     # "A",  # flake8-builtins
-    # "COM",  # flake8-commas
-    #"C40",  # flake8-comprehensions
-    #"ISC",  # flake8-implicit-str-concat
-    #"ICN",  # flake8-import-conventions
-    #"PIE",  # flake8-pie
-    #"PYI",  # flake8-pyi
-    #"SLF",  # flake8-self
-    #"SIM",  # flake8-simplify
-    #"TID",  # flake8-tidy-imports
-    #"TCH",  # flake8-type-checking
-    # "NPY",  # numpy
-    # "RUF"  # ruff
-    # "ERA",  # eradicate
-
 ]
 
 [lint.isort]

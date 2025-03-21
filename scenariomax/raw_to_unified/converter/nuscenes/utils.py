@@ -1,10 +1,11 @@
-import logging
 import re
 
 import numpy as np
 
+from scenariomax.logger_utils import get_logger
 
-logger = logging.getLogger(__name__)
+
+logger = get_logger(__name__)
 try:
     import logging
 
@@ -14,7 +15,7 @@ try:
     from nuscenes import NuScenes
     from nuscenes.eval.common.utils import quaternion_yaw
 except ImportError as e:
-    logger.warning(f"Can not import nuscenes-devkit: {e}")
+    raise RuntimeError("NuScenes package not found. Please install NuScenes to use this module.") from e
 
 EGO = "ego"
 

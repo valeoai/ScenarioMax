@@ -1,10 +1,8 @@
-import logging
 from typing import Any
 
 import numpy as np
 
-from scenariomax.raw_to_unified.converter.description import ScenarioDescription as SD
-from scenariomax.raw_to_unified.converter.type import ScenarioType
+from scenariomax.logger_utils import get_logger
 from scenariomax.raw_to_unified.converter.utils import mph_to_kmh
 from scenariomax.raw_to_unified.converter.waymo.types import (
     WaymoAgentType,
@@ -18,9 +16,11 @@ from scenariomax.raw_to_unified.converter.waymo.utils import (
     convert_values_to_str,
     nearest_point,
 )
+from scenariomax.raw_to_unified.description import ScenarioDescription as SD
+from scenariomax.raw_to_unified.type import ScenarioType
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def convert_waymo_scenario(scenario, version):

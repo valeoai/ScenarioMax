@@ -1,13 +1,9 @@
 import ast
 import inspect
-import logging
 import os
 
 import numpy as np
 import psutil
-
-
-logger = logging.getLogger(__file__)
 
 
 def mph_to_kmh(speed_in_mph: float):
