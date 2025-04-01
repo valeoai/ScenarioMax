@@ -10,7 +10,7 @@ from scenariomax.unified_to_gpudrive.utils import convert_numpy
 
 
 ERR_VAL = -1e4
-
+DEFAULT_MAX_SCENARIO_LENGTH = 200
 ### BEGIN CODE ADAPTED FROM GPUDRIVE https://github.com/Emerge-Lab/gpudrive/blob/main/data_utils/process_waymo_files.py
 
 
@@ -231,12 +231,18 @@ def _convert_map_features(scenario_net_map_features):
 def _ensure_scalar(value):
     return value.item() if isinstance(value, np.ndarray) and value.size == 1 else value
 
+def _pad_to_length(arr, pad_value=0):
+    full = np.ones((DEFAULT_MAX_SCENARIO_LENGTH, *arr.shape[1:])) * pad_value
+    full[:len(arr)] = arr
+    return full
 
 def _extract_obj(index, object_id, scenario_net_object):
     state = scenario_net_object["state"]
     metadata = scenario_net_object["metadata"]
-    positions = state["position"]
-    valids = state["valid"]
+    valids = _pad_to_length(state["valid"], False)
+    positions = _pad_to_length(state["position"])
+    headings = _pad_to_length(state["heading"])
+    velocities = _pad_to_length(state["velocity"])
 
     position = [
         {"x": point[0], "y": point[1], "z": point[2]} if valids[index] else {"x": ERR_VAL, "y": ERR_VAL, "z": ERR_VAL}
@@ -252,9 +258,8 @@ def _extract_obj(index, object_id, scenario_net_object):
     width = _ensure_scalar(state["width"][final_valid_index])
     height = _ensure_scalar(state["height"][final_valid_index])
 
-    heading = [_wrap_yaws(heading) if valids[index] else ERR_VAL for index, heading in enumerate(state["heading"])]
+    heading = [_wrap_yaws(heading) if valids[index] else ERR_VAL for index, heading in enumerate(headings)]
 
-    velocities = state["velocity"]
     velocity = [
         {
             "x": point[0],
@@ -373,6 +378,8 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
             "sdc_track_index": sdc_index[0],
             "log_name": metadata["log_name"],
             "ts": metadata["ts"],
+            "initial_lidar_timestamp": metadata["initial_lidar_timestamp"],
+            "map_name": metadata["map"],
             "objects_of_interest": [],
             "tracks_to_predict": [],
         }
