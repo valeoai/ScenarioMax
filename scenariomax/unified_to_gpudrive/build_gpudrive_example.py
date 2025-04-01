@@ -10,7 +10,7 @@ from scenariomax.unified_to_gpudrive.utils import convert_numpy
 
 
 ERR_VAL = -1e4
-DEFAULT_MAX_SCENARIO_LENGTH = 200
+DEFAULT_MAX_SCENARIO_LENGTH = 201
 ### BEGIN CODE ADAPTED FROM GPUDRIVE https://github.com/Emerge-Lab/gpudrive/blob/main/data_utils/process_waymo_files.py
 
 
