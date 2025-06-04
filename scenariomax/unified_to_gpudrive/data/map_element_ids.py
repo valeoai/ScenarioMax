@@ -64,3 +64,11 @@ TYPE_TO_MAP_FEATURE_NAME = {
 }
 
 FILTERED_TYPES = ["TRAFFIC_CONE", "TRAFFIC_BARRIER"]
+
+TRAFFIC_LIGHT_STATES_MAP = {
+    # the light states above will be converted to the following 4 types
+    "TRAFFIC_LIGHT_UNKNOWN": "unknown",
+    "TRAFFIC_LIGHT_RED": "stop",
+    "TRAFFIC_LIGHT_YELLOW": "caution",
+    "TRAFFIC_LIGHT_GREEN": "go",
+}
