@@ -27,6 +27,12 @@ def get_nuplan_scenarios(
             continue
         with open(metadata_path, 'rb') as f:
             metdata = pickle.load(f)
+
+        # Check if corresponding log exists, might not due to train/val split
+        nuplan_log_name = os.path.join(nuplan_logs_root, metdata[0]["log_name"]+'.db')
+        if not os.path.exists(nuplan_log_name):
+            continue
+
         frames_in_scenes = defaultdict(list)
         for frame in metdata:
             frames_in_scenes[frame["scene_name"]].append(
