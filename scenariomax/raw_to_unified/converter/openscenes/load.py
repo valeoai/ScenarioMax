@@ -51,6 +51,8 @@ def get_nuplan_scenarios(
             first_frame = frames_in_scene[0]
             last_frame = frames_in_scene[-1]
             scene_duration = (last_frame["timestamp"] - first_frame["timestamp"]) / 1_000_000 # convert microseconds to seconds
+            if scene_duration < 9.0: # skip too short scenes
+                continue
             extraction_info = ScenarioExtractionInfo(
                 scenario_duration=scene_duration, subsample_ratio=0.5 # 10hz
             )
