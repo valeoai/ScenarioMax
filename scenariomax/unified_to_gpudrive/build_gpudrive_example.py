@@ -403,6 +403,7 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
             "objects_of_interest": [],
             "tracks_to_predict": [],
             "average_distance_traveled": _ensure_scalar(np.mean(objects_distance_traveled)),
+            "scenario_info": metadata["scenario_type"] # for openscenes data this contains the scenario token
         }
 
     scenario_dict = {

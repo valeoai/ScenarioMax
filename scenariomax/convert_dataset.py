@@ -87,6 +87,23 @@ def convert_dataset(args, dataset):
         dataset_name = "nuplan"
         dataset_version = "v1.1"
         additional_args = {}
+    elif dataset == "openscenes":
+        from scenariomax.raw_to_unified.converter import openscenes
+        logger.info(f"Loading OpenScenes scenarios from {args.openscenes_metadata_src} (maps: {os.getenv('NUPLAN_MAPS_ROOT', 'N/A')})")
+        scenarios = openscenes.get_nuplan_scenarios(
+            os.getenv("NUPLAN_DATA_ROOT"),
+            args.nuplan_src,
+            os.getenv("NUPLAN_MAPS_ROOT"),
+            args.openscenes_metadata_src,
+            num_files=args.num_files,
+        )
+
+        preprocess_func = None
+        convert_func = openscenes.convert_nuplan_scenario
+
+        dataset_name = "openscenes"
+        dataset_version = "v1.1"
+        additional_args = {}
     else:
         err_msg = f"Unsupported dataset: {dataset}"
         logger.error(err_msg)
@@ -141,6 +158,12 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="The directory storing the raw Argoverse data",
+    )
+    parser.add_argument(
+        "--openscenes_metadata_src",
+        type=str,
+        default=None,
+        help="The directory storing the openscenes metadata"
     )
     parser.add_argument(
         "--dst",
@@ -212,7 +235,9 @@ if __name__ == "__main__":
 
     if args.waymo_src is not None:
         datasets_to_process.append("waymo")
-    if args.nuplan_src is not None:
+    if args.nuplan_src is not None and args.openscenes_metadata_src is not None:
+        datasets_to_process.append("openscenes")
+    elif args.nuplan_src is not None:
         datasets_to_process.append("nuplan")
     if args.nuscenes_src is not None:
         datasets_to_process.append("nuscenes")
