@@ -372,12 +372,12 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
         trajectory_collision_manager,
     )
 
-    _mark_colliding_agents(
-        objects=objects,
-        agent_collision_manager=agent_collision_manager,
-        road_collision_manager=road_collision_manager,
-        trajectory_collision_manager=trajectory_collision_manager,
-    )
+    # _mark_colliding_agents(
+    #     objects=objects,
+    #     agent_collision_manager=agent_collision_manager,
+    #     road_collision_manager=road_collision_manager,
+    #     trajectory_collision_manager=trajectory_collision_manager,
+    # )
 
     metadata = scenario_net_scene["metadata"]
     if metadata["dataset"] == "waymo":
