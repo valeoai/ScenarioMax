@@ -61,7 +61,7 @@ def get_nuplan_scenarios(
                 log_file_load_path=os.path.join(nuplan_logs_root, first_frame["log_name"]+'.db'),
                 initial_lidar_token=first_frame["lidar_pc_token"],
                 initial_lidar_timestamp=first_frame["timestamp"],
-                scenario_type=f'{frame["scene_name"]}+{frame["scene_token"]}',
+                scenario_type=f'{first_frame["scene_name"]}+{first_frame["scene_token"]}',
                 map_root=nuplan_maps_root,
                 map_version="nuplan-maps-v1.0",
                 map_name=first_frame["map_location"],
