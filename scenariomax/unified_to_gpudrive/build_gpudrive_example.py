@@ -331,10 +331,10 @@ def _convert_traffic_lights(scenario_net_tl_states):
         light_states = tl_state["state"]["object_state"]
         for i, state in enumerate(light_states):
             tl_dict[lane_id]["state"].append(TRAFFIC_LIGHT_STATES_MAP[state])
-            tl_dict[lane_id]["x"].append(x)
-            tl_dict[lane_id]["y"].append(y)
             tl_dict[lane_id]["time_index"].append(i)
-            tl_dict[lane_id]["lane_id"].append(lane_id)
+        tl_dict[lane_id]["x"].append(x)
+        tl_dict[lane_id]["y"].append(y)
+        tl_dict[lane_id]["lane_id"].append(int(lane_id))
     return tl_dict
 
 class AttrDict(dict):
