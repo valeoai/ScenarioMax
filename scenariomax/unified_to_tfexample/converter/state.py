@@ -15,7 +15,7 @@ def get_distance(sdc_track, other_track):
     return (first_distance + last_distance) / 2.0
 
 
-def get_state(scenario, multiagent, debug):
+def get_state(scenario, multiagent, roadgraph_samples, debug):
     state = State()
     sdc_id = scenario.metadata["sdc_id"]
 
@@ -46,6 +46,12 @@ def get_state(scenario, multiagent, debug):
 
             if np.all(scenario.tracks[object_id]["state"]["velocity"] == 0.0):
                 color = "pink"
+
+            # if object_id in scenario.metadata["tracks_to_predict"]:
+            #     color = "orange"
+
+            # if object_id in scenario.metadata["objects_of_interest"]:
+            #     color = "green"
 
             idx_valid = np.argmax(scenario.tracks[object_id]["state"]["valid"])
 
@@ -143,15 +149,21 @@ def get_state(scenario, multiagent, debug):
         state.future_valid[i][:scenario_length] = state_valids[swing_index + 1 :].astype(np.int64).flatten()
 
         # Interests
-        if np.all(state_valids) and object_type == "VEHICLE":
-            has_moved = np.linalg.norm(state_positions[0][:2] - state_positions[-1][:2]) > 3
-            if has_moved:
+        if np.sum(state_valids) >= NUM_TS_ALL * 0.8 and object_type == "VEHICLE":
+            roadgraph_xy = roadgraph_samples.xyz[..., :2]
+            lane_points = (roadgraph_samples.type == 2) | (roadgraph_samples.type == 1)
+            lane_points = np.expand_dims(lane_points, axis=1)
+            roadgraph_xy = np.where(lane_points, roadgraph_xy, np.inf)
+
+            has_moved = np.linalg.norm(state_positions[0][:2] - state_positions[-1][:2]) > 2
+            is_on_lane = np.any(np.linalg.norm(roadgraph_xy - state_positions[-1][:2], axis=1) < 2.0)
+            if has_moved and is_on_lane:
                 state.tracks_to_predict[i] = 1
 
     if not multiagent:
         return state
 
-    if np.sum(state.tracks_to_predict) < 8:
+    if np.sum(state.tracks_to_predict) < 4:
         raise NotEnoughValidObjectsException()
 
     # Sort objects to put those with tracks_to_predict=1 first (after SDC)

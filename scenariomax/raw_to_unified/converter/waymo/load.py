@@ -60,3 +60,22 @@ def preprocess_waymo_scenarios(files, worker_index):
             scenario.scenario_id = scenario.scenario_id + SPLIT_KEY + file
 
             yield scenario
+
+
+def count_waymo_scenarios(files):
+    """Count the number of waymo scenarios in the files.
+
+    Args:
+        files: list of files to be counted
+
+    Returns:
+        int: number of waymo scenarios
+    """
+    count = 0
+    for file in files:
+        file_path = os.path.join(file)
+        if ("tfrecord" not in file_path) or (not os.path.isfile(file_path)):
+            continue
+        count += sum(1 for _ in tf.data.TFRecordDataset(file_path, compression_type="").as_numpy_iterator())
+
+    return count

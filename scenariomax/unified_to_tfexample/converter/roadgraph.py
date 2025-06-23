@@ -102,7 +102,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
         points_to_add = np.array(feature["position"]) if feature_type == "STOP_SIGN" else np.array(feature[key])
 
         points_type_to_add = _scenariomax_type_to_waymax_type(feature_type)
-        points_to_add = _prepare_points(points_to_add, feature_type)
+        points_to_add = _prepare_points(points_to_add, feature_type, scenario["metadata"]["dataset"])
 
         # Check if adding these points would exceed the limit
         num_points_to_add = points_to_add.shape[0]
@@ -111,7 +111,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
             break
 
         dir_points_to_add = _compute_dir_points(points_to_add)
-        speed_limit = feature.get("speed_limit_mph", -1)
+        speed_limit = feature.get("speed_limit_kmh", -1)
 
         if debug:
             _plot_debug_info(points_to_add, dir_points_to_add, speed_limit, points_type_to_add)
@@ -151,6 +151,41 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
         raise OverpassException()
 
     return roadgraph_samples, num_points, cropped
+
+
+def _calibrate(points: np.ndarray, target_distance: float = DIST_INTERPOLATION) -> np.ndarray:
+    """
+    Calibrates a list of points to have a consistent distance between them.
+
+    Args:
+        points: A NumPy array of points, where each point is a 2D or 3D coordinate
+        target_distance: The desired distance between consecutive points
+
+    Returns:
+        A new array of points with a consistent distance between them
+    """
+    points = np.array(points)
+    calibrated_points = [points[0]]
+
+    for i in range(1, len(points)):
+        prev_point = calibrated_points[-1]
+        curr_point = points[i]
+        segment_vector = curr_point - prev_point
+        distance = np.linalg.norm(segment_vector)
+
+        while distance >= target_distance:
+            unit_vector = segment_vector / distance
+            new_point = prev_point + unit_vector * target_distance
+            calibrated_points.append(new_point)
+            prev_point = new_point
+            segment_vector = curr_point - prev_point
+            distance = np.linalg.norm(segment_vector)
+
+    # Ensure the last point in the input is included
+    if not np.array_equal(calibrated_points[-1], points[-1]):
+        calibrated_points.append(points[-1])
+
+    return np.array(calibrated_points)
 
 
 def _extract_block_id(block_key: str) -> int:
@@ -462,7 +497,7 @@ def _add_sampled_polygon_segment(
     return sampled_points
 
 
-def _prepare_points(points_to_add: np.ndarray, type: str) -> np.ndarray:
+def _prepare_points(points_to_add: np.ndarray, type: str, dataset: str = "waymo") -> np.ndarray:
     """
     Prepare points by ensuring correct shape and dimensions, and applying
     appropriate interpolation based on the point type.
@@ -482,7 +517,10 @@ def _prepare_points(points_to_add: np.ndarray, type: str) -> np.ndarray:
     if type in ["CROSSWALK", "SPEED_BUMP"]:
         return _add_polygon_samples(points_to_add)
     else:
-        return _add_interpolated_roadgraph_samples(points_to_add)
+        if dataset == "waymo":
+            return _add_interpolated_roadgraph_samples(points_to_add)
+        else:
+            return _calibrate(points_to_add)
 
 
 def _plot_debug_info(
@@ -502,14 +540,14 @@ def _plot_debug_info(
     """
     ax = plt.gca()
     ax.scatter(points_to_add[:, 0], points_to_add[:, 1], s=2, c=DEBUG_COLORS[points_type_to_add])
-    if speed_limit > 0:
-        ax.text(
-            points_to_add[0, 0],
-            points_to_add[0, 1],
-            f"Speed limit: {speed_limit} mph",
-            fontsize=8,
-            color="black",
-        )
+    # if speed_limit > 0:
+    #     ax.text(
+    #         points_to_add[0, 0],
+    #         points_to_add[0, 1],
+    #         f"Speed limit: {speed_limit} kph",
+    #         fontsize=8,
+    #         color="black",
+    #     )
     # Uncomment to show direction arrows:
     # for i in range(len(dir_points_to_add)):
     #     ax.arrow(

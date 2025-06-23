@@ -51,3 +51,6 @@ typer # Used for cli
 ujson  # Used in serialiation_callback.py
 urllib3  # Used in s3_store.py
 pytorch-lightning
+nvidia-cublas-cu12<=12.4
+nvidia-cuda-cupti-cu12<=12.4
+nvidia-cuda-nvrtc-cu12<=12.4

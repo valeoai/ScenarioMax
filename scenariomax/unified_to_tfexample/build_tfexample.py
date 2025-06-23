@@ -29,8 +29,9 @@ def build_tfexample(scenario_net_scene, multiagents=False, debug=False):
         logger.debug(f"Building TF Example for scenario: {getattr(scenario_net_scene, 'id', 'unknown')}")
 
     scenario = AttrDict(scenario_net_scene)
+    roadgraph_samples, num_roadgraph_points, cropped = get_scenario_map_points(scenario, debug)
 
-    state = get_state(scenario, multiagents, debug)
+    state = get_state(scenario, multiagents, roadgraph_samples, debug)
 
     trajectory_type = classify_scenario(state)
     a_xy, d_yaw = compute_variations(state)
@@ -38,9 +39,7 @@ def build_tfexample(scenario_net_scene, multiagents=False, debug=False):
     if debug:
         logger.debug(f"Trajectory type: {trajectory_type}, acceleration: {a_xy:.4f}, yaw: {d_yaw:.4f}")
 
-    tf_state = get_traffic_lights_state(scenario)
-
-    roadgraph_samples, num_roadgraph_points, cropped = get_scenario_map_points(scenario, debug)
+    tf_state = get_traffic_lights_state(scenario, debug)
 
     if debug:
         logger.debug(f"Number of roadmap points: {num_roadgraph_points} - CROPPED: {cropped}")

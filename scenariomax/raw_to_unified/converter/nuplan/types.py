@@ -1,18 +1,14 @@
 import os
 
+import nuplan
+from nuplan.common.actor_state.tracked_objects_types import TrackedObjectType
+from nuplan.common.maps.maps_datatypes import TrafficLightStatusType
 from scenariomax.raw_to_unified.type import ScenarioType
 
 
-try:
-    import nuplan
-    from nuplan.common.actor_state.tracked_objects_types import TrackedObjectType
-    from nuplan.common.maps.maps_datatypes import TrafficLightStatusType
+NuPlanEgoType = TrackedObjectType.EGO
 
-    NuPlanEgoType = TrackedObjectType.EGO
-
-    NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
-except ImportError as e:
-    raise RuntimeError("NuPlan package not found. Please install NuPlan to use this module.") from e
+NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 
 
 def get_line_type(nuplan_type):

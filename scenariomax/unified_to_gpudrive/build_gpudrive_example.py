@@ -1,12 +1,13 @@
+from collections import defaultdict
+
 import numpy as np
 import trimesh
-from collections import defaultdict
-import math
+
 from scenariomax.unified_to_gpudrive.data.map_element_ids import (
     FILTERED_TYPES,
+    TRAFFIC_LIGHT_STATES_MAP,
     TYPE_TO_MAP_FEATURE_NAME,
     TYPE_TO_MAP_ID,
-    TRAFFIC_LIGHT_STATES_MAP,
 )
 from scenariomax.unified_to_gpudrive.utils import convert_numpy
 
@@ -228,6 +229,7 @@ def _convert_map_features(scenario_net_map_features):
 
     return road_features, edge_segments
 
+
 def _check_object_distance_traveled(positions, valids):
     valid_positions = positions[valids]
     if len(valid_positions) < 2:
@@ -236,8 +238,10 @@ def _check_object_distance_traveled(positions, valids):
     step_distances = np.linalg.norm(diffs, axis=1)
     return np.sum(step_distances)
 
+
 def _ensure_scalar(value):
     return value.item() if isinstance(value, np.ndarray) and value.size == 1 else value
+
 
 def _extract_obj(index, object_id, scenario_net_object):
     state = scenario_net_object["state"]
@@ -295,7 +299,7 @@ def _extract_obj(index, object_id, scenario_net_object):
         "goalPosition": goalPosition,
         "is_sdc": object_id == "ego",
         "mark_as_expert": False,
-        "total_distance_traveled": _ensure_scalar(_check_object_distance_traveled(positions, valids))
+        "total_distance_traveled": _ensure_scalar(_check_object_distance_traveled(positions, valids)),
     }
 
 
@@ -323,9 +327,7 @@ def _convert_track_features_to_objects(scenario_net_tracks, agent_collision_mana
 
 
 def _convert_traffic_lights(scenario_net_tl_states):
-    tl_dict = defaultdict(
-        lambda: {"state": [], "x": [], "y": [], "z": [], "time_index": [], "lane_id": []}
-    )
+    tl_dict = defaultdict(lambda: {"state": [], "x": [], "y": [], "z": [], "time_index": [], "lane_id": []})
     for i, (lane_id, tl_state) in enumerate(scenario_net_tl_states.items()):
         x, y = tl_state["stop_point"]
         light_states = tl_state["state"]["object_state"]
@@ -336,6 +338,7 @@ def _convert_traffic_lights(scenario_net_tl_states):
             tl_dict[lane_id]["time_index"].append(i)
             tl_dict[lane_id]["lane_id"].append(lane_id)
     return tl_dict
+
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
@@ -403,7 +406,7 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
             "objects_of_interest": [],
             "tracks_to_predict": [],
             "average_distance_traveled": _ensure_scalar(np.mean(objects_distance_traveled)),
-            "scenario_info": metadata["scenario_type"] # for openscenes data this contains the scenario token
+            "scenario_info": metadata["scenario_type"],  # for openscenes data this contains the scenario token
         }
 
     scenario_dict = {

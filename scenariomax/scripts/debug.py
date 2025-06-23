@@ -1,3 +1,4 @@
+import scenariomax.tf_suppress  # noqa: F401, I001
 import argparse
 import os
 
@@ -30,7 +31,7 @@ def arg_parser():
         help="The dataset to convert",
     )
     parser.add_argument(
-        "--num-files",
+        "--num_files",
         type=int,
         default=100,
         help="Number of files to convert",

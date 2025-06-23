@@ -3,21 +3,18 @@ import tempfile
 from dataclasses import dataclass
 from os.path import join
 
+import hydra
 
-try:
-    import hydra
+import nuplan
+from nuplan.common.actor_state.tracked_objects_types import TrackedObjectType
+from nuplan.planning.script.builders.scenario_building_builder import build_scenario_builder
+from nuplan.planning.script.builders.scenario_filter_builder import build_scenario_filter
+from nuplan.planning.script.utils import set_up_common_builder
 
-    import nuplan
-    from nuplan.common.actor_state.tracked_objects_types import TrackedObjectType
-    from nuplan.planning.script.builders.scenario_building_builder import build_scenario_builder
-    from nuplan.planning.script.builders.scenario_filter_builder import build_scenario_filter
-    from nuplan.planning.script.utils import set_up_common_builder
 
-    NuPlanEgoType = TrackedObjectType.EGO
+NuPlanEgoType = TrackedObjectType.EGO
 
-    NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
-except ImportError as e:
-    raise RuntimeError("NuPlan package not found. Please install NuPlan to use this module.") from e
+NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 
 
 def get_nuplan_scenarios(
@@ -69,7 +66,7 @@ def get_nuplan_scenarios(
         # "scenario_filter.num_scenarios_per_type=1",
         # "scenario_filter.expand_scenarios=true",
         # "scenario_filter.limit_scenarios_per_type=10",  # use 10 scenarios per scenario type
-        "scenario_filter.timestamp_threshold_s=20",  # minial scenario duration (s)
+        "scenario_filter.timestamp_threshold_s=10",  # minial scenario duration (s)
     ]
 
     if num_files is not None:

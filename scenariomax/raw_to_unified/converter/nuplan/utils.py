@@ -3,17 +3,14 @@ import os
 
 import numpy as np
 
+import nuplan
+from nuplan.common.actor_state.tracked_objects_types import TrackedObjectType
+from nuplan.common.maps.maps_datatypes import SemanticMapLayer
 
-try:
-    import nuplan
-    from nuplan.common.actor_state.tracked_objects_types import TrackedObjectType
-    from nuplan.common.maps.maps_datatypes import SemanticMapLayer
 
-    NuPlanEgoType = TrackedObjectType.EGO
+NuPlanEgoType = TrackedObjectType.EGO
 
-    NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
-except ImportError as e:
-    raise RuntimeError("NuPlan package not found. Please install NuPlan to use this module.") from e
+NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 
 
 def get_center_vector(vector, nuplan_center=(0, 0)):
@@ -63,19 +60,11 @@ def extract_centerline(map_obj, nuplan_center):
     return points
 
 
-def set_light_position(scenario, lane_id, center, target_position=8):
+def set_light_position(scenario, lane_id, center):
     lane = scenario.map_api.get_map_object(str(lane_id), SemanticMapLayer.LANE_CONNECTOR)
 
     assert lane is not None, f"Can not find lane: {lane_id}"
 
     path = lane.baseline_path.discrete_path
-    acc_length = 0
-    point = [path[0].x, path[0].y]
 
-    for k, point in enumerate(path[1:], start=1):
-        previous_p = path[k - 1]
-        acc_length += np.linalg.norm([point.x - previous_p.x, point.y - previous_p.y])
-        if acc_length > target_position:
-            break
-
-    return [point.x - center[0], point.y - center[1]]
+    return [path[0].x - center[0], path[0].y - center[1]]

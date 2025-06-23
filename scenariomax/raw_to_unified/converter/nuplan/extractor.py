@@ -25,6 +25,7 @@ try:
     from nuplan.common.actor_state.static_object import StaticObject
     from nuplan.common.actor_state.tracked_objects_types import TrackedObjectType
     from nuplan.common.maps.maps_datatypes import SemanticMapLayer, StopLineType
+    from nuplan.common.maps.nuplan_map.nuplan_map import NuPlanMap
     from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario import NuPlanScenario
 
     NuPlanEgoType = TrackedObjectType.EGO
@@ -249,7 +250,7 @@ def extract_traffic(scenario: NuPlanScenario, center):
     return tracks
 
 
-def extract_map_features(map_api, center, radius=300):
+def extract_map_features(map_api: NuPlanMap, center: list[float], radius: int = 250):
     map_features = {}
 
     layer_names = [
@@ -308,14 +309,16 @@ def extract_map_features(map_api, center, radius=300):
                 polygon = [[points[0][i], points[1][i]] for i in range(len(points[0]))]
                 polygon = get_center_vector(polygon, nuplan_center=[center[0], center[1]])
 
+                # Extract lane polyline
+                lane_polyline = extract_centerline(lane_meta_data, center)
+                speed_limit = lane_meta_data.speed_limit_mps
+
                 # According to the map attributes, lanes are numbered left to right with smaller indices being on the
                 # left and larger indices being on the right.
                 # @ See NuPlanLane.adjacent_edges()
                 map_features[lane_meta_data.id] = {
-                    SD.TYPE: ScenarioType.LANE_SURFACE_STREET
-                    if layer == SemanticMapLayer.ROADBLOCK
-                    else ScenarioType.LANE_SURFACE_UNSTRUCTURE,
-                    SD.POLYLINE: extract_centerline(lane_meta_data, center),
+                    SD.TYPE: ScenarioType.LANE_SURFACE_STREET,
+                    SD.POLYLINE: lane_polyline,
                     SD.ENTRY: [edge.id for edge in lane_meta_data.incoming_edges],
                     SD.EXIT: [edge.id for edge in lane_meta_data.outgoing_edges],
                     SD.LEFT_NEIGHBORS: [edge.id for edge in block.interior_edges[:index]]
@@ -325,6 +328,8 @@ def extract_map_features(map_api, center, radius=300):
                     if layer == SemanticMapLayer.ROADBLOCK
                     else [],
                     SD.POLYGON: polygon,
+                    "speed_limit_mph": speed_limit,
+                    "speed_limit_kmh": speed_limit * 1.609344 if speed_limit is not None else None,
                 }
 
                 if layer == SemanticMapLayer.ROADBLOCK_CONNECTOR:
@@ -357,6 +362,20 @@ def extract_map_features(map_api, center, radius=300):
 
             if layer == SemanticMapLayer.ROADBLOCK:
                 block_polygons.append(block.polygon)
+
+    # # Process stop lines (similar to stop signs in Waymo)
+    # if SemanticMapLayer.STOP_LINE in nearest_vector_map:
+    #     for stop_line in nearest_vector_map[SemanticMapLayer.STOP_LINE]:
+    #         if hasattr(stop_line, "polygon") and stop_line.polygon is not None:
+    #             # Extract stop line position
+    #             centroid = stop_line.polygon.centroid
+    #             position = get_center_vector([centroid.x, centroid.y], center)
+
+    #             map_features[stop_line.id] = {
+    #                 SD.TYPE: ScenarioType.STOP_SIGN,
+    #                 "lane": [],  # Could be populated with connected lanes if available
+    #                 "position": np.array([position[0], position[1], 0.0], dtype=np.float32),
+    #             }
 
     map_features = process_walkway(map_features, nearest_vector_map, center)
     map_features = process_crosswalk(map_features, nearest_vector_map, center)

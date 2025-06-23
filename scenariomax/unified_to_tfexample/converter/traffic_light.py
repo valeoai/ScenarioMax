@@ -26,7 +26,7 @@ def from_traffic_light_state_to_int(traffic_light_state):
     return mapping.get(traffic_light_state, 0)
 
 
-def get_traffic_lights_state(scenario):
+def get_traffic_lights_state(scenario, debug=False):
     traffic_lights_state = TrafficLightState()
 
     swing_index = NUM_TS_PAST
@@ -65,5 +65,32 @@ def get_traffic_lights_state(scenario):
     traffic_lights_state.future_z[:] = traffic_lights_state.current_z
     traffic_lights_state.future_valid[:] = traffic_lights_state.current_valid
     traffic_lights_state.future_id[:] = traffic_lights_state.current_id
+
+    # Debug plotting for traffic lights
+    if debug:
+        import matplotlib.pyplot as plt
+
+        color_mapping = {
+            4: "red",
+            1: "salmon",
+            7: "salmon",
+            5: "yellow",
+            2: "yellow",
+            8: "yellow",
+            6: "green",
+            3: "green",
+            0: "blue",
+        }
+
+        ax = plt.gca()
+        # Plot each valid traffic light with color by current state
+        for i in range(DEFAULT_NUM_LIGHT_POSITIONS):
+            if traffic_lights_state.current_valid[i]:
+                x = traffic_lights_state.current_x[i]
+                y = traffic_lights_state.current_y[i]
+                state_int = traffic_lights_state.current_state[i]
+                # map states to colors
+                color = color_mapping.get(state_int, "pink")
+                ax.scatter(x, y, c=color, s=50, marker="s")
 
     return traffic_lights_state

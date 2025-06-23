@@ -1,10 +1,9 @@
+import scenariomax.tf_suppress  # noqa: F401, I001
 import argparse
 import logging
 import os
-
-
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+import time
+from pathlib import Path
 
 from scenariomax.logger_utils import get_logger, setup_logger
 from scenariomax.raw_to_unified.write import (
@@ -20,7 +19,12 @@ logger = get_logger(__name__)
 
 
 def convert_dataset(args, dataset):
+    """Convert a dataset with enhanced progress tracking and timing."""
+    start_time = time.time()
+    logger.info(f"{'=' * 60}")
     logger.info(f"Starting conversion for dataset: {dataset}")
+    logger.info(f"Target format: {args.target_format}")
+    logger.info(f"Workers: {args.num_workers}")
 
     if args.target_format == "tfexample":
         postprocess_func = postprocess_tfexample
@@ -30,6 +34,9 @@ def convert_dataset(args, dataset):
         postprocess_func = None
     else:
         raise ValueError(f"Unsupported target format: {args.target_format}")
+
+    # Dataset-specific loading with timing
+    load_start = time.time()
 
     if dataset == "waymo":
         from scenariomax.raw_to_unified.converter import waymo
@@ -89,7 +96,10 @@ def convert_dataset(args, dataset):
         additional_args = {}
     elif dataset == "openscenes":
         from scenariomax.raw_to_unified.converter import openscenes
-        logger.info(f"Loading OpenScenes scenarios from {args.openscenes_metadata_src} (maps: {os.getenv('NUPLAN_MAPS_ROOT', 'N/A')})")
+
+        logger.info(
+            f"Loading OpenScenes scenarios from {args.openscenes_metadata_src} (maps: {os.getenv('NUPLAN_MAPS_ROOT', 'N/A')})",  # noqa: E501
+        )
         scenarios = openscenes.get_nuplan_scenarios(
             os.getenv("NUPLAN_DATA_ROOT"),
             args.nuplan_src,
@@ -109,30 +119,59 @@ def convert_dataset(args, dataset):
         logger.error(err_msg)
         raise ValueError(err_msg)
 
-    logger.info(f"Loaded {len(scenarios)} scenarios from {dataset}")
+    load_time = time.time() - load_start
+    logger.info(f"✓ Loaded {len(scenarios)} scenarios from {dataset} in {load_time:.2f}s")
 
     output_path = args.dst + f"/{dataset}"
-    logger.info(f"Writing converted data to {output_path}")
+    logger.info(f"📁 Writing converted data to {output_path}")
 
-    write_to_directory(
-        convert_func=convert_func,
-        postprocess_func=postprocess_func,
-        scenarios=scenarios,
-        output_path=output_path,
-        dataset_name=dataset_name,
-        dataset_version=dataset_version,
-        num_workers=args.num_workers,
-        preprocess=preprocess_func,
-        **additional_args,
-    )
+    # Main processing with detailed timing
+    processing_start = time.time()
 
-    logger.info(f"Finished processing {dataset}")
+    try:
+        write_to_directory(
+            convert_func=convert_func,
+            postprocess_func=postprocess_func,
+            scenarios=scenarios,
+            output_path=output_path,
+            dataset_name=dataset_name,
+            dataset_version=dataset_version,
+            num_workers=args.num_workers,
+            preprocess=preprocess_func,
+            **additional_args,
+        )
+
+        processing_time = time.time() - processing_start
+        total_time = time.time() - start_time
+
+        logger.info(f"✅ Successfully processed {dataset}")
+        logger.info("📈 Processing stats:")
+        logger.info(f"   • Total scenarios: {len(scenarios)}")
+        logger.info(f"   • Processing time: {processing_time:.2f}s")
+        logger.info(f"   • Total time (including load): {total_time:.2f}s")
+        logger.info(f"   • Average per scenario: {processing_time / len(scenarios) * 1000:.1f}ms")
+
+        # Check output directory size
+        if Path(output_path).exists():
+            output_size = sum(f.stat().st_size for f in Path(output_path).rglob("*") if f.is_file())
+            logger.info(f"   • Output size: {output_size / (1024**3):.2f} GB")
+
+    except Exception as e:
+        processing_time = time.time() - processing_start
+        logger.error(f"❌ Failed to process {dataset} after {processing_time:.2f}s: {e}")
+        raise
+
+    logger.info(f"{'=' * 60}")
 
 
-if __name__ == "__main__":
+def main():
+    """Main function with enhanced pipeline tracking."""
     # Set up logging first thing
     setup_logger()
-    logger.info("Starting dataset conversion process")
+
+    pipeline_start = time.time()
+    logger.info("🚀 Starting ScenarioMax dataset conversion pipeline")
+    logger.info(f"📅 Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     parser = argparse.ArgumentParser(description="Build database from various scenarios")
     parser.add_argument(
@@ -163,7 +202,7 @@ if __name__ == "__main__":
         "--openscenes_metadata_src",
         type=str,
         default=None,
-        help="The directory storing the openscenes metadata"
+        help="The directory storing the openscenes metadata",
     )
     parser.add_argument(
         "--dst",
@@ -220,16 +259,25 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Log configuration summary
+    logger.info("⚙️  Pipeline Configuration:")
+    logger.info(f"   • Output directory: {args.dst}")
+    logger.info(f"   • Target format: {args.target_format}")
+    logger.info(f"   • Workers: {args.num_workers}")
+    logger.info(f"   • Log level: {args.log_level}")
+    if args.log_file:
+        logger.info(f"   • Log file: {args.log_file}")
+    if args.num_files:
+        logger.info(f"   • File limit: {args.num_files}")
+
     # Update log level and file if specified
     if args.log_level or args.log_file:
+        print(f"Setting up logger with level: {args.log_level} and file: {args.log_file}")
         log_level = getattr(logging, args.log_level) if args.log_level else None
         setup_logger(log_level=log_level, log_file=args.log_file)
         logger.info(f"Log level set to {args.log_level}")
         if args.log_file:
             logger.info(f"Logging to file: {args.log_file}")
-
-    logger.info(f"Output directory: {args.dst}")
-    logger.info(f"Using {args.num_workers} workers")
 
     datasets_to_process = []
 
@@ -244,22 +292,76 @@ if __name__ == "__main__":
     if args.argoverse2_src is not None:
         datasets_to_process.append("argoverse2")
 
-    logger.info(f"Will process the following datasets: {', '.join(datasets_to_process)}")
+    if not datasets_to_process:
+        logger.warning("⚠️  No datasets specified for processing")
+        return
 
-    for dataset in datasets_to_process:
-        convert_dataset(args, dataset)
+    logger.info(f"📋 Processing pipeline: {' → '.join(datasets_to_process)}")
 
+    # Track overall pipeline progress
+    pipeline_stats = {
+        "total_datasets": len(datasets_to_process),
+        "completed_datasets": 0,
+        "failed_datasets": 0,
+        "total_scenarios": 0,
+        "total_processing_time": 0,
+    }
+
+    for i, dataset in enumerate(datasets_to_process, 1):
+        logger.info(f"📊 Pipeline Progress: {i}/{len(datasets_to_process)} datasets")
+
+        try:
+            dataset_start = time.time()
+            convert_dataset(args, dataset)
+            dataset_time = time.time() - dataset_start
+
+            pipeline_stats["completed_datasets"] += 1
+            pipeline_stats["total_processing_time"] += dataset_time
+
+        except Exception as e:
+            pipeline_stats["failed_datasets"] += 1
+            logger.error(f"❌ Dataset {dataset} failed: {e}")
+            continue
+
+    # Post-processing for TFExample format
     if args.target_format == "tfexample":
-        logger.info("Merging final TFRecord files")
-        merge_tfrecord_files(args.dst, f"{args.tfrecord_name}.tfrecord")
+        logger.info("🔄 Starting post-processing for TFExample format...")
+        postprocess_start = time.time()
 
-        if args.shard > 1:
-            logger.info(f"Sharding output into {args.shard} shards")
-            shard_tfrecord(
-                src=args.dst,
-                filename=args.tfrecord_name,
-                num_threads=args.num_workers,
-                num_shards=args.shard,
-            )
+        try:
+            logger.info("Merging final TFRecord files")
+            merge_tfrecord_files(args.dst, f"{args.tfrecord_name}.tfrecord")
 
-    logger.info("Dataset conversion completed successfully")
+            if args.shard > 1:
+                logger.info(f"Sharding output into {args.shard} shards")
+                shard_tfrecord(
+                    src=args.dst,
+                    filename=args.tfrecord_name,
+                    num_threads=args.num_workers,
+                    num_shards=args.shard,
+                )
+
+            postprocess_time = time.time() - postprocess_start
+            pipeline_stats["total_processing_time"] += postprocess_time
+            logger.info(f"✅ Post-processing completed in {postprocess_time:.2f}s")
+
+        except Exception as e:
+            logger.error(f"❌ Post-processing failed: {e}")
+
+    # Final pipeline summary
+    total_pipeline_time = time.time() - pipeline_start
+
+    logger.info("🏁 Pipeline Completion Summary:")
+    logger.info(f"   • Total time: {total_pipeline_time:.2f}s ({total_pipeline_time / 60:.1f} minutes)")
+    logger.info(f"   • Datasets processed: {pipeline_stats['completed_datasets']}/{pipeline_stats['total_datasets']}")
+    if pipeline_stats["failed_datasets"] > 0:
+        logger.warning(f"   • Failed datasets: {pipeline_stats['failed_datasets']}")
+
+    if pipeline_stats["completed_datasets"] > 0:
+        logger.info("✅ Dataset conversion pipeline completed successfully")
+    else:
+        logger.error("❌ Pipeline failed - no datasets processed successfully")
+
+
+if __name__ == "__main__":
+    main()

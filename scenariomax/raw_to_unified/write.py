@@ -100,12 +100,15 @@ def write_to_directory(
     num_files_each_worker = num_files // num_workers
 
     for i in range(num_workers):
-        end_idx = num_files if i == num_workers - 1 else (i + 1) * num_files_each_worker
+        start_idx = i * num_files_each_worker
+        end_idx = num_files if i == num_workers - 1 else start_idx + num_files_each_worker
 
         subdir = os.path.join(output_path, f"{basename}_{i!s}")
         output_paths.append(subdir)
-        argument_list.append([scenarios[i * num_files_each_worker : end_idx], kwargs_for_workers[i], i, subdir])
-        logger.debug(f"Worker {i} will process {len(scenarios[i * num_files_each_worker : end_idx])} scenarios")
+        scenario_chunk = scenarios[start_idx:end_idx]
+        argument_list.append([scenario_chunk, kwargs_for_workers[i], i, subdir])
+
+        logger.info(f"Worker {i} will process {len(scenario_chunk)} items (indices {start_idx}:{end_idx})")
 
     func = partial(
         write_to_directory_single_worker,
@@ -120,7 +123,7 @@ def write_to_directory(
 
     with Parallel(n_jobs=num_workers) as parallel:
         done = parallel(
-            delayed(func)(scenarios=arg[0], worker_kwargs=arg[1], worker_index=arg[2], output_path=arg[3])
+            delayed(func)(list_scenarios=arg[0], worker_kwargs=arg[1], worker_index=arg[2], output_path=arg[3])
             for arg in argument_list
         )
 
@@ -139,7 +142,7 @@ def write_to_directory(
 def write_to_directory_single_worker(
     convert_func: Callable,
     postprocess_func: Callable | None,
-    scenarios: list[Any] | Generator[Any, None, None] | Iterable[Any],
+    list_scenarios: list[Any],
     output_path: str,
     dataset_version: str,
     dataset_name: str,
@@ -181,29 +184,36 @@ def write_to_directory_single_worker(
         logger.info("The specified version in kwargs is replaced by argument: 'dataset_version'")
 
     memory_before = process_memory()
-    logger.debug(f"Worker {worker_index} memory before preprocessing: {memory_before:.2f} MB")
+    logger.info(f"Worker {worker_index} starting - Memory usage: {memory_before:.2f} MB")
 
-    scenarios = preprocess(scenarios, worker_index)
+    # Apply preprocessing
+    scenarios = preprocess(list_scenarios, worker_index)
+
+    if dataset_name == "womd":
+        from scenariomax.raw_to_unified.converter.waymo.load import count_waymo_scenarios
+
+        num_scenarios = count_waymo_scenarios(list_scenarios)
+    else:
+        num_scenarios = len(scenarios)
 
     memory_after = process_memory()
     logger.debug(
-        f"Worker {worker_index} memory after preprocessing: {memory_after:.2f} MB ",
+        f"Worker {worker_index} preprocessing complete - Memory: {memory_after:.2f} MB "
         f"(delta: {memory_after - memory_before:.2f} MB)",
     )
 
-    pbar = tqdm(
-        desc=f"Worker {worker_index}",
-        unit=" scenario",
-        position=worker_index,
-        leave=False,
-        dynamic_ncols=True,
-    )
+    # Set up progress tracking
+    logger.info(f"Worker {worker_index} processing {num_scenarios} scenarios")
+
+    pbar = tqdm(desc=f"Worker {worker_index}", unit=" scenario", total=num_scenarios)
 
     processed_count = 0
     error_count = 0
 
     try:
         if not postprocess_func:
+            logger.info(f"Worker {worker_index} starting scenario processing (standard mode)")
+
             for scenario in scenarios:
                 try:
                     sd_scenario, export_file_name = process_scenario(
@@ -226,6 +236,7 @@ def write_to_directory_single_worker(
                     pbar.update(1)
                     pbar.set_postfix({"processed": processed_count, "errors": error_count})
         else:
+            logger.info(f"Worker {worker_index} starting scenario processing (postprocess mode)")
             postprocess_func(
                 output_path,
                 worker_index,
@@ -238,10 +249,13 @@ def write_to_directory_single_worker(
             )
 
         memory_final = process_memory()
-        logger.info(
-            f"Worker {worker_index} finished! Processed {processed_count} scenarios with {error_count} errors. "
-            f"Memory usage: {memory_final:.2f} MB, Files saved at: {output_path}",
-        )
+
+        # Detailed completion logging
+        logger.info(f"Worker {worker_index} COMPLETED:")
+        logger.info(f"  ✅ Processed: {processed_count} scenarios")
+        logger.info(f"  ❌ Errors: {error_count} scenarios")
+        logger.info(f"  📊 Memory: {memory_final:.2f} MB")
+        logger.info(f"  📁 Output: {output_path}")
 
         return True
     except Exception as e:

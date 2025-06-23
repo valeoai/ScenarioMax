@@ -1,3 +1,4 @@
+import scenariomax.tf_suppress  # noqa: F401, I001
 import argparse
 import os
 
@@ -16,7 +17,7 @@ def arg_parser():
     parser.add_argument(
         "-d",
         type=str,
-        default="nuplan",
+        default="womd",
         help="Choose the data to convert to TFRecord",
     )
     parser.add_argument(
@@ -28,7 +29,7 @@ def arg_parser():
     parser.add_argument(
         "--n_jobs",
         type=int,
-        default=8,
+        default=10,
         help="Number of parallel jobs",
     )
     return parser.parse_args()
@@ -67,7 +68,10 @@ def process_and_save_scenario_chunk(pkle_files_chunk: list[str], output_dir: str
 
 
 def write_tfrecord_from_scenariomax_files(
-    pkle_files: list[str], data_choice: str, num_files: int = None, n_jobs: int = -1
+    pkle_files: list[str],
+    data_choice: str,
+    num_files: int = None,
+    n_jobs: int = -1,
 ) -> None:
     output_dir = f"/data/tfrecord/{data_choice}"
     os.makedirs(output_dir, exist_ok=True)
@@ -122,7 +126,7 @@ if __name__ == "__main__":
     args = arg_parser()
 
     data_choice = args.d
-    data_location = "/data/out"
+    data_location = f"/data/pkl_{data_choice}/"
     pkle_files = list_files(data_location)
 
     write_tfrecord_from_scenariomax_files(pkle_files, data_choice, args.num_files, args.n_jobs)
