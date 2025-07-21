@@ -2,15 +2,18 @@ import os
 import tempfile
 from dataclasses import dataclass
 from os.path import join
-
-import hydra
+from tqdm import tqdm
 
 import nuplan
 from nuplan.common.actor_state.tracked_objects_types import TrackedObjectType
 from nuplan.planning.script.builders.scenario_building_builder import build_scenario_builder
 from nuplan.planning.script.builders.scenario_filter_builder import build_scenario_filter
 from nuplan.planning.script.utils import set_up_common_builder
-
+from nuplan.database.nuplan_db_orm.nuplandb import NuPlanDB
+from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario import NuPlanScenario
+from nuplan.common.actor_state.vehicle_parameters import get_pacifica_parameters
+from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario_utils import ScenarioExtractionInfo
+from nuplan.database.maps_db.gpkg_mapsdb import GPKGMapsDB
 
 NuPlanEgoType = TrackedObjectType.EGO
 
@@ -76,6 +79,7 @@ def get_nuplan_scenarios(
     simulation_hydra_paths = construct_simulation_hydra_paths(base_config_path)
 
     # Initialize configuration management system
+    import hydra
     hydra.core.global_hydra.GlobalHydra.instance().clear()  # reinitialize hydra if already initialized
     hydra.initialize_config_dir(config_dir=simulation_hydra_paths.config_path)
 
@@ -140,3 +144,57 @@ class HydraConfigPaths:
     config_name: str
     config_path: str
     experiment_dir: str
+
+
+def get_nuplan_scenarios_by_scene(
+    data_root,
+    map_root,
+    num_files: int | None = None,
+    logs: list | None = None,
+):
+    """Gets NuPlan scenarios by directly parsing scenes from logs.
+    Does not use the scenario builder
+
+    Args:
+        data_root: Path containing .db files, like /nuplan-v1.1/splits/mini.
+        map_root: Path to map files.
+        num_files: Maximum number of scenarios to retrieve. If None, retrieves all.
+        logs: A list of logs, like ['2021.07.16.20.45.29_veh-35_01095_01486'].
+            If None, loads all files in data_root.
+
+    Returns:
+        A collection of NuPlan scenario objects.
+    """
+    scenarios = []
+    logs = logs or [file for file in os.listdir(data_root)]
+    map_version = 'nuplan-maps-v1.0'
+    maps_db = GPKGMapsDB(map_version=map_version, map_root=map_root)
+    print("Parsing scenes directly from nuPlan log files")
+    for log in tqdm(logs):
+        log_file_path = join(data_root, log)
+        log_db = NuPlanDB(data_root, log_file_path, maps_db=maps_db)
+        for scene in log_db.scene:
+            tokens = log_db.lidar_pc.select_many(scene_token=scene.token)
+            first_frame = tokens[0]
+            last_frame = tokens[-1]
+            scene_duration = (last_frame.timestamp - first_frame.timestamp) / 1_000_000
+            if scene_duration < 19.0: # What should we use?
+                continue
+            extraction_info = ScenarioExtractionInfo(
+                scenario_duration=scene_duration, subsample_ratio=0.5
+            )
+            scenarios.append(NuPlanScenario(
+                data_root=data_root,
+                log_file_load_path=log_file_path,
+                initial_lidar_token=first_frame.token,
+                initial_lidar_timestamp=first_frame.timestamp,
+                scenario_type=f'{scene.name}+{scene.token}',
+                map_root=map_root,
+                map_version=map_version,
+                map_name=log_db.log.map_version,
+                scenario_extraction_info=extraction_info,
+                ego_vehicle_parameters=get_pacifica_parameters(),
+            ))
+            if len(scenarios) == num_files:
+                return scenarios
+    return scenarios

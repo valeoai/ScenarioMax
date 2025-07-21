@@ -82,11 +82,18 @@ def convert_dataset(args, dataset):
         from scenariomax.raw_to_unified.converter import nuplan
 
         logger.info(f"Loading NuPlan scenarios from {args.nuplan_src} (maps: {os.getenv('NUPLAN_MAPS_ROOT', 'N/A')})")
-        scenarios = nuplan.get_nuplan_scenarios(
-            args.nuplan_src,
-            os.getenv("NUPLAN_MAPS_ROOT"),
-            num_files=args.num_files,
-        )
+        if args.nuplan_direct_from_logs:
+            scenarios = nuplan.get_nuplan_scenarios_by_scene(
+                args.nuplan_src,
+                os.getenv("NUPLAN_MAPS_ROOT"),
+                num_files=args.num_files,                
+            )
+        else:
+            scenarios = nuplan.get_nuplan_scenarios(
+                args.nuplan_src,
+                os.getenv("NUPLAN_MAPS_ROOT"),
+                num_files=args.num_files,
+            )
 
         preprocess_func = None
         convert_func = nuplan.convert_nuplan_scenario
@@ -185,6 +192,12 @@ def main():
         type=str,
         default=None,
         help="The directory storing the raw NuPlan data",
+    )
+    parser.add_argument(
+        "--nuplan_direct_from_logs",
+        type=bool,
+        default=False,
+        help="If true, does not use the nuplan devkit to create scenarios and instead parses scenes directly from logs",
     )
     parser.add_argument(
         "--nuscenes_src",
