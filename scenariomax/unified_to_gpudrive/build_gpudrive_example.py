@@ -209,6 +209,8 @@ def _convert_map_features(scenario_net_map_features):
             continue
 
         original_geometry = feature[geometry_key]
+        if isinstance(original_geometry, list):
+            original_geometry = np.asarray(original_geometry, dtype=np.float32)
         original_geometry = (
             np.expand_dims(original_geometry, 0) if len(original_geometry.shape) == 1 else original_geometry
         )
@@ -327,16 +329,18 @@ def _convert_track_features_to_objects(scenario_net_tracks, agent_collision_mana
 
 
 def _convert_traffic_lights(scenario_net_tl_states):
-    tl_dict = defaultdict(lambda: {"state": [], "x": [], "y": [], "z": [], "time_index": [], "lane_id": []})
+    tl_dict = {}
     for i, (lane_id, tl_state) in enumerate(scenario_net_tl_states.items()):
-        x, y = tl_state["stop_point"]
+        x, y, z = tl_state["stop_point"]
         light_states = tl_state["state"]["object_state"]
+        tl_dict.setdefault(lane_id, {"state": [], "x": [], "y": [], "z": [], "time_index": [], "lane_id": []})
+        tl_dict[lane_id]["x"].append(x)
+        tl_dict[lane_id]["y"].append(y)
+        tl_dict[lane_id]["z"].append(z)
+        tl_dict[lane_id]["lane_id"].append(lane_id)
         for i, state in enumerate(light_states):
             tl_dict[lane_id]["state"].append(TRAFFIC_LIGHT_STATES_MAP[state])
-            tl_dict[lane_id]["x"].append(x)
-            tl_dict[lane_id]["y"].append(y)
             tl_dict[lane_id]["time_index"].append(i)
-            tl_dict[lane_id]["lane_id"].append(lane_id)
     return tl_dict
 
 
@@ -358,29 +362,32 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
     scenario_net_map_features = scenario_net_scene["map_features"]
     roads, edge_segments = _convert_map_features(scenario_net_map_features)
 
-    # Construct road edges for collision checking
-    edge_segments = _filter_small_segments(edge_segments)
-    edge_mesh = _generate_mesh(edge_segments)
-
-    # Create collision managers
-    road_collision_manager = trimesh.collision.CollisionManager()
-    road_collision_manager.add_object("road_edges", edge_mesh)
-    agent_collision_manager = trimesh.collision.CollisionManager()
-    trajectory_collision_manager = trimesh.collision.CollisionManager()
-
     scenario_net_track_features = scenario_net_scene["tracks"]
-    objects, objects_distance_traveled = _convert_track_features_to_objects(
-        scenario_net_track_features,
-        agent_collision_manager,
-        trajectory_collision_manager,
-    )
+    if len(scenario_net_track_features) > 0:
+        # Construct road edges for collision checking
+        edge_segments = _filter_small_segments(edge_segments)
+        edge_mesh = _generate_mesh(edge_segments)
 
-    _mark_colliding_agents(
-        objects=objects,
-        agent_collision_manager=agent_collision_manager,
-        road_collision_manager=road_collision_manager,
-        trajectory_collision_manager=trajectory_collision_manager,
-    )
+        # Create collision managers
+        road_collision_manager = trimesh.collision.CollisionManager()
+        road_collision_manager.add_object("road_edges", edge_mesh)
+        agent_collision_manager = trimesh.collision.CollisionManager()
+        trajectory_collision_manager = trimesh.collision.CollisionManager()
+
+        objects, objects_distance_traveled = _convert_track_features_to_objects(
+            scenario_net_track_features,
+            agent_collision_manager,
+            trajectory_collision_manager,
+        )
+
+        _mark_colliding_agents(
+            objects=objects,
+            agent_collision_manager=agent_collision_manager,
+            road_collision_manager=road_collision_manager,
+            trajectory_collision_manager=trajectory_collision_manager,
+        )
+    else:
+        objects = []
 
     metadata = scenario_net_scene["metadata"]
     if metadata["dataset"] == "waymo":
@@ -408,6 +415,13 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
             "average_distance_traveled": _ensure_scalar(np.mean(objects_distance_traveled)),
             "scenario_info": metadata["scenario_type"],  # for openscenes data this contains the scenario token
         }
+    elif metadata["dataset"] == "opendrive":
+        metadata = {
+            "sdc_track_index": 0,
+            "map_name": metadata["map"],
+            "objects_of_interest": [],
+            "tracks_to_predict": [],
+        }        
 
     scenario_dict = {
         "name": name,
