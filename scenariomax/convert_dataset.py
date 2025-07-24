@@ -114,6 +114,19 @@ def convert_dataset(args, dataset):
         dataset_name = "openscenes"
         dataset_version = "v1.1"
         additional_args = {}
+    elif dataset == "opendrive":
+        from scenariomax.raw_to_unified.converter import opendrive
+        logger.info(
+            f"Loading OpenDrive maps from {args.opendrive_src}",
+        )
+        scenarios = opendrive.get_opendrive_maps(args.opendrive_src, args.opendrive_map_names)
+        
+        preprocess_func = None
+        convert_func = opendrive.convert_opendrive_maps
+
+        dataset_name = "opendrive"
+        dataset_version = "0.0"
+        additional_args = {}
     else:
         err_msg = f"Unsupported dataset: {dataset}"
         logger.error(err_msg)
@@ -205,6 +218,18 @@ def main():
         help="The directory storing the openscenes metadata",
     )
     parser.add_argument(
+        "--opendrive_src",
+        type=str,
+        default=None,
+        help="The directory storing the .xodr files to convert"
+    )
+    parser.add_argument(
+        "--opendrive_map_names",
+        type=str,
+        default=None,
+        help=".txt file containing specific list of .xodr map names to process"
+    )
+    parser.add_argument(
         "--dst",
         type=str,
         required=True,
@@ -291,6 +316,8 @@ def main():
         datasets_to_process.append("nuscenes")
     if args.argoverse2_src is not None:
         datasets_to_process.append("argoverse2")
+    if args.opendrive_src is not None:
+        datasets_to_process.append("opendrive")
 
     if not datasets_to_process:
         logger.warning("⚠️  No datasets specified for processing")
