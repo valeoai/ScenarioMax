@@ -402,7 +402,7 @@ def postprocess_gpudrive(
                 pbar.set_postfix({"processed": processed_count, "errors": error_count})
         except Exception as e:
             error_count += 1
-            logger.error(f"Worker {worker_index} failed to process scenario: {e!s}")
+            logger.exception(f"Worker {worker_index} failed to process scenario")
             pbar.update(1)
             pbar.set_postfix({"processed": processed_count, "errors": error_count})
 
