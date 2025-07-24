@@ -143,7 +143,7 @@ class ScenarioDescription(dict):
         assert cls.METADATA_KEYS.issubset(set(scenario_dict[cls.METADATA].keys())), (
             f"You lack these keys in metadata: {cls.METADATA_KEYS.difference(set(scenario_dict[cls.METADATA].keys()))}"
         )
-        assert scenario_dict[cls.METADATA][cls.TIMESTEP].shape == (scenario_length,)
+        assert np.asarray(scenario_dict[cls.METADATA][cls.TIMESTEP]).shape == (scenario_length,)
 
     @classmethod
     def _check_map_features(cls, map_feature):
