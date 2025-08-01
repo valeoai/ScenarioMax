@@ -1,4 +1,4 @@
-from scenariomax.logger_utils import setup_logger
+from scenariomax import logger_utils
 
 
 def setup_logging(log_file="scenariomax.raw_to_unified.log"):
@@ -8,4 +8,4 @@ def setup_logging(log_file="scenariomax.raw_to_unified.log"):
     Args:
         log_file: Path to the log file
     """
-    return setup_logger(log_file=log_file)
+    return logger_utils.setup_logger(log_file=log_file)

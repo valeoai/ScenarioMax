@@ -16,27 +16,6 @@ for req_path in req_paths:
     with open(req_path) as f:
         requirements += f.read().splitlines()
 
-
-def get_dirlist(_rootdir):
-    dirlist = []
-
-    with os.scandir(_rootdir) as rit:
-        for entry in rit:
-            if not entry.name.startswith('.') and entry.is_dir():
-                dirlist.append(entry.path)
-                dirlist += get_dirlist(entry.path)
-
-    return dirlist
-
-
-# Get subfolders recursively
-os.chdir('..')
-rootdir = 'python-sdk'
-packages = [d.replace('/', '.').replace('{}.'.format(rootdir), '') for d in get_dirlist(rootdir)]
-
-# Filter out Python cache folders
-packages = [p for p in packages if not p.endswith('__pycache__')]
-
 setuptools.setup(
     name='nuscenes-devkit',
     version='1.1.11',
@@ -50,8 +29,8 @@ setuptools.setup(
     url='https://github.com/nutonomy/nuscenes-devkit',
     python_requires='>=3.6',
     install_requires=requirements,
-    packages=packages,
-    package_dir={'': 'python-sdk'},
+    packages=setuptools.find_packages('../python-sdk'),
+    package_dir={'': '../python-sdk'},
     package_data={'': ['*.json']},
     include_package_data=True,
     classifiers=[

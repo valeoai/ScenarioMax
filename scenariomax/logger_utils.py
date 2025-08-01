@@ -2,7 +2,6 @@ import logging
 import os
 
 import absl.logging
-from google.cloud import logging as gcp_logging
 
 
 class Logger(logging.Logger):
@@ -71,12 +70,6 @@ def setup_logger(log_level: int | None = None, log_file: str | None = None):
         logger.removeHandler(handler)
 
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
-    # Set up Google Cloud logging if in cloud environment
-    if os.getenv("CLOUD"):
-        client_logging = gcp_logging.Client()
-        client_logging.setup_logging(log_level=log_level)
-        return logger
 
     # Console handler
     console_handler = logging.StreamHandler()

@@ -2,15 +2,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from scenariomax.unified_to_tfexample.constants import (
-    DEFAULT_NUM_LIGHT_POSITIONS,
-    DEFAULT_NUM_OBJECTS,
-    DEFAULT_NUM_ROADMAPS,
-    NUM_PATHS,
-    NUM_POINTS_PER_PATH,
-    NUM_TS_FUTURE,
-    NUM_TS_PAST,
-)
+from scenariomax.unified_to_tfexample import constants
 
 
 @dataclass
@@ -27,14 +19,22 @@ class PathSamples:
     """
 
     xyz: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_PATHS, NUM_POINTS_PER_PATH, 3), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.NUM_PATHS, constants.NUM_POINTS_PER_PATH, 3),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
-    valid: np.ndarray = field(default_factory=lambda: np.full((NUM_PATHS, NUM_POINTS_PER_PATH), 0, dtype=np.int64))
-    id: np.ndarray = field(default_factory=lambda: np.full((NUM_PATHS, NUM_POINTS_PER_PATH), -1, dtype=np.int64))
+    valid: np.ndarray = field(
+        default_factory=lambda: np.full((constants.NUM_PATHS, constants.NUM_POINTS_PER_PATH), 0, dtype=np.int64),
+    )
+    id: np.ndarray = field(
+        default_factory=lambda: np.full((constants.NUM_PATHS, constants.NUM_POINTS_PER_PATH), -1, dtype=np.int64),
+    )
     arc_length: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_PATHS, NUM_POINTS_PER_PATH), 0.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.NUM_PATHS, constants.NUM_POINTS_PER_PATH), 0.0, dtype=np.float64),
     )
-    on_route: np.ndarray = field(default_factory=lambda: np.full((NUM_PATHS,), 0, dtype=np.int64))
+    on_route: np.ndarray = field(default_factory=lambda: np.full((constants.NUM_PATHS,), 0, dtype=np.int64))
 
 
 @dataclass
@@ -49,25 +49,37 @@ class MultiAgentPathSamples:
 
     xyz: np.ndarray = field(
         default_factory=lambda: np.full(
-            (DEFAULT_NUM_OBJECTS, NUM_PATHS, NUM_POINTS_PER_PATH, 3),
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_PATHS, constants.NUM_POINTS_PER_PATH, 3),
             -1.0,
             dtype=np.float64,
         ),
     )
     valid: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_PATHS, NUM_POINTS_PER_PATH), 0, dtype=np.int64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_PATHS, constants.NUM_POINTS_PER_PATH),
+            0,
+            dtype=np.int64,
+        ),
     )
     id: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_PATHS, NUM_POINTS_PER_PATH), -1, dtype=np.int64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_PATHS, constants.NUM_POINTS_PER_PATH),
+            -1,
+            dtype=np.int64,
+        ),
     )
     arc_length: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_PATHS, NUM_POINTS_PER_PATH), 0.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_PATHS, constants.NUM_POINTS_PER_PATH),
+            0.0,
+            dtype=np.float64,
+        ),
     )
     on_route: np.ndarray = field(
         default_factory=lambda: np.full(
             (
-                DEFAULT_NUM_OBJECTS,
-                NUM_PATHS,
+                constants.DEFAULT_NUM_OBJECTS,
+                constants.NUM_PATHS,
             ),
             0,
             dtype=np.int64,
@@ -102,14 +114,20 @@ class RoadGraphSamples:
         type (np.ndarray): Types for road graph points.
     """
 
-    xyz: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS, 3), -1.0, dtype=np.float64))
-    valid: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS,), 0, dtype=np.int64))
-    id: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS,), -1, dtype=np.int64))
-    dir: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS, 3), -1.0, dtype=np.float64))
-    speed_limit: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS,), -1.0, dtype=np.float64),
+    xyz: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_ROADMAPS, 3), -1.0, dtype=np.float64),
     )
-    type: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_ROADMAPS,), -1, dtype=np.int64))
+    valid: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_ROADMAPS,), 0, dtype=np.int64),
+    )
+    id: np.ndarray = field(default_factory=lambda: np.full((constants.DEFAULT_NUM_ROADMAPS,), -1, dtype=np.int64))
+    dir: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_ROADMAPS, 3), -1.0, dtype=np.float64),
+    )
+    speed_limit: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_ROADMAPS,), -1.0, dtype=np.float64),
+    )
+    type: np.ndarray = field(default_factory=lambda: np.full((constants.DEFAULT_NUM_ROADMAPS,), -1, dtype=np.int64))
 
 
 @dataclass
@@ -167,113 +185,181 @@ class State:
         future_valid (np.ndarray): Flags indicating if future data is valid.
     """
 
-    id: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1, dtype=np.int64))
-    type: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64))
-    is_sdc: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64))
-    tracks_to_predict: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64))
-    objects_of_interest: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64))
+    id: np.ndarray = field(default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1, dtype=np.int64))
+    type: np.ndarray = field(default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64))
+    is_sdc: np.ndarray = field(default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64))
+    tracks_to_predict: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64),
+    )
+    objects_of_interest: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64),
+    )
 
-    current_x: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64))
-    current_y: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64))
-    current_z: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64))
+    current_x: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+    )
+    current_y: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+    )
+    current_z: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+    )
 
     current_bbox_yaw: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
     )
-    current_length: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64))
-    current_width: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64))
-    current_height: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64))
-    current_speed: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64))
-    current_timestamps: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1, dtype=np.int64))
-    current_vel_yaw: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64))
+    current_length: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+    )
+    current_width: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+    )
+    current_height: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+    )
+    current_speed: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+    )
+    current_timestamps: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1, dtype=np.int64),
+    )
+    current_vel_yaw: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+    )
     current_velocity_x: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
     )
     current_velocity_y: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), -1.0, dtype=np.float64),
     )
-    current_valid: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64))
+    current_valid: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS,), 0, dtype=np.int64),
+    )
 
     past_x: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_y: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_z: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
 
     past_bbox_yaw: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_length: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_width: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_height: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_speed: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_timestamps: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1, dtype=np.int64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1, dtype=np.int64),
     )
     past_vel_yaw: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_velocity_x: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_velocity_y: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), -1.0, dtype=np.float64),
     )
     past_valid: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_PAST), 0, dtype=np.int64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_PAST), 0, dtype=np.int64),
     )
 
     future_x: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_y: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_z: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
 
     future_bbox_yaw: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_length: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_width: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_height: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_speed: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_timestamps: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1, dtype=np.int64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE), -1, dtype=np.int64),
     )
     future_vel_yaw: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_velocity_x: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_velocity_y: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_valid: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_OBJECTS, NUM_TS_FUTURE), 0, dtype=np.int64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_OBJECTS, constants.NUM_TS_FUTURE), 0, dtype=np.int64),
     )
 
     @property
@@ -314,59 +400,111 @@ class TrafficLightState:
     """
 
     current_state: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_LIGHT_POSITIONS,), -1, dtype=np.int64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_LIGHT_POSITIONS,), -1, dtype=np.int64),
     )
     current_x: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_LIGHT_POSITIONS,), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_LIGHT_POSITIONS,), -1.0, dtype=np.float64),
     )
     current_y: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_LIGHT_POSITIONS,), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_LIGHT_POSITIONS,), -1.0, dtype=np.float64),
     )
     current_z: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_LIGHT_POSITIONS,), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_LIGHT_POSITIONS,), -1.0, dtype=np.float64),
     )
-    current_id: np.ndarray = field(default_factory=lambda: np.full((DEFAULT_NUM_LIGHT_POSITIONS,), -1, dtype=np.int64))
+    current_id: np.ndarray = field(
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_LIGHT_POSITIONS,), -1, dtype=np.int64),
+    )
     current_valid: np.ndarray = field(
-        default_factory=lambda: np.full((DEFAULT_NUM_LIGHT_POSITIONS,), 0, dtype=np.int64),
+        default_factory=lambda: np.full((constants.DEFAULT_NUM_LIGHT_POSITIONS,), 0, dtype=np.int64),
     )
     current_timestamps: np.ndarray = field(default_factory=lambda: np.full((1,), 0, dtype=np.int64))
 
     past_state: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_PAST, DEFAULT_NUM_LIGHT_POSITIONS), -1, dtype=np.int64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_PAST, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1,
+            dtype=np.int64,
+        ),
     )
     past_x: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_PAST, DEFAULT_NUM_LIGHT_POSITIONS), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_PAST, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     past_y: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_PAST, DEFAULT_NUM_LIGHT_POSITIONS), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_PAST, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     past_z: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_PAST, DEFAULT_NUM_LIGHT_POSITIONS), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_PAST, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     past_id: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_PAST, DEFAULT_NUM_LIGHT_POSITIONS), -1, dtype=np.int64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_PAST, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1,
+            dtype=np.int64,
+        ),
     )
     past_valid: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_PAST, DEFAULT_NUM_LIGHT_POSITIONS), 0, dtype=np.int64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_PAST, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            0,
+            dtype=np.int64,
+        ),
     )
-    past_timestamps: np.ndarray = field(default_factory=lambda: np.full((NUM_TS_PAST,), 0, dtype=np.int64))
+    past_timestamps: np.ndarray = field(default_factory=lambda: np.full((constants.NUM_TS_PAST,), 0, dtype=np.int64))
 
     future_state: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_FUTURE, DEFAULT_NUM_LIGHT_POSITIONS), -1, dtype=np.int64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_FUTURE, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1,
+            dtype=np.int64,
+        ),
     )
     future_x: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_FUTURE, DEFAULT_NUM_LIGHT_POSITIONS), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_FUTURE, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_y: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_FUTURE, DEFAULT_NUM_LIGHT_POSITIONS), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_FUTURE, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_z: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_FUTURE, DEFAULT_NUM_LIGHT_POSITIONS), -1.0, dtype=np.float64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_FUTURE, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1.0,
+            dtype=np.float64,
+        ),
     )
     future_id: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_FUTURE, DEFAULT_NUM_LIGHT_POSITIONS), -1, dtype=np.int64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_FUTURE, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            -1,
+            dtype=np.int64,
+        ),
     )
     future_valid: np.ndarray = field(
-        default_factory=lambda: np.full((NUM_TS_FUTURE, DEFAULT_NUM_LIGHT_POSITIONS), 0, dtype=np.int64),
+        default_factory=lambda: np.full(
+            (constants.NUM_TS_FUTURE, constants.DEFAULT_NUM_LIGHT_POSITIONS),
+            0,
+            dtype=np.int64,
+        ),
     )
-    future_timestamps: np.ndarray = field(default_factory=lambda: np.full((NUM_TS_FUTURE,), 0, dtype=np.int64))
+    future_timestamps: np.ndarray = field(
+        default_factory=lambda: np.full((constants.NUM_TS_FUTURE,), 0, dtype=np.int64),
+    )

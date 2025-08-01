@@ -3,130 +3,270 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> A high-performance toolkit for autonomous vehicle scenario-based testing and dataset conversion
+
 ScenarioMax is an extension to [ScenarioNet](https://github.com/metadriverse/scenarionet) that transforms various autonomous driving datasets into standardized formats. Like ScenarioNet, it first converts different datasets (Waymo, nuPlan, nuScenes) to a unified pickle format. ScenarioMax then extends this process with additional pipelines to convert this unified data into formats compatible with [Waymax](https://github.com/waymo-research/waymax), [V-Max](https://github.com/valeoai/V-Max), and [GPUDrive](https://github.com/Emerge-Lab/gpudrive).
 
-## Features
+## 🚀 Key Features
 
-- **Data Unification Pipeline**: Similar to ScenarioNet, converts raw datasets to a standardized pickle format with type corrections and data reordering
-- **Multiple Output Formats**:
-  - **TFRecord/TFExample**: Generate optimized TFRecord files for Waymax and V-Max
-  - **JSON**: Create compatible output for GPUDrive
-- **SDC Path Support**: Add and evaluate multiple potential trajectories for self-driving vehicles
-- **Extensible Architecture**: Easily add support for new datasets or output formats
+- **Multi-Dataset Support**: Unified interface for Waymo Open Motion Dataset, nuScenes, nuPlan, and OpenScenes
+- **Flexible Output Formats**: Convert to TFExample (Waymax/V-Max), JSON (GPUDrive), or unified pickle format
+- **High Performance**: Parallel processing with memory optimization and progress monitoring
+- **Two-Stage Architecture**: Raw → Unified → Target format pipeline for maximum flexibility
+- **Enhanced Scenarios**: Optional scenario enhancement with customizable processing steps
 
-## Data Processing Pipeline
+## 📋 Table of Contents
 
-ScenarioMax provides a complete data transformation workflow:
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
+- [Supported Datasets](#supported-datasets)
+- [Output Formats](#output-formats)
+- [Architecture](#architecture)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
 
-1. **Raw to Unified** (`raw_to_unified`):
-   - Converts various datasets into a standardized pickle format
-   - Applies type corrections and data reordering to ensure compatibility
-   - Similar to ScenarioNet but with adjustments for downstream compatibility
+## 🛠️ Installation
 
-2. **Unified to Target Format**:
-   - **TFExample** (`unified_to_tfexample`): Converts unified data to TFRecord format for Waymax/V-Max
-   - **GPUDrive** (`unified_to_gpudrive`): Converts unified data to JSON format for GPUDrive
+### Prerequisites
 
-This two-stage pipeline allows for flexible processing of autonomous driving datasets across different simulation platforms.
-
-## Supported Datasets
-
-| Dataset | Version | Link | Status |
-|---------|---------|------|--------|
-| Waymo Open Motion Dataset | v1.3.0 | [Site](https://waymo.com/open/download/) | ✅ Full Support |
-| nuPlan | v1.1 | [Site](https://www.nuscenes.org/nuplan) | ✅ Full Support |
-| nuScenes | v1.0 | [Site](https://www.nuscenes.org/nuscenes) | ✅ Full Support |
-| Argoverse | v2.0 | [Site](https://www.argoverse.org/av2.html#forecasting-link) | 🚧 WIP |
-
-For dataset setup, you can see the complete [ScenarioNet documention](https://scenarionet.readthedocs.io/en/latest/).
-
-# Quick Start Guide
-
-## Prerequisites
-
-- Python 3.10 or newer
+- Python 3.10
+- [uv](https://docs.astral.sh/uv/) for fast dependency management
 - Access to at least one supported dataset (Waymo, nuPlan, or nuScenes)
 - Sufficient disk space for dataset processing
-
-## Installation
 
 ### Basic Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/scenariomax.git
-cd scenariomax
+git clone https://github.com/valeoai/ScenarioMax.git
+cd ScenarioMax
 
-# Install the package
-pip install -e .
+# Create and activate virtual environment
+uv venv -p 3.10
+source .venv/bin/activate
+
+# Install ScenarioMax with dataset support
+make womd          # Waymo Open Motion Dataset
+make nuplan        # nuPlan dataset
+make nuscenes      # nuScenes dataset
+make all           # All datasets
+make dev           # Development environment
 ```
 
-### With nuPlan Support
-
-If you need to work with nuPlan data:
+### Manual Installation
 
 ```bash
-pip install -e devkit/nuplan-devkit
-pip install -r devkit/nuplan-devkit/requirements.txt
+# For specific datasets
+uv pip install -e ".[womd]"      # Waymo support
+uv pip install -e ".[nuplan]"    # nuPlan support
+uv pip install -e ".[nuscenes]"  # nuScenes support
+uv pip install -e ".[dev]"       # Development tools
+uv pip install -e ".[all]"       # All datasets support
 ```
 
-## Basic Usage
+### Environment Setup
 
-### Converting Waymo Open Motion Dataset
+For nuPlan dataset, set required environment variables:
 
 ```bash
-python scenariomax/convert_dataset.py \
+export NUPLAN_MAPS_ROOT=/path/to/nuplan/maps
+export NUPLAN_DATA_ROOT=/path/to/nuplan/data
+```
+
+## 🚀 Quick Start
+
+### Basic Dataset Conversion
+
+```bash
+# Convert Waymo dataset to TFRecord format
+scenariomax-convert \
   --waymo_src /path/to/waymo/data \
-  --dst /path/to/output/directory \
+  --dst /path/to/output \
   --target_format tfexample \
-  --num_workers 8 \
-  --tfrecord_name training
+  --num_workers 8
+
+# Convert nuScenes to GPUDrive format
+scenariomax-convert \
+  --nuscenes_src /path/to/nuscenes \
+  --dst /path/to/output \
+  --target_format gpudrive
+
+# Multi-dataset conversion
+scenariomax-convert \
+  --waymo_src /data/waymo \
+  --nuscenes_src /data/nuscenes \
+  --dst /output \
+  --target_format tfexample
 ```
 
-### Converting nuScenes Dataset
+## 📊 Usage Examples
+
+### Use Case 1: Raw Data to Pickle (Unified Format)
 
 ```bash
-python scenariomax/convert_dataset.py \
-  --nuscenes_src /path/to/nuscenes/data \
-  --dst /path/to/output/directory \
-  --split v1.0-trainval \
-  --target_format tfexample \
-  --num_workers 8 \
-  --tfrecord_name training
-```
-
-### Converting to GPUDrive Format
-
-```bash
-python scenariomax/convert_dataset.py \
-  --waymo_src /path/to/waymo/data \
-  --dst /path/to/output/directory \
-  --target_format gpudrive \
+# Create unified format for later processing
+scenariomax-convert \
+  --waymo_src /data/waymo \
+  --dst /unified_output \
+  --target_format pickle \
   --num_workers 8
 ```
 
-## Understanding the Output
+### Use Case 2: Enhanced Processing Pipeline
 
-After running the conversion process, you'll have:
+```bash
+# Raw → Enhanced → TFRecord with scenario enhancement
+scenariomax-convert \
+  --waymo_src /data/waymo \
+  --dst /output \
+  --target_format tfexample \
+  --enable_enhancement \
+  --num_workers 8
+```
 
-- For `tfexample` format: TFRecord files compatible with Waymax and V-Max
-- For `gpudrive` format: JSON files compatible with GPUDrive
-- For `pickle` format: Standardized pickle files with unified scenario data. Pickle can be converted to a tfexample or a gpudrive afterwards.
+### Use Case 3: Batch Processing with Multiple Datasets
 
-## Documentation
+```bash
+# Process multiple datasets with sharding
+scenariomax-convert \
+  --waymo_src /data/waymo \
+  --nuplan_src /data/nuplan \
+  --nuscenes_src /data/nuscenes \
+  --dst /output \
+  --target_format tfexample \
+  --shard 1000 \
+  --num_workers 16
+```
 
-- Check the [Advanced Configuration Guide](docs/advanced_configuration.md) for more options
-- See [Dataset-Specific Notes](docs/dataset_notes.md) for details on handling each dataset
+### Use Case 4: Two-Stage Processing
 
-## Release Notes
+```bash
+# Stage 1: Raw → Pickle
+scenariomax-convert \
+  --waymo_src /data/waymo \
+  --dst /intermediate \
+  --target_format pickle
 
-### Version 1.0
-- Initial implementation with support for Waymo, nuPlan, and nuScenes
-- TFRecord conversion pipeline for efficient data handling
-- SDC paths support
-- GPUDrive format support
+# Stage 2: Pickle → Enhanced → TFRecord
+scenariomax-convert \
+  --pickle_src /intermediate \
+  --dst /final_output \
+  --target_format tfexample \
+  --enable_enhancement
+```
 
-## License
+## 🗂️ Supported Datasets
+
+
+| Dataset | Version | Link | Status |
+|---------|---------|------|--------|
+| Waymo Open Motion Dataset | v1.3.0 | [Site](https://waymo.com/open/download/) | ✅ Full Support |
+| nuPlan | v1.1 | [Site](https://www.nuscenes.org/nuplan) | ✅ Full Support |
+| nuScenes | v1.0 | [Site](https://www.nuscenes.org/nuscenes) | 🚧 WIP|
+| Argoverse | v2.0 | [Site](https://www.argoverse.org/av2.html#forecasting-link) | 🚧 WIP |
+
+### Dataset-Specific Options
+
+```bash
+# nuScenes with specific split
+scenariomax-convert \
+  --nuscenes_src /data/nuscenes \
+  --split v1.0-trainval \
+  --dst /output \
+  --target_format tfexample
+
+# nuPlan with direct log parsing
+scenariomax-convert \
+  --nuplan_src /data/nuplan \
+  --nuplan_direct_from_logs \
+  --dst /output \
+  --target_format gpudrive
+```
+
+## 📤 Output Formats
+
+### TFRecord (TensorFlow/Waymax)
+
+```bash
+--target_format tfexample
+```
+
+- **Use Case**: Training neural networks with Waymax/V-Max
+- **Output**: `training.tfrecord` files with sharding support
+
+### GPUDrive JSON
+
+```bash
+--target_format gpudrive
+```
+
+- **Use Case**: GPU-accelerated simulation and training
+- **Output**: JSON files compatible with GPUDrive simulator
+
+### Unified Pickle Format
+
+```bash
+--target_format pickle
+```
+
+- **Use Case**: Intermediate format for custom processing
+- **Features**: Full scenario data preservation, Python-native
+- **Output**: `.pkl` files with complete scenario information
+
+## 🏗️ Architecture
+
+ScenarioMax uses a **two-stage pipeline architecture**:
+
+```
+Raw Data → Unified Format → Target Format
+    ↓            ↓              ↓
+[Dataset]   [Enhancement]  [ML Ready]
+```
+
+### Pipeline Stages
+
+1. **Raw to Unified**: Dataset-specific parsers convert native formats to standardized Python dictionaries
+2. **Enhancement** (Optional): Apply transformations, filtering, or augmentation
+3. **Unified to Target**: Convert to training-ready formats (TFRecord, JSON, etc.)
+
+### Key Components
+
+- **`pipeline.py`**: Main orchestrator with multi-dataset support
+- **`dataset_registry.py`**: Dynamic dataset configuration system
+- **`raw_to_unified/`**: Dataset-specific extractors and converters
+- **`unified_to_*/`**: Target format converters
+- **`core/write.py`**: Parallel processing with memory management
+
+## 🔧 Configuration
+
+### Command Line Options
+
+```bash
+# Processing options
+--num_workers 8              # Parallel workers (default: 8)
+--shard 1000                 # Output sharding
+--num_files 100              # Limit files processed
+--enable_enhancement         # Enable scenario enhancement
+
+# Dataset options
+--split v1.0-trainval        # nuScenes data split
+--nuplan_direct_from_logs    # Alternative nuPlan parsing
+
+# Output options
+--tfrecord_name training     # TFRecord filename
+--log_level INFO             # Logging verbosity
+--log_file /path/to/log      # Log file location
+```
+
+
+## 📚 Additional Resources
+
+- [Architecture Documentation](docs/ARCHITECTURE.md)
+- [API Reference](docs/API.md)
+
+
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-

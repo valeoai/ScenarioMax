@@ -1,35 +1,34 @@
 import numpy as np
 
-from scenariomax.unified_to_tfexample.constants import DEFAULT_NUM_OBJECTS, NUM_TS_ALL, NUM_TS_PAST
-from scenariomax.unified_to_tfexample.converter.datatypes import State
-from scenariomax.unified_to_tfexample.exceptions import NotEnoughValidObjectsException
+from scenariomax.unified_to_tfexample import constants, exceptions
+from scenariomax.unified_to_tfexample.converter import datatypes
 
 
 def get_distance(sdc_track, other_track):
     """
     Calculate the distance at the first and last time step between the SDC and other tracks.
     """
-    first_distance = np.linalg.norm(sdc_track["state"]["position"][0] - other_track["state"]["position"][0])
-    last_distance = np.linalg.norm(sdc_track["state"]["position"][-1] - other_track["state"]["position"][-1])
+    first_distance = np.linalg.norm(sdc_track["states"]["position"][0] - other_track["states"]["position"][0])
+    last_distance = np.linalg.norm(sdc_track["states"]["position"][-1] - other_track["states"]["position"][-1])
 
     return (first_distance + last_distance) / 2.0
 
 
-def get_state(scenario, multiagent, debug):
-    state = State()
-    sdc_id = scenario.metadata["sdc_id"]
+def get_state(scenario, multiagent, roadgraph_samples, debug):
+    state = datatypes.State()
+    sdc_id = scenario.metadata["ego_id"]
 
-    swing_index = NUM_TS_PAST
-    scenario_length = NUM_TS_ALL
+    swing_index = constants.NUM_TS_PAST
+    scenario_length = constants.NUM_TS_ALL
 
     # Change dict order by moving SDC to the first key
-    scenario.tracks = {sdc_id: scenario.tracks.pop(sdc_id), **scenario.tracks}
+    scenario.dynamic_agents = {sdc_id: scenario.dynamic_agents.pop(sdc_id), **scenario.dynamic_agents}
 
     # Sort the tracks by the average distance to the SDC at every 10 steps
-    scenario.tracks = dict(
+    scenario.dynamic_agents = dict(
         sorted(
-            scenario.tracks.items(),
-            key=lambda item: get_distance(scenario.tracks[sdc_id], item[1]),
+            scenario.dynamic_agents.items(),
+            key=lambda item: get_distance(scenario.dynamic_agents[sdc_id], item[1]),
         ),
     )
 
@@ -41,18 +40,24 @@ def get_state(scenario, multiagent, debug):
         ax = plt.gca()
 
         # Plot the agents
-        for i, object_id in enumerate(scenario.tracks):
+        for i, object_id in enumerate(scenario.dynamic_agents):
             color = "red" if i == 0 else "blue"
 
-            if np.all(scenario.tracks[object_id]["state"]["velocity"] == 0.0):
+            if np.all(scenario.dynamic_agents[object_id]["states"]["velocity"] == 0.0):
                 color = "pink"
 
-            idx_valid = np.argmax(scenario.tracks[object_id]["state"]["valid"])
+            # if object_id in scenario.metadata["tracks_to_predict"]:
+            #     color = "orange"
 
-            position = scenario.tracks[object_id]["state"]["position"][idx_valid][:2]
-            length = scenario.tracks[object_id]["state"]["length"][idx_valid].squeeze()
-            width = scenario.tracks[object_id]["state"]["width"][idx_valid].squeeze()
-            heading = scenario.tracks[object_id]["state"]["heading"][idx_valid]
+            # if object_id in scenario.metadata["objects_of_interest"]:
+            #     color = "green"
+
+            idx_valid = np.argmax(scenario.dynamic_agents[object_id]["states"]["valid"])
+
+            position = scenario.dynamic_agents[object_id]["states"]["position"][idx_valid][:2]
+            heading = scenario.dynamic_agents[object_id]["states"]["heading"][idx_valid]
+            length = scenario.dynamic_agents[object_id]["states"]["length"][idx_valid].squeeze()
+            width = scenario.dynamic_agents[object_id]["states"]["width"][idx_valid].squeeze()
 
             ax.add_patch(
                 plt.Rectangle(
@@ -67,11 +72,11 @@ def get_state(scenario, multiagent, debug):
             )
             ax.text(position[0], position[1], str(i), color=color)
 
-    for i, object_id in enumerate(scenario.tracks):
-        if i > DEFAULT_NUM_OBJECTS - 1:
+    for i, object_id in enumerate(scenario.dynamic_agents):
+        if i > constants.DEFAULT_NUM_OBJECTS - 1:
             break
 
-        object = scenario.tracks[object_id]
+        object = scenario.dynamic_agents[object_id]
 
         object_type = object["type"]
         waymo_type = _type_to_int(object_type)
@@ -79,8 +84,8 @@ def get_state(scenario, multiagent, debug):
         state.type[i] = waymo_type
         state.id[i] = i
 
-        state_positions = object["state"]["position"][:scenario_length]
-        state_headings = object["state"]["heading"][:scenario_length]
+        state_positions = object["states"]["position"][:scenario_length]
+        state_headings = object["states"]["heading"][:scenario_length]
 
         state.past_x[i] = state_positions[:swing_index, :1].flatten()
         state.past_y[i] = state_positions[:swing_index, 1:2].flatten()
@@ -100,8 +105,8 @@ def get_state(scenario, multiagent, debug):
         # Vehicle dimensions length, width, height
         default_length, default_width, default_height = _get_default_vehicle_dimensions(object_type)
 
-        if "length" in object["state"]:
-            state_length = object["state"]["length"][:scenario_length]
+        if "length" in object["states"]:
+            state_length = object["states"]["length"][:scenario_length]
         else:
             state_length = np.full((scenario_length,), default_length, dtype=np.float64)
 
@@ -109,8 +114,8 @@ def get_state(scenario, multiagent, debug):
         state.current_length[i] = state_length[swing_index]
         state.future_length[i] = state_length[swing_index + 1 :].flatten()
 
-        if "width" in object["state"]:
-            state_width = object["state"]["width"][:scenario_length]
+        if "width" in object["states"]:
+            state_width = object["states"]["width"][:scenario_length]
         else:
             state_width = np.full((scenario_length,), default_width, dtype=np.float64)
 
@@ -118,8 +123,8 @@ def get_state(scenario, multiagent, debug):
         state.current_width[i] = state_width[swing_index]
         state.future_width[i] = state_width[swing_index + 1 :].flatten()
 
-        if "height" in object["state"]:
-            state_height = object["state"]["height"][:scenario_length]
+        if "height" in object["states"]:
+            state_height = object["states"]["height"][:scenario_length]
         else:
             state_height = np.full((scenario_length,), default_height, dtype=np.float64)
 
@@ -128,7 +133,7 @@ def get_state(scenario, multiagent, debug):
         state.future_height[i] = state_height[swing_index + 1 :].flatten()
 
         # Velocities
-        state_velocity = object["state"]["velocity"][:scenario_length]
+        state_velocity = object["states"]["velocity"][:scenario_length]
 
         state.past_velocity_x[i] = state_velocity[:swing_index, :1].flatten()
         state.past_velocity_y[i] = state_velocity[:swing_index, 1:2].flatten()
@@ -137,31 +142,41 @@ def get_state(scenario, multiagent, debug):
         state.future_velocity_x[i][:scenario_length] = state_velocity[swing_index + 1 :, :1].flatten()
         state.future_velocity_y[i][:scenario_length] = state_velocity[swing_index + 1 :, 1:2].flatten()
 
-        state_valids = object["state"]["valid"][:scenario_length]
+        state_valids = object["states"]["valid"][:scenario_length]
         state.past_valid[i] = state_valids[:swing_index].astype(np.int64).flatten()
         state.current_valid[i] = state_valids[swing_index].astype(np.int64)
         state.future_valid[i][:scenario_length] = state_valids[swing_index + 1 :].astype(np.int64).flatten()
 
         # Interests
-        if np.all(state_valids) and object_type == "VEHICLE":
-            has_moved = np.linalg.norm(state_positions[0][:2] - state_positions[-1][:2]) > 3
-            if has_moved:
+        if np.sum(state_valids) >= constants.NUM_TS_ALL * 0.8 and object_type == "VEHICLE":
+            roadgraph_xy = roadgraph_samples.xyz[..., :2]
+            lane_points = (roadgraph_samples.type == 2) | (roadgraph_samples.type == 1)
+            lane_points = np.expand_dims(lane_points, axis=1)
+            roadgraph_xy = np.where(lane_points, roadgraph_xy, np.inf)
+
+            has_moved = np.linalg.norm(state_positions[0][:2] - state_positions[-1][:2]) > 2
+            is_on_lane = np.any(np.linalg.norm(roadgraph_xy - state_positions[-1][:2], axis=1) < 2.0)
+            if has_moved and is_on_lane:
                 state.tracks_to_predict[i] = 1
 
     if not multiagent:
         return state
 
-    if np.sum(state.tracks_to_predict) < 8:
-        raise NotEnoughValidObjectsException()
+    if np.sum(state.tracks_to_predict) < 4:
+        raise exceptions.NotEnoughValidObjectsException()
 
     # Sort objects to put those with tracks_to_predict=1 first (after SDC)
     if np.sum(state.tracks_to_predict) > 0:
         # Get the indices of tracked and untracked objects (excluding SDC at 0)
         tracked = [
-            i for i in range(1, min(DEFAULT_NUM_OBJECTS, len(scenario.tracks))) if state.tracks_to_predict[i] == 1
+            i
+            for i in range(1, min(constants.DEFAULT_NUM_OBJECTS, len(scenario.dynamic_agents)))
+            if state.tracks_to_predict[i] == 1
         ]
         untracked = [
-            i for i in range(1, min(DEFAULT_NUM_OBJECTS, len(scenario.tracks))) if state.tracks_to_predict[i] == 0
+            i
+            for i in range(1, min(constants.DEFAULT_NUM_OBJECTS, len(scenario.dynamic_agents)))
+            if state.tracks_to_predict[i] == 0
         ]
 
         # Create the new ordering: SDC at 0, then tracked objects, then untracked ones
