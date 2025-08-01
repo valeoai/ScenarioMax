@@ -1,0 +1,125 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scenariomax"
+version = "0.1.0"
+description = "A toolkit for scenario-based autonomous vehicle testing"
+requires-python = ">=3.10"
+dependencies = [
+    "absl-py",
+    "psutil",
+    "joblib",
+    "pandas",
+    "numpy<2",
+    "tqdm",
+    "matplotlib",
+    "scipy",
+    "trimesh",
+    "python-fcl",
+    "tensorflow==2.11.1",
+]
+
+[project.optional-dependencies]
+# Dataset-specific dependencies
+womd = [
+    "protobuf<3.20",
+]
+
+# nuPlan dataset support - installs the devkit with all its dependencies
+nuplan = [
+    "nuplan-devkit",
+    # Core nuPlan dependencies from their requirements.txt
+    "aioboto3",
+    "aiofiles",
+    "bokeh==2.4.3",
+    "boto3==1.24.59",
+    "cachetools",
+    "casadi",
+    "control==0.9.1",
+    "docker",
+    "Fiona",
+    "geopandas>=0.12.1",
+    "grpcio==1.43.0",
+    "grpcio-tools==1.43.0",
+    "guppy3==3.1.2",
+    "hydra-core==1.1.1",
+    "hypothesis",
+    "jupyter",
+    "jupyterlab",
+    "mock",
+    "moto",
+    "nest_asyncio",
+    "numpy==1.23.4",
+    "opencv-python",
+    "Pillow",
+    "pyarrow",
+    "pyinstrument",
+    "pyogrio",
+    "pyquaternion>=0.9.5",
+    "pytest",
+    "rasterio",
+    "ray",
+    "requests",
+    "retry",
+    "rtree",
+    "s3fs",
+    "selenium",
+    "Shapely>=2.0.0",
+    "SQLAlchemy==1.4.27",
+    "sympy",
+    "testbook",
+    "tornado",
+    "typer",
+    "ujson",
+    "urllib3",
+    "torch",
+    "tensorboard",
+    "pytorch-lightning",
+]
+
+# nuScenes dataset support - installs the devkit
+nuscenes = [
+    "nuscenes-devkit",
+    # Core nuScenes dependencies
+    "pyquaternion",
+    "shapely",
+    "descartes",
+    "opencv-python",
+    "plotly",
+    "Pillow",
+]
+
+
+# All dataset
+all = [
+    "scenariomax[womd,nuplan]"
+]
+
+# Development dependencies
+dev = [
+    "scenariomax[all]",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "isort>=5.0",
+    "flake8>=6.0",
+    "mypy>=1.0",
+    "pre-commit>=3.0",
+    "ruff>=0.1.0",
+]
+
+
+[project.scripts]
+scenariomax-convert = "scenariomax.convert_dataset:main"
+
+[tool.setuptools.packages.find]
+include = ["scenariomax*"]
+
+# uv sources for local packages
+[tool.uv.sources]
+nuplan-devkit = { path = "devkit/nuplan-devkit", editable = true }
+nuscenes-devkit = { path = "devkit/nuscenes-devkit/setup", editable = true }
+
+

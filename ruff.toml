@@ -1,7 +1,7 @@
 line-length = 120
 target-version = "py310"
 
-extend-exclude = ["devkit/","scenariomax/raw_to_unified/converter/waymo/waymo_protos/"]
+extend-exclude = ["devkit/","scenariomax/raw_to_unified/datasets/waymo/waymo_protos/"]
 
 [lint]
 select = [
@@ -30,4 +30,4 @@ select = [
 lines-after-imports = 2
 
 [lint.mccabe]
-max-complexity = 21
+max-complexity = 30

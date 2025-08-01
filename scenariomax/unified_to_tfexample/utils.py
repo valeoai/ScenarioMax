@@ -1,21 +1,10 @@
 import os
 
-import tensorflow as tf
+from scenariomax.tf_utils import create_tf_feature_functions
 
 
-def bytes_feature(value):
-    """Returns a bytes_list from a string / byte."""
-    if isinstance(value, type(tf.constant(0))):
-        value = value.numpy()  # BytesList won't unpack a string from an EagerTensor.
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
-
-def float_feature(value):
-    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
-
-
-def int64_feature(value):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
+# Create feature functions using centralized TensorFlow utilities
+bytes_feature, float_feature, int64_feature = create_tf_feature_functions()
 
 
 def list_files(dir):

@@ -1,8 +1,7 @@
 import numpy as np
 
-from scenariomax.unified_to_tfexample.constants import NUM_PATHS, NUM_POINTS_PER_PATH
-from scenariomax.unified_to_tfexample.converter.datatypes import MultiAgentPathSamples, PathSamples
-from scenariomax.unified_to_tfexample.converter.utils import get_object_heading, get_object_trajectory
+from scenariomax.unified_to_tfexample import constants
+from scenariomax.unified_to_tfexample.converter import datatypes, utils
 
 
 LANE_WIDTH = 2.5
@@ -24,11 +23,11 @@ def get_scenario_paths(scenario, state, roadgraph_samples, compute_other_paths, 
     Returns:
         Dictionary mapping agent IDs to their MultiAgentPathSamples, with SDC having ID 'sdc'
     """
-    all_paths = MultiAgentPathSamples()
+    all_paths = datatypes.MultiAgentPathSamples()
 
     # First compute paths for the SDC (backward compatibility)
-    sdc_trajectory = get_object_trajectory(state)
-    sdc_heading = get_object_heading(state)
+    sdc_trajectory = utils.get_object_trajectory(state)
+    sdc_heading = utils.get_object_heading(state)
     sdc_paths = _compute_agent_paths(scenario, sdc_trajectory, sdc_heading, roadgraph_samples, debug)
     all_paths.add_data(0, sdc_paths)
 
@@ -50,8 +49,8 @@ def get_scenario_paths(scenario, state, roadgraph_samples, compute_other_paths, 
             if not state.tracks_to_predict[i]:
                 continue
 
-            object_trajectory = get_object_trajectory(state, i)
-            object_heading = get_object_heading(state, i)
+            object_trajectory = utils.get_object_trajectory(state, i)
+            object_heading = utils.get_object_heading(state, i)
 
             agent_paths = _compute_agent_paths(scenario, object_trajectory, object_heading, roadgraph_samples, debug)
             all_paths.add_data(i, agent_paths)
@@ -86,7 +85,7 @@ def get_scenario_paths(scenario, state, roadgraph_samples, compute_other_paths, 
 
 def _compute_agent_paths(scenario, trajectory, heading, roadgraph_samples, debug=False):
     """Extract of the original get_scenario_paths function to compute paths for a single agent"""
-    path_samples = PathSamples()
+    path_samples = datatypes.PathSamples()
 
     # Filter for lane centers only (type 2 and 1)
     lane_mask = np.logical_or(roadgraph_samples.type == 1, roadgraph_samples.type == 2)
@@ -144,7 +143,7 @@ def _compute_agent_paths(scenario, trajectory, heading, roadgraph_samples, debug
     # if debug:
     #     print(f"Root IDs with scores: {[(id, lane_scores.get(id, 0)) for id in root_ids]}")
 
-    paths = _create_sdc_tree_path(root_ids, scenario.map_features)
+    paths = _create_sdc_tree_path(root_ids, scenario.static_map_elements)
 
     # if debug:
     #     print(f"Number of paths: {len(paths)}")
@@ -185,7 +184,7 @@ def _sort_paths_and_get_ego_lane(sdc_trajectory, xyz, valid):
 
         closest_path.append(dist)
 
-    idx_closest_paths = np.argsort(closest_path)[:NUM_PATHS]
+    idx_closest_paths = np.argsort(closest_path)[: constants.NUM_PATHS]
     ego_lane = xyz[idx_closest_paths[0]]
 
     # Crop to the last point of the SDC trajectory
@@ -198,10 +197,10 @@ def _sort_paths_and_get_ego_lane(sdc_trajectory, xyz, valid):
 
 
 def _gather_all_paths(paths, sdc_pos, roadgraph_samples):
-    xyz = np.full((len(paths), NUM_POINTS_PER_PATH, 3), -1.0)
-    valid = np.full((len(paths), NUM_POINTS_PER_PATH), 0)
-    ids = np.full((len(paths), NUM_POINTS_PER_PATH), -1)
-    arc_length = np.full((len(paths), NUM_POINTS_PER_PATH), 0.0)
+    xyz = np.full((len(paths), constants.NUM_POINTS_PER_PATH, 3), -1.0)
+    valid = np.full((len(paths), constants.NUM_POINTS_PER_PATH), 0)
+    ids = np.full((len(paths), constants.NUM_POINTS_PER_PATH), -1)
+    arc_length = np.full((len(paths), constants.NUM_POINTS_PER_PATH), 0.0)
 
     for idx, path in enumerate(paths):
         points, points_id = _gather_points_from_path(path, roadgraph_samples)
@@ -216,9 +215,9 @@ def _gather_all_paths(paths, sdc_pos, roadgraph_samples):
         points_id = points_id[idx_closest_point:]
 
         # Crop to NUM_POINTS_PER_PATH
-        if points.shape[0] > NUM_POINTS_PER_PATH:
-            points = points[:NUM_POINTS_PER_PATH]
-            points_id = points_id[:NUM_POINTS_PER_PATH]
+        if points.shape[0] > constants.NUM_POINTS_PER_PATH:
+            points = points[: constants.NUM_POINTS_PER_PATH]
+            points_id = points_id[: constants.NUM_POINTS_PER_PATH]
 
         xyz[idx, : points.shape[0]] = points
         valid[idx, : points.shape[0]] = 1

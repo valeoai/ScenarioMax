@@ -1,9 +1,9 @@
 import numpy as np
 
-from scenariomax.unified_to_tfexample.converter.datatypes import State
+from scenariomax.unified_to_tfexample.converter import datatypes
 
 
-def get_object_trajectory(state: State, index: int = 0):
+def get_object_trajectory(state: datatypes.State, index: int = 0):
     sdc_past_x = state.past_x[index]
     sdc_past_y = state.past_y[index]
     sdc_past_z = state.past_z[index]
@@ -27,7 +27,7 @@ def get_object_trajectory(state: State, index: int = 0):
     return np.swapaxes(trajectory, 0, 1)
 
 
-def get_object_heading(state: State, index: int = 0):
+def get_object_heading(state: datatypes.State, index: int = 0):
     return np.concatenate(
         [
             state.past_bbox_yaw[index],

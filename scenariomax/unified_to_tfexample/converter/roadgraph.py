@@ -1,7 +1,6 @@
 import warnings
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import KDTree
 
@@ -76,7 +75,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
     roadgraph_samples = RoadGraphSamples()
 
     # Sort map features in reverse order for consistent processing
-    map_features_keys = {key: value for key, value in reversed(sorted(scenario.map_features.items()))}
+    static_map_elements_keys = {key: value for key, value in reversed(sorted(scenario.static_map_elements.items()))}
 
     num_points = 0
     count_types = {}
@@ -84,25 +83,28 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
     std_distances_types = {}
     cropped = False
 
-    for mp_block in map_features_keys:
-        feature = scenario.map_features[mp_block]
-        feature_type = feature["type"]
+    for element_key in static_map_elements_keys:
+        map_element = scenario.static_map_elements[element_key]
+        map_element_type = map_element["type"]
 
         # Track counts for each feature type
-        count_types[feature_type] = count_types.get(feature_type, 0) + 1
+        count_types[map_element_type] = count_types.get(map_element_type, 0) + 1
 
-        if feature_type in FILTERED_ROAD_TYPES:
+        if map_element_type in FILTERED_ROAD_TYPES:
             continue
 
         # Find the key containing the points data
-        key = next((k for k in ["polyline", "lane", "polygon"] if k in feature), None)
-        if not key:
-            continue
+        if map_element_type.startswith(("ROAD", "LANE")):
+            points_to_add = np.array(map_element["polyline"])
+        elif map_element_type in ["CROSSWALK", "SPEED_BUMP"]:
+            points_to_add = np.array(map_element["polygon"])
+        elif map_element_type == "STOP_SIGN":
+            points_to_add = np.array(map_element["position"])
+        else:
+            continue  # Skip unsupported types
 
-        points_to_add = np.array(feature["position"]) if feature_type == "STOP_SIGN" else np.array(feature[key])
-
-        points_type_to_add = _scenariomax_type_to_waymax_type(feature_type)
-        points_to_add = _prepare_points(points_to_add, feature_type)
+        points_type_to_add = _scenariomax_type_to_waymax_type(map_element_type)
+        points_to_add = _prepare_points(points_to_add, map_element_type, scenario["metadata"]["dataset_name"])
 
         # Check if adding these points would exceed the limit
         num_points_to_add = points_to_add.shape[0]
@@ -111,7 +113,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
             break
 
         dir_points_to_add = _compute_dir_points(points_to_add)
-        speed_limit = feature.get("speed_limit_mph", -1)
+        speed_limit = map_element.get("speed_limit_kmh", -1)
 
         if debug:
             _plot_debug_info(points_to_add, dir_points_to_add, speed_limit, points_type_to_add)
@@ -121,19 +123,19 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
         mean_distance = np.mean(dist_inter_points)
         std_distance = np.std(dist_inter_points)
 
-        if feature_type not in mean_distances_types:
-            mean_distances_types[feature_type] = mean_distance
-            std_distances_types[feature_type] = std_distance
+        if map_element_type not in mean_distances_types:
+            mean_distances_types[map_element_type] = mean_distance
+            std_distances_types[map_element_type] = std_distance
         else:
-            mean_distances_types[feature_type] = (mean_distances_types[feature_type] + mean_distance) / 2
-            std_distances_types[feature_type] = (std_distances_types[feature_type] + std_distance) / 2
+            mean_distances_types[map_element_type] = (mean_distances_types[map_element_type] + mean_distance) / 2
+            std_distances_types[map_element_type] = (std_distances_types[map_element_type] + std_distance) / 2
 
-        block_id = _extract_block_id(mp_block)
+        map_element_id = _extract_block_id(element_key)
 
         # Update roadgraph samples
         roadgraph_samples.xyz[num_points : num_points + num_points_to_add] = points_to_add
         roadgraph_samples.type[num_points : num_points + num_points_to_add] = points_type_to_add
-        roadgraph_samples.id[num_points : num_points + num_points_to_add] = block_id
+        roadgraph_samples.id[num_points : num_points + num_points_to_add] = map_element_id
         roadgraph_samples.dir[num_points : num_points + num_points_to_add] = dir_points_to_add
         roadgraph_samples.speed_limit[num_points : num_points + num_points_to_add] = speed_limit
         num_points += num_points_to_add
@@ -151,6 +153,41 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
         raise OverpassException()
 
     return roadgraph_samples, num_points, cropped
+
+
+def _calibrate(points: np.ndarray, target_distance: float = DIST_INTERPOLATION) -> np.ndarray:
+    """
+    Calibrates a list of points to have a consistent distance between them.
+
+    Args:
+        points: A NumPy array of points, where each point is a 2D or 3D coordinate
+        target_distance: The desired distance between consecutive points
+
+    Returns:
+        A new array of points with a consistent distance between them
+    """
+    points = np.array(points)
+    calibrated_points = [points[0]]
+
+    for i in range(1, len(points)):
+        prev_point = calibrated_points[-1]
+        curr_point = points[i]
+        segment_vector = curr_point - prev_point
+        distance = np.linalg.norm(segment_vector)
+
+        while distance >= target_distance:
+            unit_vector = segment_vector / distance
+            new_point = prev_point + unit_vector * target_distance
+            calibrated_points.append(new_point)
+            prev_point = new_point
+            segment_vector = curr_point - prev_point
+            distance = np.linalg.norm(segment_vector)
+
+    # Ensure the last point in the input is included
+    if not np.array_equal(calibrated_points[-1], points[-1]):
+        calibrated_points.append(points[-1])
+
+    return np.array(calibrated_points)
 
 
 def _extract_block_id(block_key: str) -> int:
@@ -462,7 +499,7 @@ def _add_sampled_polygon_segment(
     return sampled_points
 
 
-def _prepare_points(points_to_add: np.ndarray, type: str) -> np.ndarray:
+def _prepare_points(points_to_add: np.ndarray, type: str, dataset: str = "waymo") -> np.ndarray:
     """
     Prepare points by ensuring correct shape and dimensions, and applying
     appropriate interpolation based on the point type.
@@ -482,7 +519,10 @@ def _prepare_points(points_to_add: np.ndarray, type: str) -> np.ndarray:
     if type in ["CROSSWALK", "SPEED_BUMP"]:
         return _add_polygon_samples(points_to_add)
     else:
-        return _add_interpolated_roadgraph_samples(points_to_add)
+        if dataset == "waymo":
+            return _add_interpolated_roadgraph_samples(points_to_add)
+        else:
+            return _calibrate(points_to_add)
 
 
 def _plot_debug_info(
@@ -500,16 +540,18 @@ def _plot_debug_info(
         speed_limit: Speed limit for the points
         points_type_to_add: Type of the points for coloring
     """
+    import matplotlib.pyplot as plt
+
     ax = plt.gca()
     ax.scatter(points_to_add[:, 0], points_to_add[:, 1], s=2, c=DEBUG_COLORS[points_type_to_add])
-    if speed_limit > 0:
-        ax.text(
-            points_to_add[0, 0],
-            points_to_add[0, 1],
-            f"Speed limit: {speed_limit} mph",
-            fontsize=8,
-            color="black",
-        )
+    # if speed_limit > 0:
+    #     ax.text(
+    #         points_to_add[0, 0],
+    #         points_to_add[0, 1],
+    #         f"Speed limit: {speed_limit} kph",
+    #         fontsize=8,
+    #         color="black",
+    #     )
     # Uncomment to show direction arrows:
     # for i in range(len(dir_points_to_add)):
     #     ax.arrow(

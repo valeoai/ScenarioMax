@@ -1,11 +1,11 @@
 import math
 import os
 
-import tensorflow as tf
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
 from scenariomax.logger_utils import get_logger
+from scenariomax.tf_utils import get_tensorflow
 
 
 logger = get_logger(__name__)
@@ -20,6 +20,9 @@ def process_shard(shard_index: int, src_path: str, format_str: str, num_shards: 
         format_str: Format string for output shard filenames
         num_shards: Total number of shards
     """
+    # Get TensorFlow with optimized configuration
+    tf = get_tensorflow()
+
     file_path = format_str % (shard_index, num_shards)
     raw_dataset = tf.data.TFRecordDataset(src_path)
     shard_dataset = raw_dataset.shard(num_shards, shard_index).prefetch(tf.data.experimental.AUTOTUNE)
@@ -54,19 +57,19 @@ def shard_tfrecord(src: str, filename: str, num_threads: int, num_shards: int = 
     format_str = src_path + "-%0" + str(shard_width) + "d-of-%05d"
 
     # Process shards in parallel using thread-based parallelism for I/O operations
-    logger.info(f"Starting parallel sharding with {num_threads} threads")
-    with Parallel(n_jobs=num_threads, prefer="threads", verbose=5) as parallel:
+    logger.debug(f"Starting parallel sharding with {num_threads} threads")
+    with Parallel(n_jobs=num_threads, prefer="threads") as parallel:
         parallel(
             delayed(process_shard)(i, src_path, format_str, num_shards)
-            for i in tqdm(range(num_shards), desc="Sharding TFRecord")
+            for i in tqdm(range(num_shards), desc="Sharding TFRecord", unit="shard")
         )
 
-    logger.info(f"Sharding completed. Shards saved to {src_path}-00000-of-{num_shards:05d}")
+    logger.debug(f"Sharding completed. Shards saved to {src_path}-00000-of-{num_shards:05d}")
 
     if delete_original:
         try:
             os.remove(src_path)
-            logger.info(f"Deleted original TFRecord file: {src_path}")
+            logger.debug(f"Deleted original TFRecord file: {src_path}")
         except Exception as e:
             logger.error(f"Failed to delete original file: {e!s}")
 
