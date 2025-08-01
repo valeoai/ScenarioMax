@@ -7,6 +7,11 @@
 
 ScenarioMax is an extension to [ScenarioNet](https://github.com/metadriverse/scenarionet) that transforms various autonomous driving datasets into standardized formats. Like ScenarioNet, it first converts different datasets (Waymo, nuPlan, nuScenes) to a unified pickle format. ScenarioMax then extends this process with additional pipelines to convert this unified data into formats compatible with [Waymax](https://github.com/waymo-research/waymax), [V-Max](https://github.com/valeoai/V-Max), and [GPUDrive](https://github.com/Emerge-Lab/gpudrive).
 
+
+<div align="center">
+  <img src="docs/scheme.png" alt="Scheme" width="100%" />
+</div>
+
 ## 🚀 Key Features
 
 - **Multi-Dataset Support**: Unified interface for Waymo Open Motion Dataset, nuScenes, nuPlan, and OpenScenes
