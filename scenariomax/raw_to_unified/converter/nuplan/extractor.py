@@ -65,6 +65,7 @@ def convert_nuplan_scenario(scenario: NuPlanScenario, version):
     _scenario[SD.METADATA]["sample_rate"] = scenario_log_interval
     _scenario[SD.METADATA][SD.TIMESTEP] = np.asarray([i * scenario_log_interval for i in range(_scenario[SD.LENGTH])])
     _scenario[SD.METADATA][SD.SDC_ID] = EGO
+    _scenario[SD.METADATA]["initial_lidar_timestamp"] = scenario._initial_lidar_timestamp
 
     # centered all positions to ego car
     state = scenario.get_ego_state_at_iteration(0)

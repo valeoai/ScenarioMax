@@ -1,16 +1,17 @@
 import numpy as np
 import trimesh
-
+from collections import defaultdict
+import math
 from scenariomax.unified_to_gpudrive.data.map_element_ids import (
     FILTERED_TYPES,
     TYPE_TO_MAP_FEATURE_NAME,
     TYPE_TO_MAP_ID,
+    TRAFFIC_LIGHT_STATES_MAP,
 )
 from scenariomax.unified_to_gpudrive.utils import convert_numpy
 
 
 ERR_VAL = -1e4
-
 ### BEGIN CODE ADAPTED FROM GPUDRIVE https://github.com/Emerge-Lab/gpudrive/blob/main/data_utils/process_waymo_files.py
 
 
@@ -227,16 +228,24 @@ def _convert_map_features(scenario_net_map_features):
 
     return road_features, edge_segments
 
+def _check_object_distance_traveled(positions, valids):
+    valid_positions = positions[valids]
+    if len(valid_positions) < 2:
+        return 0.0
+    diffs = valid_positions[1:] - valid_positions[:-1]
+    step_distances = np.linalg.norm(diffs, axis=1)
+    return np.sum(step_distances)
 
 def _ensure_scalar(value):
     return value.item() if isinstance(value, np.ndarray) and value.size == 1 else value
 
-
 def _extract_obj(index, object_id, scenario_net_object):
     state = scenario_net_object["state"]
     metadata = scenario_net_object["metadata"]
+    valids = state["valid"].astype(bool)
     positions = state["position"]
-    valids = state["valid"]
+    headings = state["heading"]
+    velocities = state["velocity"]
 
     position = [
         {"x": point[0], "y": point[1], "z": point[2]} if valids[index] else {"x": ERR_VAL, "y": ERR_VAL, "z": ERR_VAL}
@@ -252,9 +261,8 @@ def _extract_obj(index, object_id, scenario_net_object):
     width = _ensure_scalar(state["width"][final_valid_index])
     height = _ensure_scalar(state["height"][final_valid_index])
 
-    heading = [_wrap_yaws(heading) if valids[index] else ERR_VAL for index, heading in enumerate(state["heading"])]
+    heading = [_wrap_yaws(heading) if valids[index] else ERR_VAL for index, heading in enumerate(headings)]
 
-    velocities = state["velocity"]
     velocity = [
         {
             "x": point[0],
@@ -283,15 +291,17 @@ def _extract_obj(index, object_id, scenario_net_object):
         "height": height,
         "heading": heading,
         "velocity": velocity,
-        "valid": valids.astype(bool),
+        "valid": valids,
         "goalPosition": goalPosition,
         "is_sdc": object_id == "ego",
         "mark_as_expert": False,
+        "total_distance_traveled": _ensure_scalar(_check_object_distance_traveled(positions, valids))
     }
 
 
 def _convert_track_features_to_objects(scenario_net_tracks, agent_collision_manager, trajectory_collision_manager):
     objects = []
+    objects_distance_traveled = []
     for index, object_id in enumerate(scenario_net_tracks):
         scenario_net_object = scenario_net_tracks[object_id]
         if scenario_net_object["metadata"]["type"] in FILTERED_TYPES:
@@ -308,8 +318,24 @@ def _convert_track_features_to_objects(scenario_net_tracks, agent_collision_mana
             if first_valid_idx is not None:
                 _add_trajectories_to_mesh(obj, first_valid_idx, agent_collision_manager, trajectory_collision_manager)
                 objects.append(obj)
-    return objects
+                objects_distance_traveled.append(obj["total_distance_traveled"])
+    return objects, objects_distance_traveled
 
+
+def _convert_traffic_lights(scenario_net_tl_states):
+    tl_dict = defaultdict(
+        lambda: {"state": [], "x": [], "y": [], "z": [], "time_index": [], "lane_id": []}
+    )
+    for i, (lane_id, tl_state) in enumerate(scenario_net_tl_states.items()):
+        x, y = tl_state["stop_point"]
+        light_states = tl_state["state"]["object_state"]
+        for i, state in enumerate(light_states):
+            tl_dict[lane_id]["state"].append(TRAFFIC_LIGHT_STATES_MAP[state])
+            tl_dict[lane_id]["x"].append(x)
+            tl_dict[lane_id]["y"].append(y)
+            tl_dict[lane_id]["time_index"].append(i)
+            tl_dict[lane_id]["lane_id"].append(lane_id)
+    return tl_dict
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
@@ -323,9 +349,8 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
     scenario_id = scenario.id
 
     # Construct the traffic light states
-    tl_dict = {"state": [], "x": [], "y": [], "z": [], "time_index": []}
-    # all_keys = ["state", "x", "y", "z"]
-    # Skip traffic lights for the time being
+    scenario_net_tl_states = scenario_net_scene["dynamic_map_states"]
+    tl_dict = _convert_traffic_lights(scenario_net_tl_states)
 
     scenario_net_map_features = scenario_net_scene["map_features"]
     roads, edge_segments = _convert_map_features(scenario_net_map_features)
@@ -341,7 +366,7 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
     trajectory_collision_manager = trimesh.collision.CollisionManager()
 
     scenario_net_track_features = scenario_net_scene["tracks"]
-    objects = _convert_track_features_to_objects(
+    objects, objects_distance_traveled = _convert_track_features_to_objects(
         scenario_net_track_features,
         agent_collision_manager,
         trajectory_collision_manager,
@@ -373,8 +398,12 @@ def build_gpudrive_example(name, scenario_net_scene, debug=False):
             "sdc_track_index": sdc_index[0],
             "log_name": metadata["log_name"],
             "ts": metadata["ts"],
+            "initial_lidar_timestamp": metadata["initial_lidar_timestamp"],
+            "map_name": metadata["map"],
             "objects_of_interest": [],
             "tracks_to_predict": [],
+            "average_distance_traveled": _ensure_scalar(np.mean(objects_distance_traveled)),
+            "scenario_info": metadata["scenario_type"] # for openscenes data this contains the scenario token
         }
 
     scenario_dict = {
