@@ -17,8 +17,9 @@ ScenarioMax is an extension to [ScenarioNet](https://github.com/metadriverse/sce
 - **Multi-Dataset Support**: Unified interface for Waymo Open Motion Dataset, nuScenes, nuPlan, and OpenScenes
 - **Flexible Output Formats**: Convert to TFExample (Waymax/V-Max), JSON (GPUDrive), or unified pickle format
 - **High Performance**: Parallel processing with memory optimization and progress monitoring
-- **Two-Stage Architecture**: Raw → Unified → Target format pipeline for maximum flexibility
+- **3-Stage Pipeline Architecture**: Convert → Process → Format for maximum flexibility
 - **Enhanced Scenarios**: Optional scenario enhancement with customizable processing steps
+- **Visualization**: Bird's Eye View (BEV) rendering of scenarios with matplotlib
 
 ## 📋 Table of Contents
 
@@ -82,84 +83,85 @@ export NUPLAN_DATA_ROOT=/path/to/nuplan/data
 
 ## 🚀 Quick Start
 
-### Basic Dataset Conversion
+### 3-Stage Pipeline
+
+ScenarioMax uses a flexible 3-stage pipeline:
+
+```
+Stage 1: Convert  - Raw dataset(s) → Unified pickles
+Stage 2: Process  - Unified pickles → Enhanced pickles (optional)
+Stage 3: Format   - Unified pickles → Target format (tfrecord/json)
+```
+
+### Basic Usage
 
 ```bash
-# Convert Waymo dataset to TFRecord format
-scenariomax-convert \
-  --waymo_src /path/to/waymo/data \
-  --dst /path/to/output \
-  --target_format tfexample \
-  --num_workers 8
+# Stage 1: Convert raw Waymo to unified format
+scenariomax-convert convert --waymo_src /data/waymo --dst /output/unified --num_workers 16
 
-# Convert nuScenes to GPUDrive format
-scenariomax-convert \
-  --nuscenes_src /path/to/nuscenes \
-  --dst /path/to/output \
-  --target_format gpudrive
+# Stage 2: Process unified scenarios (optional)
+scenariomax-convert process --src /output/unified --dst /output/processed --traffic-lights
 
-# Multi-dataset conversion
-scenariomax-convert \
-  --waymo_src /data/waymo \
-  --nuscenes_src /data/nuscenes \
-  --dst /output \
-  --target_format tfexample
+# Stage 3: Convert to TFRecord
+scenariomax-convert format --src /output/processed --dst /output/tfrecord --format tfexample --shard 10
+
+# Or run all 3 stages at once
+scenariomax-convert pipeline --waymo_src /data/waymo --dst /output --format tfexample --process --shard 10
+
+# Visualize unified scenarios (BEV PNG images)
+scenariomax-convert viz --src /output/unified --dst /output/viz --timestep 10 --max-scenarios 100
 ```
 
 ## 📊 Usage Examples
 
-### Use Case 1: Raw Data to Pickle (Unified Format)
+### Use Case 1: Single Dataset Conversion
 
 ```bash
-# Create unified format for later processing
-scenariomax-convert \
-  --waymo_src /data/waymo \
-  --dst /unified_output \
-  --target_format pickle \
-  --num_workers 8
-```
-
-### Use Case 2: Enhanced Processing Pipeline
-
-```bash
-# Raw → Enhanced → TFRecord with scenario enhancement
-scenariomax-convert \
+# Convert Waymo to TFRecord format
+scenariomax-convert pipeline \
   --waymo_src /data/waymo \
   --dst /output \
-  --target_format tfexample \
-  --enable_enhancement \
+  --format tfexample \
   --num_workers 8
 ```
 
-### Use Case 3: Batch Processing with Multiple Datasets
+### Use Case 2: Multi-Dataset Processing
 
 ```bash
-# Process multiple datasets with sharding
-scenariomax-convert \
+# Combine Waymo and nuPlan datasets
+scenariomax-convert pipeline \
   --waymo_src /data/waymo \
   --nuplan_src /data/nuplan \
-  --nuscenes_src /data/nuscenes \
   --dst /output \
-  --target_format tfexample \
-  --shard 1000 \
+  --format tfexample \
+  --shard 10 \
   --num_workers 16
 ```
 
-### Use Case 4: Two-Stage Processing
+### Use Case 3: Enhanced Processing Pipeline
 
 ```bash
-# Stage 1: Raw → Pickle
-scenariomax-convert \
+# Add traffic light processing
+scenariomax-convert pipeline \
   --waymo_src /data/waymo \
-  --dst /intermediate \
-  --target_format pickle
+  --dst /output \
+  --format tfexample \
+  --process \
+  --traffic-lights \
+  --num_workers 8
+```
 
-# Stage 2: Pickle → Enhanced → TFRecord
-scenariomax-convert \
-  --pickle_src /intermediate \
-  --dst /final_output \
-  --target_format tfexample \
-  --enable_enhancement
+### Use Case 4: Visualization Workflow
+
+```bash
+# Stage 1: Convert to unified format
+scenariomax-convert convert --waymo_src /data/waymo --dst /unified --num_workers 8
+
+# Visualize scenarios
+scenariomax-convert viz --src /unified --dst /viz --timestep 10 --max-scenarios 50
+
+# Stage 3: Convert to target format
+scenariomax-convert format --src /unified --dst /output --format json --num_workers 8
 ```
 
 ## 🗂️ Supported Datasets
@@ -222,26 +224,44 @@ scenariomax-convert \
 
 ## 🏗️ Architecture
 
-ScenarioMax uses a **two-stage pipeline architecture**:
+ScenarioMax uses a **3-stage pipeline architecture**:
 
 ```
-Raw Data → Unified Format → Target Format
-    ↓            ↓              ↓
-[Dataset]   [Enhancement]  [ML Ready]
+Stage 1: Convert  →  Stage 2: Process  →  Stage 3: Format
+Raw Data          →  Unified Format     →  Target Format
+[Dataset]         →  [Enhancement]      →  [ML Ready]
 ```
 
 ### Pipeline Stages
 
-1. **Raw to Unified**: Dataset-specific parsers convert native formats to standardized Python dictionaries
-2. **Enhancement** (Optional): Apply transformations, filtering, or augmentation
-3. **Unified to Target**: Convert to training-ready formats (TFRecord, JSON, etc.)
+1. **Stage 1 (convert)**: Raw dataset(s) → Unified pickles
+   - Dataset-specific parsers convert native formats to standardized format
+   - Supports multiple datasets simultaneously
+   - Output: Pickle files with unified scenario data
+
+2. **Stage 2 (process)**: Unified → Enhanced (Optional)
+   - Apply transformations, filtering, or augmentation
+   - Traffic light inference, object filtering, etc.
+   - Output: Enhanced pickle files
+
+3. **Stage 3 (format)**: Unified → Target format
+   - Convert to training-ready formats (TFRecord, JSON)
+   - Optional sharding for TFRecord output
+   - Output: Format-specific files
+
+### Additional Tools
+
+- **viz**: Visualize unified scenarios as Bird's Eye View (BEV) PNG images
+- **pipeline**: Run all 3 stages together in-memory or with intermediate disk writes
 
 ### Key Components
 
 - **`pipeline.py`**: Main orchestrator with multi-dataset support
 - **`dataset_registry.py`**: Dynamic dataset configuration system
-- **`raw_to_unified/`**: Dataset-specific extractors and converters
-- **`unified_to_*/`**: Target format converters
+- **`stage1_convert/`**: Dataset-specific extractors and converters
+- **`stage2_process/`**: Enhancement processors (traffic lights, etc.)
+- **`stage3_format/`**: Target format converters (tfexample, json)
+- **`visualization/`**: BEV rendering with matplotlib
 - **`core/write.py`**: Parallel processing with memory management
 
 ## 🔧 Configuration

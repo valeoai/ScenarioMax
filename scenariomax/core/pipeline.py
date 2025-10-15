@@ -565,9 +565,7 @@ def _run_pipeline_in_memory(
         config = dataset_registry.get_dataset_config(dataset_name)
 
         # Load raw scenarios
-        scenarios, additional_args = _load_raw_scenarios(
-            dataset_name, dataset_path, config, **kwargs
-        )
+        scenarios, additional_args = _load_raw_scenarios(dataset_name, dataset_path, config, **kwargs)
 
         # Apply preprocessing to get actual scenario generator/list
         from scenariomax.core.write import default_preprocess_func
@@ -618,6 +616,7 @@ def _run_pipeline_in_memory(
             if processors:
                 stage2_start = time.time()
                 for processor_fn in processors:
+
                     def apply_processor(scenario):
                         return processor_fn(scenario)
 

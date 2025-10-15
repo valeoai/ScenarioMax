@@ -37,6 +37,7 @@ def create_argument_parser():
   3. format:  Unified pickles → Target format (tfrecord/json)
 
   pipeline: Run all 3 stages together
+  viz: Visualize unified scenarios in Bird's Eye View (BEV)
 
 Examples:
   # Stage 1: Convert raw Waymo to unified format
@@ -53,6 +54,9 @@ Examples:
 
   # Stage 3: Convert to JSON
   scenariomax-convert format --src /output/processed --dst /output/json --format json
+
+  # Visualize unified scenarios (BEV PNG images)
+  scenariomax-convert viz --src /output/unified --dst /output/viz --timestep 10 --max-scenarios 100
 
   # Full pipeline: All 3 stages at once
   scenariomax-convert pipeline --waymo_src /data/waymo --dst /output --format tfexample --process --shard 10
@@ -150,6 +154,45 @@ Examples:
         "--tfrecord_name",
         default="training",
         help="TFRecord filename (default: training)",
+    )
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Subcommand: viz (Visualize unified scenarios)
+    # ═══════════════════════════════════════════════════════════════════════
+    viz_parser = subparsers.add_parser(
+        "viz",
+        help="Visualize unified scenarios in Bird's Eye View (BEV)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    viz_parser.add_argument("--src", required=True, help="Input directory with unified pickle files")
+    viz_parser.add_argument("--dst", required=True, help="Output directory for PNG visualizations")
+    viz_parser.add_argument(
+        "--timestep",
+        type=int,
+        default=10,
+        help="Timestep to visualize (default: 10)",
+    )
+    viz_parser.add_argument(
+        "--max-scenarios",
+        type=int,
+        help="Maximum number of scenarios to visualize (default: all)",
+    )
+    viz_parser.add_argument(
+        "--no-history",
+        action="store_true",
+        help="Don't show trajectory history",
+    )
+    viz_parser.add_argument(
+        "--no-future",
+        action="store_true",
+        help="Don't show trajectory future",
+    )
+    viz_parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=1,
+        help="Number of workers (default: 1, currently unused)",
     )
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -306,6 +349,25 @@ def handle_format_command(args):
     return 0
 
 
+def handle_viz_command(args):
+    """Handle visualization: Unified pickles → BEV PNG images."""
+    from scenariomax.visualization import visualize_scenarios
+
+    # Run visualization
+    stats = visualize_scenarios(
+        input_path=args.src,
+        output_path=args.dst,
+        timestep=args.timestep,
+        max_scenarios=args.max_scenarios,
+        show_history=not args.no_history,
+        show_future=not args.no_future,
+        num_workers=args.num_workers,
+    )
+
+    logger.info(f"✅ Visualization completed: {stats}")
+    return 0
+
+
 def handle_pipeline_command(args):
     """Handle full pipeline: Raw → Unified → Processed → Target."""
     # Build datasets dict
@@ -373,6 +435,8 @@ def main():
         return handle_process_command(args)
     elif args.command == "format":
         return handle_format_command(args)
+    elif args.command == "viz":
+        return handle_viz_command(args)
     elif args.command == "pipeline":
         return handle_pipeline_command(args)
     else:

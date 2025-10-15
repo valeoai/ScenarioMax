@@ -123,6 +123,18 @@ def is_road_edge(obj_type: str) -> bool:
     return obj_type in ROAD_EDGE_TYPES
 
 
+def is_road_map_element(obj_type: str) -> bool:
+    return obj_type in LANE_TYPES or obj_type in ROAD_LINE_TYPES or obj_type in ROAD_EDGE_TYPES
+
+
+def is_traffic_sign(obj_type: str) -> bool:
+    return obj_type in [STOP_SIGN, SPEED_BUMP, DRIVEWAY]
+
+
+def is_crosswalk(obj_type: str) -> bool:
+    return obj_type == CROSSWALK
+
+
 def is_map_feature(obj_type: str) -> bool:
     return obj_type in MAP_FEATURE_TYPES
 
