@@ -28,7 +28,7 @@ def get_dataset_config(dataset_name: str) -> DatasetConfig:
     """Get configuration for a specific dataset."""
 
     if dataset_name == "waymo":
-        from scenariomax.raw_to_unified.datasets import waymo
+        from scenariomax.stage1_convert.datasets import waymo
 
         return DatasetConfig(
             name="womd",
@@ -39,7 +39,7 @@ def get_dataset_config(dataset_name: str) -> DatasetConfig:
         )
     if dataset_name == "nuscenes":
         raise UnsupportedDatasetError(dataset_name, "nuScenes dataset not yet supported in ScenarioMax")
-        from scenariomax.raw_to_unified.datasets import nuscenes
+        from scenariomax.stage1_convert.datasets import nuscenes
 
         return DatasetConfig(
             name="nuscenes",
@@ -49,7 +49,7 @@ def get_dataset_config(dataset_name: str) -> DatasetConfig:
             preprocess_func=nuscenes.preprocess_nuscenes_scenarios,
         )
     if dataset_name == "nuplan":
-        from scenariomax.raw_to_unified.datasets import nuplan
+        from scenariomax.stage1_convert.datasets import nuplan
 
         return DatasetConfig(
             name="nuplan",
@@ -58,7 +58,7 @@ def get_dataset_config(dataset_name: str) -> DatasetConfig:
             convert_func=nuplan.convert_nuplan_scenario,
         )
     if dataset_name == "openscenes":
-        from scenariomax.raw_to_unified.datasets import openscenes
+        from scenariomax.stage1_convert.datasets import openscenes
 
         return DatasetConfig(
             name="openscenes",
@@ -68,7 +68,7 @@ def get_dataset_config(dataset_name: str) -> DatasetConfig:
         )
     if dataset_name == "argoverse2":
         raise UnsupportedDatasetError(dataset_name, "Argoverse2 dataset not yet supported in ScenarioMax")
-        from scenariomax.raw_to_unified.datasets import argoverse2
+        from scenariomax.stage1_convert.datasets import argoverse2
 
         return DatasetConfig(
             name="argoverse",

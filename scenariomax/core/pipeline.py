@@ -149,7 +149,7 @@ def process_unified_scenarios(
 
     Examples:
         # Apply traffic light processing
-        from scenariomax.enhancement import enhance_scenarios
+        from scenariomax.stage2_process import enhance_scenarios
 
         process_unified_scenarios(
             input_path='/output/unified',
@@ -161,7 +161,7 @@ def process_unified_scenarios(
     start_time = time.time()
 
     if processors is None:
-        from scenariomax.enhancement import enhance_scenarios
+        from scenariomax.stage2_process import enhance_scenarios
 
         processors = [enhance_scenarios]
 
@@ -311,7 +311,7 @@ def format_unified_to_target(
 
         # For single dataset, still need to merge workers
         if format == "tfexample":
-            from scenariomax.unified_to_tfexample import postprocess
+            from scenariomax.stage3_format.tfexample import postprocess
 
             postprocess.merge_dataset_workers(output_path, os.path.basename(output_path))
 
@@ -324,10 +324,10 @@ def format_unified_to_target(
                 # Shard if requested
                 num_shards = format_options.get("shard", 1)
                 if num_shards > 1:
-                    from scenariomax.unified_to_tfexample import shard_tfexample
+                    from scenariomax.stage3_format.tfexample import shard
 
                     logger.info(f"Sharding into {num_shards} shards")
-                    shard_tfexample.shard_tfrecord(
+                    shard.shard_tfrecord(
                         src=os.path.dirname(output_path),
                         filename=os.path.basename(output_path),
                         num_threads=num_workers,
@@ -335,7 +335,7 @@ def format_unified_to_target(
                     )
 
         elif format == "json":
-            from scenariomax.unified_to_gpudrive import postprocess
+            from scenariomax.stage3_format.json import postprocess
 
             postprocess.merge_dataset_workers(output_path, os.path.basename(output_path))
 
@@ -655,7 +655,7 @@ def _run_pipeline_in_memory(
     postprocess_start = time.time()
 
     if format == "tfexample":
-        from scenariomax.unified_to_tfexample import postprocess
+        from scenariomax.stage3_format.tfexample import postprocess
 
         postprocess.merge_dataset_workers(final_path, os.path.basename(final_path))
 
@@ -668,10 +668,10 @@ def _run_pipeline_in_memory(
             # Shard if requested
             num_shards = kwargs.get("shard", 1)
             if num_shards > 1:
-                from scenariomax.unified_to_tfexample import shard_tfexample
+                from scenariomax.stage3_format.tfexample import shard
 
                 logger.info(f"Sharding into {num_shards} shards")
-                shard_tfexample.shard_tfrecord(
+                shard.shard_tfrecord(
                     src=os.path.dirname(final_path),
                     filename=os.path.basename(final_path),
                     num_threads=num_workers,
@@ -679,7 +679,7 @@ def _run_pipeline_in_memory(
                 )
 
     elif format == "json":
-        from scenariomax.unified_to_gpudrive import postprocess
+        from scenariomax.stage3_format.json import postprocess
 
         postprocess.merge_dataset_workers(final_path, os.path.basename(final_path))
 
@@ -762,7 +762,7 @@ def _load_raw_scenarios(
 def _get_scenario_count(dataset_name: str, scenarios: list) -> int:
     """Get accurate scenario count (special handling for Waymo)."""
     if dataset_name == "waymo":
-        from scenariomax.raw_to_unified.datasets.waymo.load import count_waymo_scenarios
+        from scenariomax.stage1_convert.datasets.waymo.load import count_waymo_scenarios
 
         return count_waymo_scenarios(scenarios)
     return len(scenarios)
@@ -771,11 +771,11 @@ def _get_scenario_count(dataset_name: str, scenarios: list) -> int:
 def _get_postprocess_func(format: str) -> Callable:
     """Get postprocess function for target format."""
     if format == "tfexample":
-        from scenariomax.unified_to_tfexample import postprocess
+        from scenariomax.stage3_format.tfexample import postprocess
 
         return postprocess.postprocess_tfexample
     elif format == "json":
-        from scenariomax.unified_to_gpudrive import postprocess
+        from scenariomax.stage3_format.json import postprocess
 
         return postprocess.postprocess_gpudrive
     else:
@@ -842,7 +842,7 @@ def _convert_scenarios_to_format(
 def _final_postprocess(format: str, output_path: str, **kwargs) -> None:
     """Final postprocessing for multi-dataset outputs."""
     if format == "tfexample":
-        from scenariomax.unified_to_tfexample import postprocess, shard_tfexample
+        from scenariomax.stage3_format.tfexample import postprocess, shard
 
         # Step 1: Merge workers for each dataset
         logger.info("🔄 Merging TFExample workers for each dataset")
@@ -861,7 +861,7 @@ def _final_postprocess(format: str, output_path: str, **kwargs) -> None:
         num_shards = kwargs.get("shard", 1)
         if num_shards > 1:
             logger.info(f"Sharding into {num_shards} shards")
-            shard_tfexample.shard_tfrecord(
+            shard.shard_tfrecord(
                 src=output_path,
                 filename=tfrecord_name,
                 num_threads=kwargs.get("num_workers", 8),
@@ -869,10 +869,10 @@ def _final_postprocess(format: str, output_path: str, **kwargs) -> None:
             )
 
     elif format == "json":
-        from scenariomax.unified_to_gpudrive import postprocess
+        from scenariomax.stage3_format.json import postprocess
 
         # Step 1: Merge workers for each dataset
-        logger.info("🔄 Merging GPUDrive workers for each dataset")
+        logger.info("🔄 Merging JSON workers for each dataset")
         for dataset_name in os.listdir(output_path):
             dataset_dir = os.path.join(output_path, dataset_name)
             if os.path.isdir(dataset_dir):

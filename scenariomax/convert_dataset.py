@@ -267,14 +267,14 @@ def handle_process_command(args):
     # Build processors list
     processors = []
     if args.traffic_lights:
-        from scenariomax.enhancement import enhance_scenarios
+        from scenariomax.stage2_process import enhance_scenarios
 
         processors.append(enhance_scenarios)
 
     if not processors:
         logger.warning("⚠️  No processors specified. Use --traffic-lights")
         logger.warning("   Proceeding with default processor (currently a no-op)")
-        from scenariomax.enhancement import enhance_scenarios
+        from scenariomax.stage2_process import enhance_scenarios
 
         processors = [enhance_scenarios]
 
@@ -329,7 +329,7 @@ def handle_pipeline_command(args):
     # Build processors list
     processors = None
     if args.process or args.traffic_lights:
-        from scenariomax.enhancement import enhance_scenarios
+        from scenariomax.stage2_process import enhance_scenarios
 
         processors = [enhance_scenarios]
 

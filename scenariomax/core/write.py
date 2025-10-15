@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from scenariomax import logger_utils
 from scenariomax.core.exceptions import EmptyDatasetError, WorkerProcessingError
-from scenariomax.raw_to_unified.datasets import utils as converter_utils
+from scenariomax.stage1_convert.datasets import utils as converter_utils
 
 
 logger = logger_utils.get_logger(__name__)
@@ -312,7 +312,7 @@ def _execute_parallel_processing(
 def _get_scenario_count(scenarios: Any, list_scenarios: list, dataset_name: str) -> int:
     """Get the number of scenarios, with special handling for Waymo."""
     if dataset_name == "womd":
-        from scenariomax.raw_to_unified.datasets.waymo.load import count_waymo_scenarios
+        from scenariomax.stage1_convert.datasets.waymo.load import count_waymo_scenarios
 
         return count_waymo_scenarios(list_scenarios)
     else:
