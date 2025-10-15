@@ -1,459 +1,486 @@
 """
-Unified conversion pipeline supporting all dataset transformation use cases.
+Simplified 3-stage pipeline for dataset conversion.
 
-This module provides a single, streamlined interface for converting between
-raw datasets, pickle format, and target formats (TFRecord/GPUDrive) with
-minimal disk I/O and maximum code reuse.
+This module provides 4 main functions:
+1. convert_raw_to_unified: Stage 1 - Raw dataset(s) → Unified pickles
+2. process_unified_scenarios: Stage 2 - Unified → Processed unified
+3. format_unified_to_target: Stage 3 - Unified → Target format (tfrecord/json)
+4. process_scenarios: Full pipeline - Run all 3 stages together
 """
 
 import os
 import pickle
-import shutil
 import time
 from collections.abc import Callable
 from typing import Any
 
+from joblib import Parallel, delayed
 from tqdm import tqdm
 
 from scenariomax import dataset_registry, logger_utils
-from scenariomax.core import write
-from scenariomax.core.exceptions import DatasetLoadError, UnsupportedFormatError
-from scenariomax.enhancement import enhance_scenarios
+from scenariomax.core import processor, write
+from scenariomax.core.exceptions import DatasetLoadError
 
 
 logger = logger_utils.get_logger(__name__)
 
 
-# ════════════════════════════════════════════════════════════════════════════════
-# Convenience API Functions
-# ════════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+# Stage 1: Raw → Unified
+# ═══════════════════════════════════════════════════════════════════════════
 
 
-def raw_to_pickle(
-    dataset_name: str,
-    dataset_path: str,
+def convert_raw_to_unified(
+    datasets: dict[str, str] | str,
     output_path: str,
-    enhancement: bool = False,
-    **kwargs,
-) -> dict[str, Any]:
-    """Convert raw dataset to pickle format (use cases 1-2)."""
-    return convert_dataset(
-        source_type="raw",
-        source_paths={dataset_name: dataset_path},
-        target_format="pickle",
-        output_path=output_path,
-        enhancement=enhancement,
-        **kwargs,
-    )
-
-
-def pickle_to_target(
-    pickle_path: str,
-    target_format: str,
-    output_path: str,
-    enhancement: bool = False,
-    **kwargs,
-) -> dict[str, Any]:
-    """Convert pickle to target format (use cases 3-4)."""
-    return convert_dataset(
-        source_type="pickle",
-        source_paths={"pickle": pickle_path},
-        target_format=target_format,
-        output_path=output_path,
-        enhancement=enhancement,
-        **kwargs,
-    )
-
-
-def raw_to_target(
-    dataset_name: str,
-    dataset_path: str,
-    target_format: str,
-    output_path: str,
-    enhancement: bool = False,
-    **kwargs,
-) -> dict[str, Any]:
-    """Convert raw dataset directly to target format (use cases 5-6)."""
-    return convert_dataset(
-        source_type="raw",
-        source_paths={dataset_name: dataset_path},
-        target_format=target_format,
-        output_path=output_path,
-        enhancement=enhancement,
-        stream_mode=True,  # Always stream for raw->target
-        **kwargs,
-    )
-
-
-def convert_dataset(
-    source_type: str,
-    source_paths: dict[str, str],
-    target_format: str,
-    output_path: str,
-    enhancement: bool = False,
-    stream_mode: bool = True,
     num_workers: int = 8,
     **kwargs,
 ) -> dict[str, Any]:
     """
-    Unified dataset conversion pipeline supporting all use cases.
-
-    Use Case 1: Raw → Pickle: source_type='raw', target_format='pickle'
-    Use Case 2: Raw → Pickle + Enhancement: source_type='raw', target_format='pickle', enhancement=True
-    Use Case 3: Pickle → Target: source_type='pickle', target_format='tfexample/gpudrive'
-    Use Case 4: Pickle → Enhanced → Target: source_type='pickle', target_format='tfexample/gpudrive', enhancement=True
-    Use Case 5: Raw → Target (streaming): source_type='raw', target_format='tfexample/gpudrive', stream_mode=True
-    Use Case 6: Raw → Enhanced → Target (streaming): source_type='raw', target_format='tfexample/gpudrive', enhancement=True, stream_mode=True
+    Stage 1: Convert raw dataset(s) to unified pickle format.
 
     Args:
-        source_type: 'raw' or 'pickle'
-        source_paths: Dict mapping dataset names to paths (e.g., {'waymo': '/path/to/waymo'})
-        target_format: 'pickle', 'tfexample', or 'gpudrive'
-        output_path: Output directory
-        enhancement: Apply scenario enhancement
-        stream_mode: Process without intermediate disk saves (for raw→target)
+        datasets: Dict mapping dataset names to paths (e.g., {'waymo': '/path'})
+                 Or single path string (will auto-detect dataset type)
+        output_path: Output directory for unified pickles
         num_workers: Number of parallel workers
-        **kwargs: Additional arguments passed to dataset loaders
+        **kwargs: Dataset-specific arguments (num_files, split, etc.)
 
     Returns:
         Dict with conversion statistics
-    """  # noqa: E501
+
+    Examples:
+        # Single dataset
+        convert_raw_to_unified(
+            datasets={'waymo': '/data/waymo'},
+            output_path='/output/unified',
+            num_workers=16
+        )
+
+        # Multiple datasets
+        convert_raw_to_unified(
+            datasets={'waymo': '/data/waymo', 'nuplan': '/data/nuplan'},
+            output_path='/output/unified',
+            num_workers=16
+        )
+    """
     start_time = time.time()
 
-    # Initialize pipeline
-    _log_pipeline_start(source_type, target_format, stream_mode, enhancement)
-    _validate_inputs(source_type, source_paths, target_format)
-    _setup_output_directory(output_path)
-    stats = _initialize_conversion_stats(source_type, target_format, enhancement, stream_mode)
+    # Normalize input to dict format
+    if isinstance(datasets, str):
+        datasets = {"dataset": datasets}
 
-    # Process all datasets
-    stats = _process_all_datasets(
-        source_paths,
-        stats,
-        source_type,
-        target_format,
-        output_path,
-        enhancement,
-        stream_mode,
-        num_workers,
-        **kwargs,
-    )
+    logger.info(f"🚀 Stage 1: Converting {len(datasets)} dataset(s) to unified format")
 
-    # Finalize pipeline
-    if stats["datasets_processed"] > 0 and target_format != "pickle":
-        _final_postprocess(target_format, output_path, **kwargs)
+    # Setup output directory
+    processor.setup_output_directory(output_path, clean=True)
 
-    _log_pipeline_completion(stats, start_time)
-    return stats
-
-
-def _process_single_dataset(
-    dataset_name: str,
-    dataset_path: str,
-    source_type: str,
-    target_format: str,
-    output_path: str,
-    enhancement: bool,
-    stream_mode: bool,
-    num_workers: int,
-    **kwargs,
-) -> int:
-    """Process a single dataset through the unified pipeline."""
-
-    if source_type == "pickle":
-        # Load from pickle and convert
-        return _process_from_pickle(dataset_path, target_format, output_path, enhancement, **kwargs)
-
-    elif source_type == "raw":
-        if target_format == "pickle":
-            # Raw → Pickle (with optional enhancement)
-            return _process_raw_to_pickle(dataset_name, dataset_path, output_path, enhancement, num_workers, **kwargs)
-        else:
-            # Raw → Target (streaming or with pickle intermediate)
-            return _process_raw_to_target(
-                dataset_name,
-                dataset_path,
-                target_format,
-                output_path,
-                enhancement,
-                stream_mode,
-                num_workers,
-                **kwargs,
-            )
-
-    else:
-        raise ValueError(f"Invalid source_type: {source_type}")
-
-
-def _process_from_pickle(pickle_path: str, target_format: str, output_path: str, enhancement: bool, **kwargs) -> int:
-    """Process scenarios from pickle format (use cases 3-4)."""
-    logger.info(f"📋 Route: pickle → {target_format}")
-
-    # Load unified scenarios
-    scenarios = _load_pickle_scenarios(pickle_path)
-
-    # Apply enhancement if requested
-    if enhancement:
-        scenarios = _apply_enhancement(scenarios)
-
-    # Convert to target format
-    if target_format == "pickle":
-        # Just copy/save enhanced pickle
-        _save_scenarios_as_pickle(scenarios, output_path)
-    else:
-        _convert_to_target_format(scenarios, target_format, output_path, "pickle")
-
-    return len(scenarios)
-
-
-def _process_raw_to_pickle(
-    dataset_name: str,
-    dataset_path: str,
-    output_path: str,
-    enhancement: bool,
-    num_workers: int,
-    **kwargs,
-) -> int:
-    """Process raw dataset to pickle format (use cases 1-2)."""
-    logger.info(f"📋 Route: {dataset_name} → pickle")
-
-    # Load raw scenarios
-    scenarios, additional_args = _load_raw_scenarios(dataset_name, dataset_path, **kwargs)
-
-    # Get dataset config
-    config = dataset_registry.get_dataset_config(dataset_name)
-
-    # Define conversion pipeline
-    # Raw → Unified → Enhanced (?) → Pickle
-    convert_func = _create_enhanced_converter(config.convert_func) if enhancement else config.convert_func
-
-    # Use existing parallel processing infrastructure
-    write.write_to_directory(
-        convert_func=convert_func,
-        postprocess_func=None,  # Save as pickle
-        scenarios=scenarios,
-        output_path=output_path,
-        dataset_name=config.name,
-        dataset_version=config.version,
-        num_workers=num_workers,
-        preprocess=config.preprocess_func,
-        **additional_args,
-    )
-
-    return _get_scenario_count(dataset_name, scenarios)
-
-
-def _process_raw_to_target(
-    dataset_name: str,
-    dataset_path: str,
-    target_format: str,
-    output_path: str,
-    enhancement: bool,
-    stream_mode: bool,
-    num_workers: int,
-    **kwargs,
-) -> int:
-    """Process raw dataset to target format (use cases 5-6)."""
-
-    if stream_mode:
-        logger.info(f"📋 Route: {dataset_name} → {target_format}")
-        return _process_streaming(
-            dataset_name,
-            dataset_path,
-            target_format,
-            output_path,
-            enhancement,
-            num_workers,
-            **kwargs,
-        )
-    else:
-        logger.info(f"📋 Route: {dataset_name} → pickle → {target_format}")
-        # Raw → Pickle → Target (two-stage)
-        temp_pickle_path = output_path + "_temp_pickle"
-
-        try:
-            # Stage 1: Raw → Pickle
-            scenario_count = _process_raw_to_pickle(
-                dataset_name,
-                dataset_path,
-                temp_pickle_path,
-                enhancement,
-                num_workers,
-                **kwargs,
-            )
-
-            # Stage 2: Pickle → Target
-            _process_from_pickle(temp_pickle_path, target_format, output_path, False, **kwargs)
-
-            return scenario_count
-
-        finally:
-            # Cleanup temporary pickle
-            if os.path.exists(temp_pickle_path):
-                shutil.rmtree(temp_pickle_path)
-
-
-def _process_streaming(
-    dataset_name: str,
-    dataset_path: str,
-    target_format: str,
-    output_path: str,
-    enhancement: bool,
-    num_workers: int,
-    **kwargs,
-) -> int:
-    """Stream processing: Raw → Unified → Enhanced → Target (in memory)."""
-
-    # Load raw scenarios
-    scenarios, additional_args = _load_raw_scenarios(dataset_name, dataset_path, **kwargs)
-
-    # Get dataset config and target postprocess function
-    config = dataset_registry.get_dataset_config(dataset_name)
-    postprocess_func = _get_target_postprocess_func(target_format)
-
-    # Create simple converter pipeline (unified format only)
-    convert_func = _create_enhanced_converter(config.convert_func) if enhancement else config.convert_func
-
-    # Use existing parallel processing with postprocess that handles target format conversion
-    write.write_to_directory(
-        convert_func=convert_func,
-        postprocess_func=postprocess_func,
-        scenarios=scenarios,
-        output_path=output_path,
-        dataset_name=config.name,
-        dataset_version=config.version,
-        num_workers=num_workers,
-        preprocess=config.preprocess_func,
-        **additional_args,
-    )
-
-    return _get_scenario_count(dataset_name, scenarios)
-
-
-# ════════════════════════════════════════════════════════════════════════════════
-# Pipeline Setup and Coordination Functions
-# ════════════════════════════════════════════════════════════════════════════════
-
-
-def _log_pipeline_start(source_type: str, target_format: str, stream_mode: bool, enhancement: bool) -> None:
-    """Log pipeline initialization information."""
-    logger.info(f"🚀 Starting unified conversion: {source_type} → {target_format}")
-    logger.info(f"Stream mode: {stream_mode}, Enhancement: {enhancement}")
-
-
-def _setup_output_directory(output_path: str) -> None:
-    """Setup clean output directory, removing existing if present."""
-    if os.path.exists(output_path):
-        logger.info(f"🗑️ Removing existing output directory: {output_path}")
-        shutil.rmtree(output_path)
-
-    os.makedirs(output_path, exist_ok=False)
-    logger.info(f"📁 Created clean output directory: {output_path}")
-
-
-def _initialize_conversion_stats(
-    source_type: str,
-    target_format: str,
-    enhancement: bool,
-    stream_mode: bool,
-) -> dict[str, Any]:
-    """Initialize conversion statistics tracking."""
-    return {
-        "source_type": source_type,
-        "target_format": target_format,
-        "enhancement": enhancement,
-        "stream_mode": stream_mode,
+    stats = {
+        "stage": "raw_to_unified",
         "datasets_processed": 0,
         "total_scenarios": 0,
-        "processing_time": 0,
     }
 
+    # Process each dataset
+    for dataset_name, dataset_path in datasets.items():
+        logger.info(f"📊 Processing dataset: {dataset_name}")
 
-def _process_all_datasets(
-    source_paths: dict[str, str],
-    stats: dict[str, Any],
-    source_type: str,
-    target_format: str,
-    output_path: str,
-    enhancement: bool,
-    stream_mode: bool,
-    num_workers: int,
-    **kwargs,
-) -> dict[str, Any]:
-    """Process all datasets and update statistics."""
-    for dataset_name, dataset_path in source_paths.items():
-        logger.info(f"📊 Processing {dataset_name}")
+        if not os.path.exists(dataset_path):
+            raise DatasetLoadError(dataset_name, dataset_path, "Path not found")
 
+        # Get dataset configuration
+        config = dataset_registry.get_dataset_config(dataset_name)
+
+        # Load raw scenarios
+        scenarios, additional_args = _load_raw_scenarios(dataset_name, dataset_path, config, **kwargs)
+
+        # Create output subdirectory for this dataset
         dataset_output = os.path.join(output_path, dataset_name)
-        scenario_count = _process_single_dataset(
-            dataset_name=dataset_name,
-            dataset_path=dataset_path,
-            source_type=source_type,
-            target_format=target_format,
+
+        # Convert using existing write infrastructure (saves as pickles)
+        write.write_to_directory(
+            convert_func=config.convert_func,
+            postprocess_func=None,  # None = save as pickle
+            scenarios=scenarios,
             output_path=dataset_output,
-            enhancement=enhancement,
-            stream_mode=stream_mode,
+            dataset_name=config.name,
+            dataset_version=config.version,
             num_workers=num_workers,
-            **kwargs,
+            preprocess=config.preprocess_func,
+            **additional_args,
         )
 
+        scenario_count = _get_scenario_count(dataset_name, scenarios)
         stats["datasets_processed"] += 1
         stats["total_scenarios"] += scenario_count
+
         logger.info(f"✅ Completed {dataset_name}: {scenario_count} scenarios")
 
-    return stats
-
-
-def _log_pipeline_completion(stats: dict[str, Any], start_time: float) -> None:
-    """Log pipeline completion statistics."""
     stats["processing_time"] = time.time() - start_time
-    logger.info(f"🏁 Pipeline completed in {stats['processing_time']:.2f}s")
+    logger.info(f"🏁 Stage 1 completed in {stats['processing_time']:.2f}s")
     logger.info(f"   • Datasets: {stats['datasets_processed']}")
     logger.info(f"   • Total scenarios: {stats['total_scenarios']}")
 
+    return stats
 
-# ════════════════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Stage 2: Unified → Processed
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def process_unified_scenarios(
+    input_path: str,
+    output_path: str,
+    processors: list[Callable] | None = None,
+    num_workers: int = 8,
+) -> dict[str, Any]:
+    """
+    Stage 2: Process unified scenarios with transformations.
+
+    Apply transformations like adding traffic lights, filtering,
+    interpolation, data cleaning, etc.
+
+    Args:
+        input_path: Directory containing unified pickle files
+        output_path: Output directory for processed pickles
+        processors: List of processor functions to apply
+                   Each function should take and return a UnifiedScenario
+        num_workers: Number of parallel workers
+
+    Returns:
+        Dict with processing statistics
+
+    Examples:
+        # Apply traffic light processing
+        from scenariomax.enhancement import enhance_scenarios
+
+        process_unified_scenarios(
+            input_path='/output/unified',
+            output_path='/output/processed',
+            processors=[enhance_scenarios],
+            num_workers=8
+        )
+    """
+    start_time = time.time()
+
+    if processors is None:
+        from scenariomax.enhancement import enhance_scenarios
+
+        processors = [enhance_scenarios]
+
+    logger.info(f"🚀 Stage 2: Processing unified scenarios")
+    logger.info(f"   • Processors: {len(processors)}")
+
+    # Setup output directory
+    processor.setup_output_directory(output_path, clean=True)
+
+    # Load all pickle files
+    scenarios = processor.load_pickle_files(input_path)
+
+    logger.info(f"Applying {len(processors)} processor(s) to {len(scenarios)} scenarios")
+
+    # Apply each processor function sequentially
+    processed_scenarios = scenarios
+    for i, processor_fn in enumerate(processors):
+        logger.info(f"Applying processor {i + 1}/{len(processors)}: {processor_fn.__name__}")
+
+        def apply_processor(scenario):
+            return processor_fn(scenario)
+
+        processed_scenarios = processor.process_batch_parallel(
+            items=processed_scenarios,
+            process_fn=apply_processor,
+            num_workers=num_workers,
+            desc=f"Processor {i + 1}/{len(processors)}",
+        )
+
+    # Save processed scenarios
+    processor.save_pickle_files(processed_scenarios, output_path)
+
+    stats = {
+        "stage": "process_unified",
+        "scenarios_processed": len(scenarios),
+        "processors_applied": len(processors),
+        "processing_time": time.time() - start_time,
+    }
+
+    logger.info(f"🏁 Stage 2 completed in {stats['processing_time']:.2f}s")
+    logger.info(f"   • Scenarios processed: {stats['scenarios_processed']}")
+
+    return stats
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Stage 3: Unified → Target Format
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def format_unified_to_target(
+    input_path: str,
+    output_path: str,
+    format: str,
+    num_workers: int = 8,
+    **format_options,
+) -> dict[str, Any]:
+    """
+    Stage 3: Convert unified pickles to target format.
+
+    Args:
+        input_path: Directory containing unified pickle files
+        output_path: Output directory for target format
+        format: Target format ('tfexample' or 'json')
+        num_workers: Number of parallel workers
+        **format_options: Format-specific options
+            - For tfexample: shard (int), tfrecord_name (str)
+            - For json: (none currently)
+
+    Returns:
+        Dict with conversion statistics
+
+    Examples:
+        # Convert to TFRecord with sharding
+        format_unified_to_target(
+            input_path='/output/enhanced',
+            output_path='/output/tfrecord',
+            format='tfexample',
+            shard=10,
+            tfrecord_name='training',
+            num_workers=8
+        )
+
+        # Convert to JSON for GPUDrive
+        format_unified_to_target(
+            input_path='/output/enhanced',
+            output_path='/output/json',
+            format='json',
+            num_workers=8
+        )
+    """
+    start_time = time.time()
+
+    if format not in ["tfexample", "json"]:
+        raise ValueError(f"Unsupported format: {format}. Use 'tfexample' or 'json'")
+
+    logger.info(f"🚀 Stage 3: Converting unified → {format.upper()}")
+
+    # Setup output directory
+    processor.setup_output_directory(output_path, clean=True)
+
+    # Get the appropriate postprocess function
+    postprocess_func = _get_postprocess_func(format)
+
+    # Check if we have dataset subdirectories or flat structure
+    dataset_dirs = _find_dataset_dirs(input_path)
+
+    if dataset_dirs:
+        # Multi-dataset structure: process each dataset separately
+        logger.info(f"Found {len(dataset_dirs)} dataset directories")
+        total_scenarios = 0
+
+        for dataset_name, dataset_path in dataset_dirs.items():
+            logger.info(f"Processing dataset: {dataset_name}")
+
+            # Create output subdirectory for this dataset
+            dataset_output = os.path.join(output_path, dataset_name)
+
+            # Load scenarios for this dataset
+            scenarios = processor.load_pickle_files(dataset_path)
+            total_scenarios += len(scenarios)
+
+            # Convert using write infrastructure
+            _convert_scenarios_to_format(
+                scenarios=scenarios,
+                output_path=dataset_output,
+                postprocess_func=postprocess_func,
+                num_workers=num_workers,
+            )
+
+        # Final postprocessing (merge workers, shuffle, shard)
+        _final_postprocess(format, output_path, **format_options)
+
+    else:
+        # Flat structure: single dataset
+        logger.info("Processing single dataset")
+        scenarios = processor.load_pickle_files(input_path)
+        total_scenarios = len(scenarios)
+
+        # Convert using write infrastructure
+        _convert_scenarios_to_format(
+            scenarios=scenarios,
+            output_path=output_path,
+            postprocess_func=postprocess_func,
+            num_workers=num_workers,
+        )
+
+        # For single dataset, still need to merge workers
+        if format == "tfexample":
+            from scenariomax.unified_to_tfexample import postprocess
+
+            postprocess.merge_dataset_workers(output_path, os.path.basename(output_path))
+
+            # Shuffle the merged file
+            tfrecord_name = format_options.get("tfrecord_name", "training")
+            merged_file = os.path.join(os.path.dirname(output_path), f"{os.path.basename(output_path)}.tfrecord")
+            if os.path.exists(merged_file):
+                postprocess.shuffle_tfrecord_file(merged_file)
+
+                # Shard if requested
+                num_shards = format_options.get("shard", 1)
+                if num_shards > 1:
+                    from scenariomax.unified_to_tfexample import shard_tfexample
+
+                    logger.info(f"Sharding into {num_shards} shards")
+                    shard_tfexample.shard_tfrecord(
+                        src=os.path.dirname(output_path),
+                        filename=os.path.basename(output_path),
+                        num_threads=num_workers,
+                        num_shards=num_shards,
+                    )
+
+        elif format == "json":
+            from scenariomax.unified_to_gpudrive import postprocess
+
+            postprocess.merge_dataset_workers(output_path, os.path.basename(output_path))
+
+    stats = {
+        "stage": "unified_to_target",
+        "format": format,
+        "scenarios_processed": total_scenarios,
+        "processing_time": time.time() - start_time,
+    }
+
+    logger.info(f"🏁 Stage 3 completed in {stats['processing_time']:.2f}s")
+    logger.info(f"   • Format: {format}")
+    logger.info(f"   • Scenarios processed: {stats['scenarios_processed']}")
+
+    return stats
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Full Pipeline: Raw → Unified → Processed → Target
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def process_scenarios(
+    datasets: dict[str, str] | str,
+    output_path: str,
+    format: str,
+    processors: list[Callable] | None = None,
+    num_workers: int = 8,
+    **kwargs,
+) -> dict[str, Any]:
+    """
+    Full pipeline: Run all 3 stages in sequence.
+
+    Args:
+        datasets: Dict mapping dataset names to paths (e.g., {'waymo': '/path'})
+        output_path: Base output directory
+        format: Target format ('tfexample' or 'json')
+        processors: Optional list of processor functions for Stage 2
+        num_workers: Number of parallel workers
+        **kwargs: Additional arguments for stages
+
+    Returns:
+        Dict with combined statistics from all stages
+
+    Examples:
+        # Full pipeline with processing
+        process_scenarios(
+            datasets={'waymo': '/data/waymo'},
+            output_path='/output',
+            format='tfexample',
+            processors=[enhance_scenarios],
+            num_workers=16,
+            shard=10
+        )
+
+        # Full pipeline without processing
+        process_scenarios(
+            datasets={'waymo': '/data/waymo', 'nuplan': '/data/nuplan'},
+            output_path='/output',
+            format='json',
+            num_workers=16
+        )
+    """
+    start_time = time.time()
+
+    logger.info("🚀 Starting full 3-stage pipeline")
+    logger.info(f"   • Datasets: {list(datasets.keys()) if isinstance(datasets, dict) else 'auto-detect'}")
+    logger.info(f"   • Target format: {format}")
+    logger.info(f"   • Processors: {len(processors) if processors else 0}")
+
+    # Create intermediate paths
+    unified_path = os.path.join(output_path, "_unified")
+    processed_path = os.path.join(output_path, "_processed") if processors else None
+    final_path = os.path.join(output_path, format)
+
+    # Stage 1: Raw → Unified
+    stage1_stats = convert_raw_to_unified(
+        datasets=datasets,
+        output_path=unified_path,
+        num_workers=num_workers,
+        **kwargs,
+    )
+
+    # Stage 2: Unified → Processed (optional)
+    stage2_stats = None
+    if processors:
+        stage2_stats = process_unified_scenarios(
+            input_path=unified_path,
+            output_path=processed_path,
+            processors=processors,
+            num_workers=num_workers,
+        )
+        input_for_stage3 = processed_path
+    else:
+        input_for_stage3 = unified_path
+
+    # Stage 3: Unified/Processed → Target Format
+    stage3_stats = format_unified_to_target(
+        input_path=input_for_stage3,
+        output_path=final_path,
+        format=format,
+        num_workers=num_workers,
+        **kwargs,
+    )
+
+    # Cleanup intermediate directories
+    import shutil
+
+    logger.info("Cleaning up intermediate directories")
+    if os.path.exists(unified_path):
+        shutil.rmtree(unified_path)
+    if processed_path and os.path.exists(processed_path):
+        shutil.rmtree(processed_path)
+
+    # Combine statistics
+    total_time = time.time() - start_time
+    stats = {
+        "pipeline": "full_3_stage",
+        "stage1": stage1_stats,
+        "stage2": stage2_stats,
+        "stage3": stage3_stats,
+        "total_time": total_time,
+    }
+
+    logger.info(f"🏁 Full pipeline completed in {total_time:.2f}s")
+
+    return stats
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Helper Functions
-# ════════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
 
 
-def _validate_inputs(source_type: str, source_paths: dict[str, str], target_format: str):
-    """Validate pipeline inputs."""
-    if source_type not in ["raw", "pickle"]:
-        raise ValueError(f"Invalid source_type: {source_type}")
-
-    if target_format not in ["pickle", "tfexample", "gpudrive"]:
-        raise UnsupportedFormatError(target_format, ["pickle", "tfexample", "gpudrive"])
-
-    if not source_paths:
-        raise ValueError("No source paths provided")
-
-    for dataset_name, path in source_paths.items():
-        if not os.path.exists(path):
-            raise DatasetLoadError(dataset_name, path, "Source path not found")
-
-
-def _load_pickle_scenarios(pickle_path: str) -> list[dict[str, Any]]:
-    """Load scenarios from pickle directory."""
-    scenarios = []
-
-    for root, _, files in os.walk(pickle_path):
-        for file in files:
-            if file.endswith(".pkl"):
-                file_path = os.path.join(root, file)
-                with open(file_path, "rb") as f:
-                    scenario = pickle.load(f)
-                    scenarios.append(scenario)
-
-    logger.info(f"Loaded {len(scenarios)} scenarios from pickle")
-    return scenarios
-
-
-def _load_raw_scenarios(dataset_name: str, dataset_path: str, **kwargs) -> tuple:
+def _load_raw_scenarios(
+    dataset_name: str,
+    dataset_path: str,
+    config: Any,
+    **kwargs,
+) -> tuple[list[Any], dict[str, Any]]:
     """Load raw scenarios for a dataset."""
-    config = dataset_registry.get_dataset_config(dataset_name)
-
-    # Prepare load arguments based on dataset
     load_args = {"data_path": dataset_path}
 
     if dataset_name == "waymo":
@@ -474,121 +501,15 @@ def _load_raw_scenarios(dataset_name: str, dataset_path: str, **kwargs) -> tuple
                 "maps_path": os.getenv("NUPLAN_MAPS_ROOT"),
                 "metadata_src": kwargs.get("openscenes_metadata_src"),
                 "num_files": kwargs.get("num_files"),
-            },
+            }
         )
 
     scenarios = config.load_func(**load_args)
     return scenarios, {}
 
 
-def _apply_enhancement(scenarios: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Apply enhancement to scenarios."""
-    logger.info("🔄 Applying scenario enhancement")
-    enhanced = [enhance_scenarios(scenario) for scenario in scenarios]
-    logger.info(f"✅ Enhanced {len(enhanced)} scenarios")
-    return enhanced
-
-
-def _save_scenarios_as_pickle(scenarios: list[dict[str, Any]], output_path: str):
-    """Save scenarios as pickle files."""
-    os.makedirs(output_path, exist_ok=True)
-    worker_dir = os.path.join(output_path, f"{os.path.basename(output_path)}_0")
-    os.makedirs(worker_dir, exist_ok=True)
-
-    for i, scenario in enumerate(scenarios):
-        pickle_file = os.path.join(worker_dir, f"scenario_{i:06d}.pkl")
-        with open(pickle_file, "wb") as f:
-            pickle.dump(scenario, f)
-
-
-def _convert_to_target_format(scenarios: list[dict[str, Any]], target_format: str, output_path: str, dataset_name: str):
-    """Convert scenarios to target format using the proper postprocess functions."""
-    # This function is now only used for pickle->target conversion
-    # Use the actual postprocess functions to avoid duplication
-
-    if target_format == "tfexample":
-        from scenariomax.unified_to_tfexample import postprocess
-
-        # Create a dummy converter that returns scenarios as-is (already unified)
-        def identity_converter(scenario, version):
-            return scenario
-
-        # Create single worker directory
-        worker_dir = os.path.join(output_path, f"{os.path.basename(output_path)}_0")
-        os.makedirs(worker_dir, exist_ok=True)
-
-        pbar = tqdm(desc=f"Converting to {target_format.upper()}", total=len(scenarios))
-
-        postprocess.postprocess_tfexample(
-            output_path=worker_dir,
-            worker_index=0,
-            scenarios=scenarios,
-            convert_func=identity_converter,
-            dataset_version="pickle",
-            dataset_name=dataset_name,
-            pbar=pbar,
-            process_scenario_func=lambda scenario, convert_func, dataset_version, dataset_name, **kwargs: scenario,
-        )
-
-        pbar.close()
-
-    elif target_format == "gpudrive":
-        from scenariomax.unified_to_gpudrive import postprocess
-
-        # Create a dummy converter that returns scenarios as-is (already unified)
-        def identity_converter(scenario, version):
-            return scenario
-
-        # Create single worker directory
-        worker_dir = os.path.join(output_path, f"{os.path.basename(output_path)}_0")
-        os.makedirs(worker_dir, exist_ok=True)
-
-        pbar = tqdm(desc=f"Converting to {target_format.upper()}", total=len(scenarios))
-
-        postprocess.postprocess_gpudrive(
-            output_path=worker_dir,
-            worker_index=0,
-            scenarios=scenarios,
-            convert_func=identity_converter,
-            dataset_version="pickle",
-            dataset_name=dataset_name,
-            pbar=pbar,
-            process_scenario_func=lambda scenario, convert_func, dataset_version, dataset_name, **kwargs: scenario,
-        )
-
-        pbar.close()
-
-
-def enhanced_converter(base_convert_func: Callable):
-    """Create a converter that applies enhancement after conversion."""
-
-    def converter(scenario, version):
-        unified_scenario = base_convert_func(scenario, version)
-        return enhance_scenarios(unified_scenario)
-
-    return converter
-
-
-def _create_enhanced_converter(base_convert_func: Callable) -> Callable:
-    """Create converter that applies enhancement after conversion."""
-    return enhanced_converter(base_convert_func)
-
-
-def _get_target_postprocess_func(target_format: str) -> Callable | None:
-    """Get postprocessing function for target format."""
-    if target_format == "tfexample":
-        from scenariomax.unified_to_tfexample import postprocess
-
-        return postprocess.postprocess_tfexample
-    elif target_format == "gpudrive":
-        from scenariomax.unified_to_gpudrive import postprocess
-
-        return postprocess.postprocess_gpudrive
-    return None
-
-
 def _get_scenario_count(dataset_name: str, scenarios: list) -> int:
-    """Get accurate scenario count for dataset."""
+    """Get accurate scenario count (special handling for Waymo)."""
     if dataset_name == "waymo":
         from scenariomax.raw_to_unified.datasets.waymo.load import count_waymo_scenarios
 
@@ -596,9 +517,80 @@ def _get_scenario_count(dataset_name: str, scenarios: list) -> int:
     return len(scenarios)
 
 
-def _final_postprocess(target_format: str, output_path: str, **kwargs):
+def _get_postprocess_func(format: str) -> Callable:
+    """Get postprocess function for target format."""
+    if format == "tfexample":
+        from scenariomax.unified_to_tfexample import postprocess
+
+        return postprocess.postprocess_tfexample
+    elif format == "json":
+        from scenariomax.unified_to_gpudrive import postprocess
+
+        return postprocess.postprocess_gpudrive
+    else:
+        raise ValueError(f"Unknown format: {format}")
+
+
+def _find_dataset_dirs(input_path: str) -> dict[str, str] | None:
+    """
+    Check if input has dataset subdirectories (multi-dataset structure).
+
+    Returns dict of {dataset_name: path} or None if flat structure.
+    """
+    if not os.path.exists(input_path):
+        return None
+
+    subdirs = {}
+    has_pickle_files = False
+
+    for item in os.listdir(input_path):
+        item_path = os.path.join(input_path, item)
+        if os.path.isdir(item_path):
+            # Check if this subdir contains pickle files
+            has_pickles = any(f.endswith(".pkl") for root, _, files in os.walk(item_path) for f in files)
+            if has_pickles:
+                subdirs[item] = item_path
+        elif item.endswith(".pkl"):
+            has_pickle_files = True
+
+    # If we have both subdirs and top-level pickles, treat as flat
+    if has_pickle_files:
+        return None
+
+    # If we have dataset subdirs, return them
+    if subdirs:
+        return subdirs
+
+    return None
+
+
+def _convert_scenarios_to_format(
+    scenarios: list[Any],
+    output_path: str,
+    postprocess_func: Callable,
+    num_workers: int,
+) -> None:
+    """Convert scenarios to target format using write infrastructure."""
+
+    # Create identity converter (scenarios are already unified)
+    def identity_converter(scenario, version):
+        return scenario
+
+    # Use write infrastructure with postprocess function
+    write.write_to_directory(
+        convert_func=identity_converter,
+        postprocess_func=postprocess_func,
+        scenarios=scenarios,
+        output_path=output_path,
+        dataset_name="unified",
+        dataset_version="pickle",
+        num_workers=num_workers,
+    )
+
+
+def _final_postprocess(format: str, output_path: str, **kwargs) -> None:
     """Final postprocessing for multi-dataset outputs."""
-    if target_format == "tfexample":
+    if format == "tfexample":
         from scenariomax.unified_to_tfexample import postprocess, shard_tfexample
 
         # Step 1: Merge workers for each dataset
@@ -625,7 +617,7 @@ def _final_postprocess(target_format: str, output_path: str, **kwargs):
                 num_shards=num_shards,
             )
 
-    elif target_format == "gpudrive":
+    elif format == "json":
         from scenariomax.unified_to_gpudrive import postprocess
 
         # Step 1: Merge workers for each dataset
