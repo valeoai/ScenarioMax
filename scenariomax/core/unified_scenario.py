@@ -124,38 +124,39 @@ class UnifiedScenario(dict):
 
     def validate(self) -> bool:
         """Validate the scenario structure and data consistency."""
-        # Check required fields
-        required_fields = [
-            "id",
-            "version",
-            "length",
-            "timesteps",
-            "dynamic_agents",
-            "static_map_elements",
-            "dynamic_map_elements",
-            "metadata",
-        ]
+        # Check required top-level fields
+        required_fields = ["id", "dynamic_agents", "static_map_elements", "dynamic_map_elements", "metadata"]
         for field in required_fields:
             if field not in self:
                 raise ValueError(f"Missing required field: {field}")
 
+        # Check required metadata fields
+        metadata_fields = ["dataset_name", "dataset_version", "length", "timesteps"]
+        for field in metadata_fields:
+            if field not in self["metadata"]:
+                raise ValueError(f"Missing required metadata field: {field}")
+
         # Check timesteps consistency
-        if len(self["timesteps"]) != self["length"]:
-            raise ValueError("Timesteps array length doesn't match scenario length")
+        length = self["metadata"]["length"]
+        timesteps = self["metadata"]["timesteps"]
+        if len(timesteps) != length:
+            raise ValueError(f"Timesteps array length ({len(timesteps)}) doesn't match scenario length ({length})")
 
         # Check dynamic agents data consistency
         for aid, agent in self["dynamic_agents"].items():
-            if len(agent["position"]) != self["length"]:
-                raise ValueError(f"Dynamic agent {aid} position length mismatch")
-            if len(agent["heading"]) != self["length"]:
-                raise ValueError(f"Dynamic agent {aid} heading length mismatch")
-            if len(agent["valid"]) != self["length"]:
-                raise ValueError(f"Dynamic agent {aid} valid mask length mismatch")
+            states = agent.get("states", {})
+
+            if "position" in states and len(states["position"]) != length:
+                raise ValueError(f"Dynamic agent {aid} position length mismatch: {len(states['position'])} != {length}")
+            if "heading" in states and len(states["heading"]) != length:
+                raise ValueError(f"Dynamic agent {aid} heading length mismatch: {len(states['heading'])} != {length}")
+            if "valid" in states and len(states["valid"]) != length:
+                raise ValueError(f"Dynamic agent {aid} valid mask length mismatch: {len(states['valid'])} != {length}")
 
         # Check dynamic map elements data consistency
         for dmid, dme in self["dynamic_map_elements"].items():
-            if len(dme["states"]) != self["length"]:
-                raise ValueError(f"Dynamic map element {dmid} states length mismatch")
+            if "states" in dme and len(dme["states"]) != length:
+                raise ValueError(f"Dynamic map element {dmid} states length mismatch: {len(dme['states'])} != {length}")
 
         return True
 
