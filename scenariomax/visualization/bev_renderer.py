@@ -11,7 +11,7 @@ from typing import Any
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.collections import LineCollection
+from matplotlib.animation import FFMpegWriter
 from tqdm import tqdm
 
 from scenariomax import logger_utils
@@ -296,26 +296,146 @@ def _add_legend(ax: plt.Axes, scenario: dict[str, Any]) -> None:
     ax.legend(handles=legend_elements, loc="upper right", fontsize=10, framealpha=0.9)
 
 
+def render_scenario_video(
+    scenario: dict[str, Any],
+    output_path: str,
+    show_history: bool = True,
+    show_future: bool = True,
+    figsize: tuple = (24, 24),
+    dpi: int = 150,
+    fps: int = 10,
+) -> None:
+    """
+    Render a unified scenario as an animated video showing all timesteps.
+
+    Args:
+        scenario: Unified scenario dict
+        output_path: Output MP4 file path
+        show_history: Show trajectory history (default: True)
+        show_future: Show trajectory future (default: True)
+        figsize: Figure size in inches (default: (24, 24))
+        dpi: Image resolution (default: 150, lower for faster rendering)
+        fps: Frames per second (default: 10)
+    """
+    import matplotlib.animation as animation
+
+    metadata = scenario.get("metadata", {})
+    scenario_id = metadata.get("scenario_id", "unknown")
+    dataset_name = metadata.get("dataset_name", "unknown")
+    total_timesteps = len(metadata.get("timesteps", 0))
+
+    if total_timesteps == 0:
+        logger.warning(f"Scenario {scenario_id} has no timesteps, skipping video")
+        return
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.set_aspect("equal")
+    ax.set_xlabel("X (meters)", fontsize=12)
+    ax.set_ylabel("Y (meters)", fontsize=12)
+
+    # Render static map once (doesn't change)
+    _render_static_map(ax, scenario)
+
+    # Calculate bounds for consistent view
+    bounds = _calculate_scenario_bounds(scenario)
+    if bounds:
+        x_min, x_max, y_min, y_max = bounds
+        margin = max(x_max - x_min, y_max - y_min) * 0.1
+        ax.set_xlim(x_min - margin, x_max + margin)
+        ax.set_ylim(y_min - margin, y_max + margin)
+
+    def update_frame(timestep):
+        """Update function for animation."""
+        # Clear dynamic elements (keep static map)
+        for artist in ax.patches[:]:
+            artist.remove()
+        for line in ax.lines[len(ax.lines) - 100 :]:  # Keep static map lines
+            if line.get_zorder() >= 5:  # Remove only dynamic elements
+                line.remove()
+
+        # Update title
+        ax.set_title(
+            f"BEV Visualization - {dataset_name}\nScenario: {scenario_id} | Timestep: {timestep}/{total_timesteps - 1}",
+            fontsize=14,
+            fontweight="bold",
+        )
+
+        # Render dynamic agents at this timestep
+        _render_dynamic_agents(ax, scenario, timestep, show_history, show_future)
+
+        return ax.patches + ax.lines
+
+    # Create animation
+    logger.info(f"Creating video for scenario {scenario_id} ({total_timesteps} frames at {fps} fps)")
+    anim = animation.FuncAnimation(
+        fig, update_frame, frames=total_timesteps, interval=1000 / fps, blit=False, repeat=False
+    )
+
+    # Save video
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    writer = FFMpegWriter(fps=fps, bitrate=5000, codec="libx264")
+    anim.save(output_path, writer=writer)
+    plt.close(fig)
+
+    logger.debug(f"Saved BEV video to {output_path}")
+
+
+def _calculate_scenario_bounds(scenario: dict[str, Any]) -> tuple[float, float, float, float] | None:
+    """Calculate bounding box for the entire scenario."""
+    x_coords = []
+    y_coords = []
+
+    # Get bounds from static map
+    static_map = scenario.get("static_map_elements", {})
+    for element in static_map.values():
+        element_type = element.get("type", 0)
+        if types.is_road_map_element(element_type):
+            polyline = element.get("polyline", [])
+            if len(polyline) > 0:
+                polyline = np.array(polyline)
+                x_coords.extend(polyline[:, 0])
+                y_coords.extend(polyline[:, 1])
+
+    # Get bounds from dynamic agents
+    dynamic_agents = scenario.get("dynamic_agents", {})
+    for agent in dynamic_agents.values():
+        states = agent.get("states", {})
+        positions = states.get("position", [])
+        valids = states.get("valid", [])
+        for pos, valid in zip(positions, valids):
+            if valid:
+                x_coords.append(pos[0])
+                y_coords.append(pos[1])
+
+    if not x_coords or not y_coords:
+        return None
+
+    return min(x_coords), max(x_coords), min(y_coords), max(y_coords)
+
+
 def visualize_scenarios(
     input_path: str,
     output_path: str,
-    timestep: int = 10,
     max_scenarios: int | None = None,
     show_history: bool = True,
     show_future: bool = True,
     num_workers: int = 1,
+    output_format: str = "png",
+    fps: int = 10,
 ) -> dict[str, Any]:
     """
     Visualize multiple scenarios from a directory of pickle files.
 
     Args:
         input_path: Directory containing unified pickle files
-        output_path: Output directory for PNG files
-        timestep: Timestep to visualize (default: 10)
+        output_path: Output directory for PNG/MP4 files
         max_scenarios: Maximum number of scenarios to process (default: None = all)
         show_history: Show trajectory history (default: True)
         show_future: Show trajectory future (default: True)
         num_workers: Number of parallel workers (currently unused, sequential processing)
+        output_format: Output format - "png" or "video" (default: "png")
+        fps: Frames per second for video output (default: 10)
 
     Returns:
         Dict with visualization statistics
@@ -324,7 +444,11 @@ def visualize_scenarios(
 
     logger.info(f"🎨 Visualizing scenarios from {input_path}")
     logger.info(f"   • Output: {output_path}")
-    logger.info(f"   • Timestep: {timestep}")
+    logger.info(f"   • Format: {output_format}")
+    if output_format == "png":
+        logger.info(f"   • Timestep: 0 (first timestep)")
+    else:
+        logger.info(f"   • FPS: {fps}")
     logger.info(f"   • History: {show_history}, Future: {show_future}")
 
     # Find all pickle files
@@ -355,16 +479,32 @@ def visualize_scenarios(
         scenario_id = scenario.get("metadata", {}).get("scenario_id", os.path.basename(pickle_file))
         # Clean scenario_id for filename
         scenario_id = scenario_id.replace("/", "_").replace("\\", "_")
-        output_file = os.path.join(output_path, f"{scenario_id}_t{timestep}.png")
 
-        # Render
-        render_scenario_bev(
-            scenario=scenario,
-            output_path=output_file,
-            timestep=timestep,
-            show_history=show_history,
-            show_future=show_future,
-        )
+        if output_format == "png":
+            # Use first timestep (timestep 0)
+            output_file = os.path.join(output_path, f"{scenario_id}_t0.png")
+            # Render PNG
+            render_scenario_bev(
+                scenario=scenario,
+                output_path=output_file,
+                timestep=0,
+                show_history=show_history,
+                show_future=show_future,
+            )
+        elif output_format == "video":
+            output_file = os.path.join(output_path, f"{scenario_id}.mp4")
+            # Render video
+            render_scenario_video(
+                scenario=scenario,
+                output_path=output_file,
+                show_history=show_history,
+                show_future=show_future,
+                fps=fps,
+            )
+        else:
+            logger.error(f"Unknown output format: {output_format}")
+            error_count += 1
+            continue
 
         success_count += 1
 

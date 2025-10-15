@@ -55,8 +55,11 @@ Examples:
   # Stage 3: Convert to JSON
   scenariomax-convert format --src /output/processed --dst /output/json --format json
 
-  # Visualize unified scenarios (BEV PNG images)
-  scenariomax-convert viz --src /output/unified --dst /output/viz --timestep 10 --max-scenarios 100
+  # Visualize unified scenarios (BEV PNG images at first timestep)
+  scenariomax-convert viz --src /output/unified --dst /output/viz --format png --max-scenarios 100
+
+  # Generate animated videos
+  scenariomax-convert viz --src /output/unified --dst /output/videos --format video --fps 10 --max-scenarios 10
 
   # Full pipeline: All 3 stages at once
   scenariomax-convert pipeline --waymo_src /data/waymo --dst /output --format tfexample --process --shard 10
@@ -166,12 +169,18 @@ Examples:
     )
 
     viz_parser.add_argument("--src", required=True, help="Input directory with unified pickle files")
-    viz_parser.add_argument("--dst", required=True, help="Output directory for PNG visualizations")
+    viz_parser.add_argument("--dst", required=True, help="Output directory for PNG/MP4 visualizations")
     viz_parser.add_argument(
-        "--timestep",
+        "--format",
+        choices=["png", "video"],
+        default="png",
+        help="Output format: png (first timestep) or video (animated) (default: png)",
+    )
+    viz_parser.add_argument(
+        "--fps",
         type=int,
         default=10,
-        help="Timestep to visualize (default: 10)",
+        help="Frames per second for video output (default: 10)",
     )
     viz_parser.add_argument(
         "--max-scenarios",
@@ -350,18 +359,19 @@ def handle_format_command(args):
 
 
 def handle_viz_command(args):
-    """Handle visualization: Unified pickles → BEV PNG images."""
+    """Handle visualization: Unified pickles → BEV PNG images or MP4 videos."""
     from scenariomax.visualization import visualize_scenarios
 
     # Run visualization
     stats = visualize_scenarios(
         input_path=args.src,
         output_path=args.dst,
-        timestep=args.timestep,
         max_scenarios=args.max_scenarios,
         show_history=not args.no_history,
         show_future=not args.no_future,
         num_workers=args.num_workers,
+        output_format=args.format,
+        fps=args.fps,
     )
 
     logger.info(f"✅ Visualization completed: {stats}")
