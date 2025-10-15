@@ -80,10 +80,13 @@ def render_scenario_bev(
     # 1. Render static map elements (roads, lanes, crosswalks)
     _render_static_map(ax, scenario, scatter_map=scatter_map)
 
-    # 2. Render dynamic agents (vehicles, pedestrians, cyclists)
+    # 2. Render traffic lights
+    _render_traffic_lights(ax, scenario, timestep=0)
+
+    # 3. Render dynamic agents (vehicles, pedestrians, cyclists)
     _render_dynamic_agents(ax, scenario, 0, show_trajectory)
 
-    # 3. Add legend
+    # 4. Add legend
     _add_legend(ax, scenario)
 
     # 4. Auto-scale view to fit all elements
@@ -162,6 +165,63 @@ def _render_static_map(ax: plt.Axes, scenario: dict[str, Any], scatter_map: bool
                 ax.plot(x, y, color="#8B4513", linewidth=1.5, alpha=0.7, linestyle="--")  # Brown dashed line
         else:
             logger.warning(f"Unknown static map element type: {element_type}")
+
+
+def _render_traffic_lights(ax: plt.Axes, scenario: dict[str, Any], timestep: int) -> None:
+    """Render traffic lights with their states.
+
+    Args:
+        ax: Matplotlib axes
+        scenario: Unified scenario dict
+        timestep: Current timestep for traffic light state
+    """
+    dynamic_map = scenario.get("dynamic_map_elements", {})
+
+    TRAFFIC_LIGHT_COLORS = {
+        types.TRAFFIC_LIGHT_UNKNOWN: "#808080",
+        types.TRAFFIC_LIGHT_ARROW_RED: "#FF0000",
+        types.TRAFFIC_LIGHT_ARROW_YELLOW: "#FFFF00",
+        types.TRAFFIC_LIGHT_ARROW_GREEN: "#00FF00",
+        types.TRAFFIC_LIGHT_RED: "#FF0000",
+        types.TRAFFIC_LIGHT_YELLOW: "#FFFF00",
+        types.TRAFFIC_LIGHT_GREEN: "#00FF00",
+        types.TRAFFIC_LIGHT_FLASHING_RED: "#FF6600",
+        types.TRAFFIC_LIGHT_FLASHING_YELLOW: "#FFFF00",
+    }
+
+    for _, element in dynamic_map.items():
+        element_type = element.get("type", 0)
+
+        # Only render traffic lights (type 1)
+        if element_type != types.TRAFFIC_LIGHT:
+            continue
+
+        position = element.get("position", [])
+        if len(position) < 2:
+            continue
+
+        x, y = position[0], position[1]
+
+        # Get traffic light state at current timestep
+        traffic_light_states = element.get("states", {})
+
+        state = traffic_light_states[timestep]
+
+        # Get color based on state
+        color = TRAFFIC_LIGHT_COLORS.get(state, "#808080")
+
+        # Draw traffic light as a circle with border
+        ax.add_patch(
+            plt.Circle(
+                (x, y),
+                radius=0.6,
+                alpha=0.9,
+                facecolor=color,
+                edgecolor="black",
+                linewidth=0.5,
+                zorder=15,
+            ),
+        )
 
 
 def _render_dynamic_agents(
@@ -314,6 +374,18 @@ def _add_legend(ax: plt.Axes, scenario: dict[str, Any]) -> None:
         mpatches.Patch(facecolor=COLORS["crosswalk"], edgecolor=COLORS["crosswalk"], label="Crosswalk"),
     ]
 
+    # Add traffic light legend if present
+    dynamic_map = scenario.get("dynamic_map_elements", {})
+    has_traffic_lights = any(elem.get("type") == types.TRAFFIC_LIGHT for elem in dynamic_map.values())
+    if has_traffic_lights:
+        legend_elements.extend(
+            [
+                mpatches.Patch(facecolor="#FF0000", edgecolor="black", label="Traffic Light (Red)"),
+                mpatches.Patch(facecolor="#FFFF00", edgecolor="black", label="Traffic Light (Yellow)"),
+                mpatches.Patch(facecolor="#00FF00", edgecolor="black", label="Traffic Light (Green)"),
+            ]
+        )
+
     ax.legend(handles=legend_elements, loc="upper right", fontsize=10, framealpha=0.9)
 
 
@@ -381,6 +453,9 @@ def render_scenario_video(
             fontsize=14,
             fontweight="bold",
         )
+
+        # Render traffic lights at this timestep
+        _render_traffic_lights(ax, scenario, timestep)
 
         # Render dynamic agents at this timestep
         _render_dynamic_agents(ax, scenario, timestep, show_trajectory)
