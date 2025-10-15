@@ -188,20 +188,14 @@ Examples:
         help="Maximum number of scenarios to visualize (default: all)",
     )
     viz_parser.add_argument(
-        "--no-history",
+        "--no-log-trajectory",
         action="store_true",
         help="Don't show trajectory history",
     )
     viz_parser.add_argument(
-        "--no-future",
+        "--scatter-map",
         action="store_true",
-        help="Don't show trajectory future",
-    )
-    viz_parser.add_argument(
-        "--num-workers",
-        type=int,
-        default=1,
-        help="Number of workers (default: 1, currently unused)",
+        help="Render road map as scattered points instead of lines",
     )
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -367,11 +361,10 @@ def handle_viz_command(args):
         input_path=args.src,
         output_path=args.dst,
         max_scenarios=args.max_scenarios,
-        show_history=not args.no_history,
-        show_future=not args.no_future,
-        num_workers=args.num_workers,
+        show_trajectory=not args.no_log_trajectory,
         output_format=args.format,
         fps=args.fps,
+        scatter_map=args.scatter_map,
     )
 
     logger.info(f"✅ Visualization completed: {stats}")

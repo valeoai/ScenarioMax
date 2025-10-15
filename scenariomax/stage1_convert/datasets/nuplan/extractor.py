@@ -121,9 +121,9 @@ def extract_dynamic_agents(scenario: NuPlanScenario, center: list[float]) -> dic
                 "heading": np.zeros((episode_length,), dtype=np.float32),
                 "velocity": np.zeros((episode_length, 2), dtype=np.float32),
                 "valid": np.zeros((episode_length,), dtype=np.float32),
-                "length": np.zeros((episode_length, 1), dtype=np.float32),
-                "width": np.zeros((episode_length, 1), dtype=np.float32),
-                "height": np.zeros((episode_length, 1), dtype=np.float32),
+                "length": np.zeros((episode_length,), dtype=np.float32),
+                "width": np.zeros((episode_length,), dtype=np.float32),
+                "height": np.zeros((episode_length,), dtype=np.float32),
             },
         }
         for agent_id in all_agent_ids

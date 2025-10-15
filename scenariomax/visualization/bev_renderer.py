@@ -45,11 +45,10 @@ AGENT_TYPE_NAMES = {
 def render_scenario_bev(
     scenario: dict[str, Any],
     output_path: str,
-    timestep: int = 10,
-    show_history: bool = True,
-    show_future: bool = True,
+    show_trajectory: bool = True,
     figsize: tuple = (24, 24),
     dpi: int = 300,
+    scatter_map: bool = False,
 ) -> None:
     """
     Render a unified scenario in Bird's Eye View (BEV) and save as PNG.
@@ -57,11 +56,10 @@ def render_scenario_bev(
     Args:
         scenario: Unified scenario dict
         output_path: Output PNG file path
-        timestep: Timestep to visualize (default: 10, middle of scenario)
-        show_history: Show trajectory history (default: True)
-        show_future: Show trajectory future (default: True)
+        show_trajectory: Show trajectory (default: True)
         figsize: Figure size in inches (default: (24, 24))
         dpi: Image resolution (default: 300)
+        scatter_map: Render road map as scattered points instead of lines (default: False)
     """
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     ax.set_aspect("equal")
@@ -72,22 +70,18 @@ def render_scenario_bev(
     metadata = scenario.get("metadata", {})
     scenario_id = metadata.get("scenario_id", "unknown")
     dataset_name = metadata.get("dataset_name", "unknown")
-    total_timesteps = len(metadata.get("timesteps", 0))
-
-    # Clamp timestep to valid range
-    timestep = max(0, min(timestep, total_timesteps - 1))
 
     ax.set_title(
-        f"BEV Visualization - {dataset_name}\nScenario: {scenario_id} | Timestep: {timestep}/{total_timesteps - 1}",
+        f"BEV Visualization - {dataset_name}\nScenario: {scenario_id}",
         fontsize=14,
         fontweight="bold",
     )
 
     # 1. Render static map elements (roads, lanes, crosswalks)
-    _render_static_map(ax, scenario)
+    _render_static_map(ax, scenario, scatter_map=scatter_map)
 
     # 2. Render dynamic agents (vehicles, pedestrians, cyclists)
-    _render_dynamic_agents(ax, scenario, timestep, show_history, show_future)
+    _render_dynamic_agents(ax, scenario, 0, show_trajectory)
 
     # 3. Add legend
     _add_legend(ax, scenario)
@@ -105,8 +99,14 @@ def render_scenario_bev(
     logger.debug(f"Saved BEV visualization to {output_path}")
 
 
-def _render_static_map(ax: plt.Axes, scenario: dict[str, Any]) -> None:
-    """Render static map elements (lanes, road edges, crosswalks)."""
+def _render_static_map(ax: plt.Axes, scenario: dict[str, Any], scatter_map: bool = False) -> None:
+    """Render static map elements (lanes, road edges, crosswalks).
+
+    Args:
+        ax: Matplotlib axes
+        scenario: Unified scenario dict
+        scatter_map: If True, render road map elements as scattered points instead of lines
+    """
     static_map = scenario.get("static_map_elements", {})
 
     for _, element in static_map.items():
@@ -114,43 +114,61 @@ def _render_static_map(ax: plt.Axes, scenario: dict[str, Any]) -> None:
         if types.is_road_map_element(element_type):
             polyline = np.array(element.get("polyline", []))
             x, y = polyline[:, 0], polyline[:, 1]
-        elif element_type in [6, 9]:  # Crosswalk or Speed bump
-            polygon = element.get("polygon", [])
-            x, y = zip(*polygon)
-            x = np.array(x + (x[0],))
-            y = np.array(y + (y[0],))
-        elif element_type == 8:  # Stop sign
-            position = element.get("position", [])
-            x, y = np.array([position[0]]), np.array([position[1]])
-
-        if len(x) == 0:
-            continue
+        elif element_type in [types.CROSSWALK, types.SPEED_BUMP, types.DRIVEWAY]:
+            polygon = np.array(element.get("polygon", []))
+            x, y = polygon[:, 0], polygon[:, 1]
+            # Close the polygon if not already closed
+            if not np.array_equal(polygon[0], polygon[-1]):
+                x = np.append(x, x[0])
+                y = np.append(y, y[0])
+        elif element_type == types.STOP_SIGN:
+            position = np.array(element.get("position", []))
+            x, y = position[0], position[1]
+        else:
+            logger.warning(f"Unknown static map element type: {element_type}")
 
         # Map element types to colors and styles
         if types.is_lane(element_type):
-            ax.plot(x, y, color=COLORS["lane"], linewidth=0.8, alpha=0.7, linestyle="-")
+            if scatter_map:
+                ax.scatter(x, y, color=COLORS["lane"], s=2, alpha=0.7, zorder=1)
+            else:
+                ax.plot(x, y, color=COLORS["lane"], linewidth=0.8, alpha=0.7, linestyle="-")
         elif types.is_road_line(element_type):
-            ax.plot(x, y, color=COLORS["road_line"], linewidth=1.2, alpha=0.7, linestyle="--")
+            if scatter_map:
+                ax.scatter(x, y, color=COLORS["road_line"], s=2, alpha=0.7, zorder=1)
+            else:
+                ax.plot(x, y, color=COLORS["road_line"], linewidth=1.2, alpha=0.7, linestyle="--")
         elif types.is_road_edge(element_type):
-            ax.plot(x, y, color=COLORS["road_edge"], linewidth=1.5, alpha=1.0)
+            if scatter_map:
+                ax.scatter(x, y, color=COLORS["road_edge"], s=3, alpha=1.0, zorder=1)
+            else:
+                ax.plot(x, y, color=COLORS["road_edge"], linewidth=1.5, alpha=1.0)
         elif element_type == types.CROSSWALK:
-            ax.plot(x, y, color=COLORS["crosswalk"], linewidth=2.0, alpha=0.6)
+            if scatter_map:
+                ax.scatter(x, y, color=COLORS["crosswalk"], s=4, alpha=0.6, zorder=1)
+            else:
+                ax.plot(x, y, color=COLORS["crosswalk"], linewidth=2.0, alpha=0.6)
         elif element_type == types.SPEED_BUMP:
-            ax.plot(x, y, color=COLORS["speed_bump"], linewidth=2.5, alpha=0.7)
+            if scatter_map:
+                ax.scatter(x, y, color=COLORS["speed_bump"], s=4, alpha=0.7, zorder=1)
+            else:
+                ax.plot(x, y, color=COLORS["speed_bump"], linewidth=2.5, alpha=0.7)
         elif element_type == types.STOP_SIGN:
-            ax.scatter(x, y, color=COLORS["stop_sign"], s=100, marker="s", label="Stop Sign", zorder=10)
+            ax.scatter(x, y, color=COLORS["stop_sign"], s=20, marker="s", label="Stop Sign", zorder=10)
         elif element_type == types.DRIVEWAY:
-            ax.plot(x, y, color="#8B4513", linewidth=1.5, alpha=0.7, linestyle="--")  # Brown dashed line
+            if scatter_map:
+                ax.scatter(x, y, color="#8B4513", s=2, alpha=0.7, zorder=1)
+            else:
+                ax.plot(x, y, color="#8B4513", linewidth=1.5, alpha=0.7, linestyle="--")  # Brown dashed line
         else:
-            raise ValueError(f"Unknown static map element type: {element_type}")
+            logger.warning(f"Unknown static map element type: {element_type}")
 
 
 def _render_dynamic_agents(
     ax: plt.Axes,
     scenario: dict[str, Any],
     timestep: int,
-    show_history: bool,
-    show_future: bool,
+    show_trajectory: bool,
 ) -> None:
     """Render dynamic agents (vehicles, pedestrians, cyclists)."""
     dynamic_agents = scenario.get("dynamic_agents", {})
@@ -164,6 +182,8 @@ def _render_dynamic_agents(
         positions = states.get("position", [])
         headings = states.get("heading", [])
         valids = states.get("valid", [])
+        lengths = states.get("length", [4.5])
+        widths = states.get("width", [2.0])
 
         if timestep >= len(positions) or not valids[timestep]:
             continue
@@ -174,27 +194,22 @@ def _render_dynamic_agents(
         # Current position and heading
         x, y = positions[timestep][:2]
         heading = headings[timestep]
+        length = lengths[timestep]
+        width = widths[timestep]
 
-        # Draw agent as oriented rectangle
-        if agent_type == 2:  # Pedestrian (circle)
+        if agent_type == types.VEHICLE or agent_type == types.CYCLIST:  # Vehicle or Cyclist
+            _draw_oriented_box(ax, x, y, heading, length, width, color, is_ego)
+        elif agent_type == types.PEDESTRIAN:  # Pedestrian (circle)
             circle = plt.Circle((x, y), radius=0.5, color=color, alpha=0.8, zorder=10)
             ax.add_patch(circle)
-        else:  # Vehicle/Cyclist (oriented rectangle)
-            length = 4.5 if agent_type == 1 else 2.0
-            width = 2.0 if agent_type == 1 else 0.8
-            _draw_oriented_box(ax, x, y, heading, length, width, color, is_ego)
+        else:
+            logger.warning(f"Unknown agent type: {agent_type}")
 
-        # Draw trajectory history
-        if show_history and timestep > 0:
-            hist_positions = positions[max(0, timestep - 10) : timestep]
-            hist_valids = valids[max(0, timestep - 10) : timestep]
-            _draw_trajectory(ax, hist_positions, hist_valids, color, alpha=0.4)
-
-        # Draw trajectory future
-        if show_future and timestep < len(positions) - 1:
+        # Draw trajectory
+        if show_trajectory:
             future_positions = positions[timestep + 1 : min(len(positions), timestep + 31)]
             future_valids = valids[timestep + 1 : min(len(valids), timestep + 31)]
-            _draw_trajectory(ax, future_positions, future_valids, color, alpha=0.3, linestyle="--")
+            _draw_trajectory(ax, future_positions, future_valids, color, alpha=0.4)
 
 
 def _draw_oriented_box(
@@ -229,12 +244,18 @@ def _draw_oriented_box(
     linewidth = 2.5 if is_ego else 1.5
     alpha = 0.9 if is_ego else 0.7
     rect = mpatches.Polygon(
-        corners_world, closed=True, edgecolor=color, facecolor=color, alpha=alpha, linewidth=linewidth, zorder=10
+        corners_world,
+        closed=True,
+        edgecolor=color,
+        facecolor=color,
+        alpha=alpha,
+        linewidth=linewidth,
+        zorder=10,
     )
     ax.add_patch(rect)
 
     # Draw heading arrow
-    arrow_length = length * 0.6
+    arrow_length = length * 0.2
     dx = arrow_length * cos_h
     dy = arrow_length * sin_h
     ax.arrow(
@@ -242,8 +263,8 @@ def _draw_oriented_box(
         y,
         dx,
         dy,
-        head_width=width * 0.6,
-        head_length=length * 0.3,
+        head_width=width * 0.5,
+        head_length=length * 0.2,
         fc="white",
         ec="white",
         alpha=0.9,
@@ -299,11 +320,11 @@ def _add_legend(ax: plt.Axes, scenario: dict[str, Any]) -> None:
 def render_scenario_video(
     scenario: dict[str, Any],
     output_path: str,
-    show_history: bool = True,
-    show_future: bool = True,
+    show_trajectory: bool = True,
     figsize: tuple = (24, 24),
     dpi: int = 150,
     fps: int = 10,
+    scatter_map: bool = False,
 ) -> None:
     """
     Render a unified scenario as an animated video showing all timesteps.
@@ -311,20 +332,20 @@ def render_scenario_video(
     Args:
         scenario: Unified scenario dict
         output_path: Output MP4 file path
-        show_history: Show trajectory history (default: True)
-        show_future: Show trajectory future (default: True)
+        show_trajectory: Show log trajectory (default: True)
         figsize: Figure size in inches (default: (24, 24))
         dpi: Image resolution (default: 150, lower for faster rendering)
         fps: Frames per second (default: 10)
+        scatter_map: Render road map as scattered points instead of lines (default: False)
     """
     import matplotlib.animation as animation
 
     metadata = scenario.get("metadata", {})
     scenario_id = metadata.get("scenario_id", "unknown")
     dataset_name = metadata.get("dataset_name", "unknown")
-    total_timesteps = len(metadata.get("timesteps", 0))
+    scenario_length = metadata.get("length", 0)
 
-    if total_timesteps == 0:
+    if scenario_length == 0:
         logger.warning(f"Scenario {scenario_id} has no timesteps, skipping video")
         return
 
@@ -335,7 +356,7 @@ def render_scenario_video(
     ax.set_ylabel("Y (meters)", fontsize=12)
 
     # Render static map once (doesn't change)
-    _render_static_map(ax, scenario)
+    _render_static_map(ax, scenario, scatter_map=scatter_map)
 
     # Calculate bounds for consistent view
     bounds = _calculate_scenario_bounds(scenario)
@@ -356,21 +377,31 @@ def render_scenario_video(
 
         # Update title
         ax.set_title(
-            f"BEV Visualization - {dataset_name}\nScenario: {scenario_id} | Timestep: {timestep}/{total_timesteps - 1}",
+            f"BEV Visualization - {dataset_name}\nScenario: {scenario_id} | Timestep: {timestep}/{scenario_length - 1}",
             fontsize=14,
             fontweight="bold",
         )
 
         # Render dynamic agents at this timestep
-        _render_dynamic_agents(ax, scenario, timestep, show_history, show_future)
+        _render_dynamic_agents(ax, scenario, timestep, show_trajectory)
 
         return ax.patches + ax.lines
 
     # Create animation
-    logger.info(f"Creating video for scenario {scenario_id} ({total_timesteps} frames at {fps} fps)")
+    logger.info(f"Creating video for scenario {scenario_id} ({scenario_length} frames at {fps} fps)")
     anim = animation.FuncAnimation(
-        fig, update_frame, frames=total_timesteps, interval=1000 / fps, blit=False, repeat=False
+        fig,
+        update_frame,
+        frames=scenario_length,
+        interval=1000 / fps,
+        blit=False,
+        repeat=False,
     )
+
+    ax.autoscale()
+    ax.margins(0.1)
+
+    plt.tight_layout()
 
     # Save video
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -418,11 +449,10 @@ def visualize_scenarios(
     input_path: str,
     output_path: str,
     max_scenarios: int | None = None,
-    show_history: bool = True,
-    show_future: bool = True,
-    num_workers: int = 1,
+    show_trajectory: bool = True,
     output_format: str = "png",
     fps: int = 10,
+    scatter_map: bool = False,
 ) -> dict[str, Any]:
     """
     Visualize multiple scenarios from a directory of pickle files.
@@ -431,11 +461,11 @@ def visualize_scenarios(
         input_path: Directory containing unified pickle files
         output_path: Output directory for PNG/MP4 files
         max_scenarios: Maximum number of scenarios to process (default: None = all)
-        show_history: Show trajectory history (default: True)
+        show_trajectory: Show log trajectory (default: True)
         show_future: Show trajectory future (default: True)
-        num_workers: Number of parallel workers (currently unused, sequential processing)
         output_format: Output format - "png" or "video" (default: "png")
         fps: Frames per second for video output (default: 10)
+        scatter_map: Render road map as scattered points instead of lines (default: False)
 
     Returns:
         Dict with visualization statistics
@@ -445,11 +475,7 @@ def visualize_scenarios(
     logger.info(f"🎨 Visualizing scenarios from {input_path}")
     logger.info(f"   • Output: {output_path}")
     logger.info(f"   • Format: {output_format}")
-    if output_format == "png":
-        logger.info(f"   • Timestep: 0 (first timestep)")
-    else:
-        logger.info(f"   • FPS: {fps}")
-    logger.info(f"   • History: {show_history}, Future: {show_future}")
+    logger.info(f"   • Map rendering: {'scatter points' if scatter_map else 'lines'}")
 
     # Find all pickle files
     pickle_files = []
@@ -482,14 +508,13 @@ def visualize_scenarios(
 
         if output_format == "png":
             # Use first timestep (timestep 0)
-            output_file = os.path.join(output_path, f"{scenario_id}_t0.png")
+            output_file = os.path.join(output_path, f"{scenario_id}.png")
             # Render PNG
             render_scenario_bev(
                 scenario=scenario,
                 output_path=output_file,
-                timestep=0,
-                show_history=show_history,
-                show_future=show_future,
+                show_trajectory=show_trajectory,
+                scatter_map=scatter_map,
             )
         elif output_format == "video":
             output_file = os.path.join(output_path, f"{scenario_id}.mp4")
@@ -497,9 +522,9 @@ def visualize_scenarios(
             render_scenario_video(
                 scenario=scenario,
                 output_path=output_file,
-                show_history=show_history,
-                show_future=show_future,
+                show_trajectory=show_trajectory,
                 fps=fps,
+                scatter_map=scatter_map,
             )
         else:
             logger.error(f"Unknown output format: {output_format}")
