@@ -9,13 +9,9 @@ This module provides 4 main functions:
 """
 
 import os
-import pickle
 import time
 from collections.abc import Callable
 from typing import Any
-
-from joblib import Parallel, delayed
-from tqdm import tqdm
 
 from scenariomax import dataset_registry, logger_utils
 from scenariomax.core import processor, write
@@ -169,7 +165,7 @@ def process_unified_scenarios(
 
         processors = [enhance_scenarios]
 
-    logger.info(f"🚀 Stage 2: Processing unified scenarios")
+    logger.info("🚀 Stage 2: Processing unified scenarios")
     logger.info(f"   • Processors: {len(processors)}")
 
     # Setup output directory
@@ -501,7 +497,7 @@ def _load_raw_scenarios(
                 "maps_path": os.getenv("NUPLAN_MAPS_ROOT"),
                 "metadata_src": kwargs.get("openscenes_metadata_src"),
                 "num_files": kwargs.get("num_files"),
-            }
+            },
         )
 
     scenarios = config.load_func(**load_args)

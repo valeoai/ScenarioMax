@@ -11,7 +11,6 @@ import os
 import pickle
 import shutil
 from collections.abc import Callable
-from functools import partial
 from typing import Any
 
 from joblib import Parallel, delayed
