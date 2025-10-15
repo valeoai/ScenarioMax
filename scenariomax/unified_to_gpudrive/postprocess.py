@@ -83,23 +83,25 @@ def merge_dataset_workers(dataset_dir: str, dataset_name: str) -> None:
     parent_dir = os.path.dirname(dataset_dir)
 
     # Look for worker subdirectories and their JSON files
-    basename = os.path.basename(dataset_dir)
     logger.info(f"Merging {dataset_name} workers from: {dataset_dir}")
 
     for item in os.listdir(dataset_dir):
         dir_path = os.path.join(dataset_dir, item)
-        # Look for directories that match the worker pattern: {basename}_{worker_index}
-        if os.path.isdir(dir_path) and item.startswith(f"{basename}_"):
+        if os.path.isdir(dir_path):
             list_dir = os.listdir(dir_path)
-            worker_json_files = [os.path.join(dir_path, f) for f in list_dir if f.endswith(".json")]
-            json_files.extend(worker_json_files)
-            logger.debug(f"Found {len(worker_json_files)} JSON files in worker dir {dir_path}")
+            for worker_dir in list_dir:
+                worker_json_files = [
+                    os.path.join(dir_path, worker_dir, f)
+                    for f in os.listdir(os.path.join(dir_path, worker_dir))
+                    if f.endswith(".json")
+                ]
+                json_files.extend(worker_json_files)
+                logger.debug(f"Found {len(worker_json_files)} JSON files in worker dir {dir_path}")
 
     logger.info(f"Found {len(json_files)} worker JSON files for {dataset_name}")
 
     if not json_files:
-        logger.warning(f"No JSON files found for dataset {dataset_name} in {dataset_dir}")
-        return
+        raise RuntimeError(f"No JSON files found for dataset {dataset_name} in {dataset_dir}")
 
     # Move files to parent directory
     for file in json_files:
