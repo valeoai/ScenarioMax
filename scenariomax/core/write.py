@@ -194,7 +194,7 @@ def process_scenario(
     dataset_version: str,
     dataset_name: str,
     **kwargs,
-) -> tuple:
+) -> Any:
     """
     Process a single scenario and convert it to the desired format.
 
@@ -206,9 +206,7 @@ def process_scenario(
         **kwargs: Additional arguments for the conversion function.
 
     Returns:
-        tuple: (unified_scenario, export_file_name)
-            - unified_scenario: The converted scenario.
-            - export_file_name: The name of the file where the scenario will be saved.
+        Any: The converted scenario (typically a UnifiedScenario object).
     """
     converted_scenario = convert_func(scenario, dataset_version, **kwargs)
 
