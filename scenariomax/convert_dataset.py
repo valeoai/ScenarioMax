@@ -421,15 +421,12 @@ def handle_pipeline_command(args):
 
 def main():
     """Main entry point for dataset conversion."""
-    logger_utils.setup_logger()
-
     parser = create_argument_parser()
     args = parser.parse_args()
 
-    # Configure logging
-    if args.log_level or args.log_file:
-        log_level = getattr(logging, args.log_level) if args.log_level else None
-        logger_utils.setup_logger(log_level=log_level, log_file=args.log_file)
+    # Configure logging once with user-specified options
+    log_level = getattr(logging, args.log_level) if args.log_level else logging.INFO
+    logger_utils.setup_logger(log_level=log_level, log_file=args.log_file)
 
     # Route to appropriate command handler
     if args.command == "convert":
