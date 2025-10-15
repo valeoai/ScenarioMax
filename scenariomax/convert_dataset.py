@@ -41,31 +41,31 @@ def create_argument_parser():
 
 Examples:
   # Stage 1: Convert raw Waymo to unified format
-  scenariomax-convert convert --waymo_src /data/waymo --dst /output/unified --num_workers 16
+  scenariomax convert --waymo_src /data/waymo --dst /output/unified --num_workers 16
 
   # Stage 1: Convert multiple datasets
-  scenariomax-convert convert --waymo_src /data/waymo --nuplan_src /data/nuplan --dst /output/unified
+  scenariomax convert --waymo_src /data/waymo --nuplan_src /data/nuplan --dst /output/unified
 
   # Stage 2: Process unified scenarios
-  scenariomax-convert process --src /output/unified --dst /output/processed --traffic-lights
+  scenariomax process --src /output/unified --dst /output/processed --traffic-lights
 
   # Stage 3: Convert to TFRecord with sharding
-  scenariomax-convert format --src /output/processed --dst /output/tfrecord --format tfexample --shard 10
+  scenariomax format --src /output/processed --dst /output/tfrecord --format tfexample --shard 10
 
   # Stage 3: Convert to JSON
-  scenariomax-convert format --src /output/processed --dst /output/json --format json
+  scenariomax format --src /output/processed --dst /output/json --format json
 
   # Visualize unified scenarios (BEV PNG images at first timestep)
-  scenariomax-convert viz --src /output/unified --dst /output/viz --format png --max-scenarios 100
+  scenariomax viz --src /output/unified --dst /output/viz --format png --max-scenarios 100
 
   # Generate animated videos
-  scenariomax-convert viz --src /output/unified --dst /output/videos --format video --fps 10 --max-scenarios 10
+  scenariomax viz --src /output/unified --dst /output/videos --format video --fps 10 --max-scenarios 10
 
   # Full pipeline: All 3 stages at once
-  scenariomax-convert pipeline --waymo_src /data/waymo --dst /output --format tfexample --process --shard 10
+  scenariomax pipeline --waymo_src /data/waymo --dst /output --format tfexample --process --shard 10
 
   # Full pipeline: Multiple datasets
-  scenariomax-convert pipeline --waymo_src /data/waymo --nuplan_src /data/nuplan --dst /output --format json
+  scenariomax pipeline --waymo_src /data/waymo --nuplan_src /data/nuplan --dst /output --format json
         """,
     )
 

@@ -97,19 +97,19 @@ Stage 3: Format   - Unified pickles → Target format (tfrecord/json)
 
 ```bash
 # Stage 1: Convert raw Waymo to unified format
-scenariomax-convert convert --waymo_src /data/waymo --dst /output/unified --num_workers 16
+scenariomax convert --waymo_src /data/waymo --dst /output/unified --num_workers 16
 
 # Stage 2: Process unified scenarios (optional)
-scenariomax-convert process --src /output/unified --dst /output/processed --traffic-lights
+scenariomax process --src /output/unified --dst /output/processed --traffic-lights
 
 # Stage 3: Convert to TFRecord
-scenariomax-convert format --src /output/processed --dst /output/tfrecord --format tfexample --shard 10
+scenariomax format --src /output/processed --dst /output/tfrecord --format tfexample --shard 10
 
 # Or run all 3 stages at once
-scenariomax-convert pipeline --waymo_src /data/waymo --dst /output --format tfexample --process --shard 10
+scenariomax pipeline --waymo_src /data/waymo --dst /output --format tfexample --process --shard 10
 
 # Visualize unified scenarios (BEV PNG images)
-scenariomax-convert viz --src /output/unified --dst /output/viz --timestep 10 --max-scenarios 100
+scenariomax viz --src /output/unified --dst /output/viz --timestep 10 --max-scenarios 100
 ```
 
 ## 📊 Usage Examples
@@ -118,7 +118,7 @@ scenariomax-convert viz --src /output/unified --dst /output/viz --timestep 10 --
 
 ```bash
 # Convert Waymo to TFRecord format
-scenariomax-convert pipeline \
+scenariomax pipeline \
   --waymo_src /data/waymo \
   --dst /output \
   --format tfexample \
@@ -129,7 +129,7 @@ scenariomax-convert pipeline \
 
 ```bash
 # Combine Waymo and nuPlan datasets
-scenariomax-convert pipeline \
+scenariomax pipeline \
   --waymo_src /data/waymo \
   --nuplan_src /data/nuplan \
   --dst /output \
@@ -142,7 +142,7 @@ scenariomax-convert pipeline \
 
 ```bash
 # Add traffic light processing
-scenariomax-convert pipeline \
+scenariomax pipeline \
   --waymo_src /data/waymo \
   --dst /output \
   --format tfexample \
@@ -155,13 +155,13 @@ scenariomax-convert pipeline \
 
 ```bash
 # Stage 1: Convert to unified format
-scenariomax-convert convert --waymo_src /data/waymo --dst /unified --num_workers 8
+scenariomax convert --waymo_src /data/waymo --dst /unified --num_workers 8
 
 # Visualize scenarios
-scenariomax-convert viz --src /unified --dst /viz --timestep 10 --max-scenarios 50
+scenariomax viz --src /unified --dst /viz --timestep 10 --max-scenarios 50
 
 # Stage 3: Convert to target format
-scenariomax-convert format --src /unified --dst /output --format json --num_workers 8
+scenariomax format --src /unified --dst /output --format json --num_workers 8
 ```
 
 ## 🗂️ Supported Datasets
@@ -178,14 +178,14 @@ scenariomax-convert format --src /unified --dst /output --format json --num_work
 
 ```bash
 # nuScenes with specific split
-scenariomax-convert \
+scenariomax \
   --nuscenes_src /data/nuscenes \
   --split v1.0-trainval \
   --dst /output \
   --target_format tfexample
 
 # nuPlan with direct log parsing
-scenariomax-convert \
+scenariomax \
   --nuplan_src /data/nuplan \
   --nuplan_direct_from_logs \
   --dst /output \

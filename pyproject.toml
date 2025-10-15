@@ -112,7 +112,7 @@ dev = [
 
 
 [project.scripts]
-scenariomax-convert = "scenariomax.convert_dataset:main"
+scenariomax = "scenariomax.convert_dataset:main"
 
 [tool.setuptools.packages.find]
 include = ["scenariomax*"]
