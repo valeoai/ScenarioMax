@@ -20,6 +20,9 @@ from scenariomax.core import types
 
 logger = logger_utils.get_logger(__name__)
 
+# Visualization constants
+MAX_DYNAMIC_ELEMENTS_TO_KEEP = 100  # Number of recent dynamic elements to preserve in video frames
+
 # Color scheme
 COLORS = {
     "ego": "#FF0000",  # Red
@@ -89,7 +92,7 @@ def render_scenario_bev(
     # 4. Add legend
     _add_legend(ax, scenario)
 
-    # 4. Auto-scale view to fit all elements
+    # 5. Auto-scale view to fit all elements
     ax.autoscale()
     ax.margins(0.1)
 
@@ -205,7 +208,8 @@ def _render_traffic_lights(ax: plt.Axes, scenario: dict[str, Any], timestep: int
         # Get traffic light state at current timestep
         traffic_light_states = element.get("states", {})
 
-        state = traffic_light_states[timestep]
+        # Bounds check for timestep
+        state = traffic_light_states[timestep] if timestep < len(traffic_light_states) else types.TRAFFIC_LIGHT_UNKNOWN
 
         # Get color based on state
         color = TRAFFIC_LIGHT_COLORS.get(state, "#808080")
@@ -383,7 +387,7 @@ def _add_legend(ax: plt.Axes, scenario: dict[str, Any]) -> None:
                 mpatches.Patch(facecolor="#FF0000", edgecolor="black", label="Traffic Light (Red)"),
                 mpatches.Patch(facecolor="#FFFF00", edgecolor="black", label="Traffic Light (Yellow)"),
                 mpatches.Patch(facecolor="#00FF00", edgecolor="black", label="Traffic Light (Green)"),
-            ]
+            ],
         )
 
     ax.legend(handles=legend_elements, loc="upper right", fontsize=10, framealpha=0.9)
@@ -443,8 +447,9 @@ def render_scenario_video(
         # Clear dynamic elements (keep static map)
         for artist in ax.patches[:]:
             artist.remove()
-        for line in ax.lines[len(ax.lines) - 100 :]:  # Keep static map lines
-            if line.get_zorder() >= 5:  # Remove only dynamic elements
+        # Keep static map lines, remove only recent dynamic elements
+        for line in ax.lines[len(ax.lines) - MAX_DYNAMIC_ELEMENTS_TO_KEEP :]:
+            if line.get_zorder() >= 5:  # Remove only dynamic elements (trajectories, etc.)
                 line.remove()
 
         # Update title
@@ -568,9 +573,6 @@ def visualize_scenarios(
     os.makedirs(output_path, exist_ok=True)
 
     # Process scenarios
-    success_count = 0
-    error_count = 0
-
     for pickle_file in tqdm(pickle_files, desc="Visualizing"):
         # Load scenario
         with open(pickle_file, "rb") as f:
@@ -602,20 +604,10 @@ def visualize_scenarios(
                 scatter_map=scatter_map,
             )
         else:
-            logger.error(f"Unknown output format: {output_format}")
-            error_count += 1
-            continue
+            raise ValueError(f"Unknown output format: {output_format}")
 
-        success_count += 1
-
-    stats = {
-        "total_scenarios": len(pickle_files),
-        "success": success_count,
-        "errors": error_count,
-    }
+    stats = {"total_scenarios": len(pickle_files)}
 
     logger.info("✅ Visualization complete")
-    logger.info(f"   • Success: {success_count}")
-    logger.info(f"   • Errors: {error_count}")
 
     return stats
