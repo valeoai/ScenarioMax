@@ -1,6 +1,6 @@
 # ScenarioMax Makefile for uv-based installation and management
 
-.PHONY: help setup womd nuplan nuscenes all dev clean
+.PHONY: help setup waymo nuplan nuscenes all dev clean
 
 # Default target
 help:
@@ -8,7 +8,7 @@ help:
 	@echo "================================================="
 	@echo ""
 	@echo "Quick installation targets:"
-	@echo "  make womd          Install with Waymo dataset support"
+	@echo "  make waymo          Install with Waymo dataset support"
 	@echo "  make nuplan        Install with nuPlan dataset support"
 	@echo "  make nuscenes      Install with nuScenes dataset support"
 	@echo "  make all           Install every datasets"
@@ -25,8 +25,8 @@ help:
 	uv venv --python 3.10
 
 
-womd: .venv/pyvenv.cfg
-	uv pip install -e ".[womd]"
+waymo: .venv/pyvenv.cfg
+	uv pip install -e ".[waymo]"
 
 nuplan: .venv/pyvenv.cfg
 	uv pip install -e ".[nuplan]"

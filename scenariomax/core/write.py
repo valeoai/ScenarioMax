@@ -311,7 +311,7 @@ def _execute_parallel_processing(
 
 def _get_scenario_count(scenarios: Any, list_scenarios: list, dataset_name: str) -> int:
     """Get the number of scenarios, with special handling for Waymo."""
-    if dataset_name == "womd":
+    if dataset_name == "waymo":
         from scenariomax.stage1_convert.datasets.waymo.load import count_waymo_scenarios
 
         return count_waymo_scenarios(list_scenarios)

@@ -23,7 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Dataset-specific dependencies
-womd = [
+waymo = [
     "protobuf<3.20",
 ]
 
@@ -94,7 +94,7 @@ nuscenes = [
 
 # All dataset
 all = [
-    "scenariomax[womd,nuplan]"
+    "scenariomax[waymo,nuplan]"
 ]
 
 # Development dependencies

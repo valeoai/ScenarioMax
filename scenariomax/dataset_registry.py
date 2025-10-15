@@ -31,7 +31,7 @@ def get_dataset_config(dataset_name: str) -> DatasetConfig:
         from scenariomax.stage1_convert.datasets import waymo
 
         return DatasetConfig(
-            name="womd",
+            name="waymo",
             version="v1.3",
             load_func=waymo.get_waymo_scenarios,
             convert_func=waymo.convert_waymo_scenario,

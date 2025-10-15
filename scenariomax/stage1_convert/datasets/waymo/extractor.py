@@ -10,12 +10,12 @@ from scenariomax.stage1_convert.datasets.waymo import utils as waymo_utils
 
 
 def convert_waymo_scenario(waymo_scenario: Any, version: str) -> UnifiedScenario:
-    """Convert WOMD scenario to unified format."""
+    """Convert Waymo scenario to unified format."""
     # Extract scenario ID from Waymo scenario
     scenario_id = waymo_scenario.scenario_id.split(waymo_utils.SPLIT_KEY)[0]
 
     # Create unified scenario
-    scenario = UnifiedScenario(scenario_id=scenario_id, dataset_name="WOMD", dataset_version=version)
+    scenario = UnifiedScenario(scenario_id=scenario_id, dataset_name="waymo", dataset_version=version)
 
     # Convert data
     dynamic_agents, ego_id = extract_dynamic_agents(waymo_scenario)

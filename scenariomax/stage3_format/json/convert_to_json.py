@@ -47,7 +47,7 @@ def convert(unified_scenario):
     )
 
     metadata = unified_scenario["metadata"]
-    if metadata["dataset_name"] == "WOMD":
+    if metadata["dataset_name"] == "waymo":
         sdc_track_index = metadata["sdc_track_index"]
         objects_of_interest = metadata["objects_of_interest"]
         tracks_to_predict = metadata["tracks_to_predict"]

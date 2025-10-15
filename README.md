@@ -54,7 +54,7 @@ uv venv -p 3.10
 source .venv/bin/activate
 
 # Install ScenarioMax with dataset support
-make womd          # Waymo Open Motion Dataset
+make waymo          # Waymo Open Motion Dataset
 make nuplan        # nuPlan dataset
 make nuscenes      # nuScenes dataset
 make all           # All datasets
@@ -65,7 +65,7 @@ make dev           # Development environment
 
 ```bash
 # For specific datasets
-uv pip install -e ".[womd]"      # Waymo support
+uv pip install -e ".[waymo]"      # Waymo support
 uv pip install -e ".[nuplan]"    # nuPlan support
 uv pip install -e ".[nuscenes]"  # nuScenes support
 uv pip install -e ".[dev]"       # Development tools
