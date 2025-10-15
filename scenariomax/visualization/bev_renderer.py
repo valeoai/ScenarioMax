@@ -21,7 +21,8 @@ from scenariomax.core import types
 logger = logger_utils.get_logger(__name__)
 
 # Visualization constants
-MAX_DYNAMIC_ELEMENTS_TO_KEEP = 100  # Number of recent dynamic elements to preserve in video frames
+# Optimized for ~30-frame trajectory history (3s @ 10fps) with multiple agents
+MAX_DYNAMIC_ELEMENTS_TO_KEEP = 100
 
 # Color scheme
 COLORS = {
@@ -573,41 +574,59 @@ def visualize_scenarios(
     os.makedirs(output_path, exist_ok=True)
 
     # Process scenarios
+    success_count = 0
+    error_count = 0
+
     for pickle_file in tqdm(pickle_files, desc="Visualizing"):
-        # Load scenario
-        with open(pickle_file, "rb") as f:
-            scenario = pickle.load(f)
+        try:
+            # Load scenario
+            with open(pickle_file, "rb") as f:
+                scenario = pickle.load(f)
 
-        # Generate output filename
-        scenario_id = scenario.get("metadata", {}).get("scenario_id", os.path.basename(pickle_file))
-        # Clean scenario_id for filename
-        scenario_id = scenario_id.replace("/", "_").replace("\\", "_")
+            # Generate output filename
+            scenario_id = scenario.get("metadata", {}).get("scenario_id", os.path.basename(pickle_file))
+            # Clean scenario_id for filename
+            scenario_id = scenario_id.replace("/", "_").replace("\\", "_")
 
-        if output_format == "png":
-            # Use first timestep (timestep 0)
-            output_file = os.path.join(output_path, f"{scenario_id}.png")
-            # Render PNG
-            render_scenario_bev(
-                scenario=scenario,
-                output_path=output_file,
-                show_trajectory=show_trajectory,
-                scatter_map=scatter_map,
-            )
-        elif output_format == "video":
-            output_file = os.path.join(output_path, f"{scenario_id}.mp4")
-            # Render video
-            render_scenario_video(
-                scenario=scenario,
-                output_path=output_file,
-                show_trajectory=show_trajectory,
-                fps=fps,
-                scatter_map=scatter_map,
-            )
-        else:
-            raise ValueError(f"Unknown output format: {output_format}")
+            if output_format == "png":
+                # Use first timestep (timestep 0)
+                output_file = os.path.join(output_path, f"{scenario_id}.png")
+                # Render PNG
+                render_scenario_bev(
+                    scenario=scenario,
+                    output_path=output_file,
+                    show_trajectory=show_trajectory,
+                    scatter_map=scatter_map,
+                )
+            elif output_format == "video":
+                output_file = os.path.join(output_path, f"{scenario_id}.mp4")
+                # Render video
+                render_scenario_video(
+                    scenario=scenario,
+                    output_path=output_file,
+                    show_trajectory=show_trajectory,
+                    fps=fps,
+                    scatter_map=scatter_map,
+                )
+            else:
+                raise ValueError(f"Unknown output format: {output_format}")
 
-    stats = {"total_scenarios": len(pickle_files)}
+            success_count += 1
+
+        except Exception as e:
+            logger.error(f"Failed to visualize {pickle_file}: {e}")
+            error_count += 1
+            continue
+
+    stats = {
+        "total_scenarios": len(pickle_files),
+        "success": success_count,
+        "errors": error_count,
+    }
 
     logger.info("✅ Visualization complete")
+    logger.info(f"   • Success: {success_count}")
+    if error_count > 0:
+        logger.warning(f"   • Errors: {error_count}")
 
     return stats
