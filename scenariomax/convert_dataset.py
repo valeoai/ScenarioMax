@@ -195,6 +195,19 @@ Examples:
         help="Add traffic light data (implies --process)",
     )
 
+    # Pipeline mode
+    pipeline_parser.add_argument(
+        "--save-intermediate",
+        action="store_true",
+        help="Save intermediate pickles to disk (default: in-memory streaming)",
+    )
+    pipeline_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="Batch size for in-memory processing (default: 100 scenarios)",
+    )
+
     # Format-specific options
     pipeline_parser.add_argument("--shard", type=int, default=1, help="Number of output shards (tfexample only)")
     pipeline_parser.add_argument(
@@ -327,6 +340,8 @@ def handle_pipeline_command(args):
         format=args.format,
         processors=processors,
         num_workers=args.num_workers,
+        save_intermediate=args.save_intermediate,
+        batch_size=args.batch_size,
         num_files=args.num_files,
         split=args.split,
         shard=args.shard,
