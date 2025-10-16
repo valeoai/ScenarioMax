@@ -6,6 +6,16 @@ import numpy as np
 import psutil
 
 
+def mps_to_kmh(speed_in_mps: float):
+    speed_in_kmh = speed_in_mps * 3.6
+    return np.ceil(speed_in_kmh)
+
+
+def mps_to_mph(speed_in_mps: float):
+    speed_in_mph = speed_in_mps * 2.23694
+    return np.ceil(speed_in_mph)
+
+
 def mph_to_kmh(speed_in_mph: float):
     speed_in_kmh = speed_in_mph * 1.609344
     return np.ceil(speed_in_kmh)

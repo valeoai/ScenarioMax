@@ -305,8 +305,12 @@ def extract_static_map_elements(
 
                 # Get speed limit (convert from m/s to mph and km/h)
                 speed_limit_mps = lane_data.speed_limit_mps
-                speed_limit_mph = speed_limit_mps * 2.23694 if speed_limit_mps else -1
-                speed_limit_kmh = converter_utils.mph_to_kmh(speed_limit_mph) if speed_limit_mph > 0 else -1
+                if speed_limit_mps is not None:
+                    speed_limit_mph = converter_utils.mps_to_mph(speed_limit_mps)
+                    speed_limit_kmh = converter_utils.mps_to_kmh(speed_limit_mps)
+                else:
+                    speed_limit_mph = -1
+                    speed_limit_kmh = -1
 
                 # Create lane element
                 static_map_elements[lane_data.id] = {
