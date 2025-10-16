@@ -13,6 +13,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from tqdm import tqdm
+
 from scenariomax import dataset_registry, logger_utils
 from scenariomax.core import processor, write
 from scenariomax.core.exceptions import DatasetLoadError
@@ -313,11 +315,11 @@ def format_unified_to_target(
         if format == "tfexample":
             from scenariomax.stage3_format.tfexample import postprocess
 
-            postprocess.merge_dataset_workers(output_path, os.path.basename(output_path))
+            tfrecord_name = format_options.get("tfrecord_name", "training")
+            postprocess.merge_dataset_workers(output_path, tfrecord_name)
 
             # Shuffle the merged file
-            tfrecord_name = format_options.get("tfrecord_name", "training")
-            merged_file = os.path.join(os.path.dirname(output_path), f"{os.path.basename(output_path)}.tfrecord")
+            merged_file = os.path.join(output_path, f"{tfrecord_name}.tfrecord")
             if os.path.exists(merged_file):
                 postprocess.shuffle_tfrecord_file(merged_file)
 
@@ -328,8 +330,8 @@ def format_unified_to_target(
 
                     logger.info(f"Sharding into {num_shards} shards")
                     shard.shard_tfrecord(
-                        src=os.path.dirname(output_path),
-                        filename=os.path.basename(output_path),
+                        src=output_path,
+                        filename=tfrecord_name,
                         num_threads=num_workers,
                         num_shards=num_shards,
                     )
@@ -519,37 +521,35 @@ def _run_pipeline_in_memory(
     **kwargs,
 ) -> tuple[dict, dict | None, dict]:
     """
-    Run pipeline with batch-based in-memory processing.
+    Run pipeline with true in-memory per-worker processing.
 
-    Processes scenarios in batches to avoid loading entire dataset into memory.
-    Each batch flows through: Raw → Unified → Process → Format → Save
-    This minimizes memory footprint while avoiding intermediate disk I/O.
+    Each worker independently processes chunks of raw scenarios through:
+    1. Load raw scenario from file path
+    2. Convert to unified format (Stage 1)
+    3. Apply processors (Stage 2 - optional)
+    4. Format to target format (Stage 3)
+    5. Save directly to target format
+
+    NO intermediate pickle saves. Workers process in chunks to control memory.
+    Each worker is responsible for opening/closing its own files.
     """
-    batch_size = kwargs.get("batch_size", 100)  # Default: 100 scenarios per batch
-
     start_time_total = time.time()
 
     # Normalize input to dict format
     if isinstance(datasets, str):
         datasets = {"dataset": datasets}
 
-    logger.info(f"🚀 In-memory batch pipeline: {len(datasets)} dataset(s)")
-    logger.info(f"   • Batch size: {batch_size} scenarios")
+    logger.info(f"🚀 In-memory pipeline: {len(datasets)} dataset(s)")
     logger.info(f"   • Workers: {num_workers}")
+    logger.info(f"   • Format: {format}")
 
     # Setup output directory for target format
     final_path = os.path.join(output_path, format)
     processor.setup_output_directory(final_path, clean=True)
 
-    # Get the appropriate postprocess function for Stage 3
-    postprocess_func = _get_postprocess_func(format)
-
     # Track statistics
     total_scenarios = 0
     datasets_processed = 0
-    total_stage1_time = 0
-    total_stage2_time = 0
-    total_stage3_time = 0
 
     # Process each dataset
     for dataset_name, dataset_path in datasets.items():
@@ -564,88 +564,24 @@ def _run_pipeline_in_memory(
         # Get dataset configuration
         config = dataset_registry.get_dataset_config(dataset_name)
 
-        # Load raw scenarios
-        scenarios, additional_args = _load_raw_scenarios(dataset_name, dataset_path, config, **kwargs)
+        # Load raw scenario file paths
+        scenario_files, additional_args = _load_raw_scenarios(dataset_name, dataset_path, config, **kwargs)
 
-        # Apply preprocessing to get actual scenario generator/list
-        from scenariomax.core.write import default_preprocess_func
-
-        preprocess_func = config.preprocess_func if config.preprocess_func else default_preprocess_func
-        preprocessed_scenarios = preprocess_func(scenarios, worker_index=0)
-
-        # Convert to iterator for batch processing (works for both generators and lists)
-        import itertools
-
-        scenario_iterator = iter(preprocessed_scenarios)
-
-        scenario_count = _get_scenario_count(dataset_name, scenarios)
+        scenario_count = _get_scenario_count(dataset_name, scenario_files)
         logger.info(f"   • Total scenarios: {scenario_count}")
-        logger.info(f"   • Batches: {(scenario_count + batch_size - 1) // batch_size}")
 
-        # Process scenarios in batches using itertools
-        batch_num = 0
-        total_batches = (scenario_count + batch_size - 1) // batch_size
+        # Process scenarios: Stage 1→2→3 in workers without intermediate saves
+        _process_scenarios_stage123_parallel(
+            scenario_files=scenario_files,
+            config=config,
+            processors=processors,
+            format=format,
+            output_path=dataset_output,
+            num_workers=num_workers,
+            additional_args=additional_args,
+        )
 
-        while True:
-            # Get next batch from iterator
-            batch = list(itertools.islice(scenario_iterator, batch_size))
-            if not batch:
-                break  # No more scenarios
-
-            batch_num += 1
-            logger.info(f"   • Batch {batch_num}/{total_batches} ({len(batch)} scenarios)")
-
-            # Stage 1: Raw → Unified (in-memory, batch)
-            stage1_start = time.time()
-
-            # Convert scenarios in parallel (already preprocessed)
-            def convert_scenario(scenario):
-                return config.convert_func(scenario, config.version, **additional_args)
-
-            unified_batch = processor.process_batch_parallel(
-                items=batch,
-                process_fn=convert_scenario,
-                num_workers=num_workers,
-                desc=f"Batch {batch_num}/{total_batches} - Converting",
-            )
-            stage1_time = time.time() - stage1_start
-            total_stage1_time += stage1_time
-
-            # Stage 2: Process (in-memory, batch) - optional
-            stage2_time = 0
-            if processors:
-                stage2_start = time.time()
-                for processor_fn in processors:
-
-                    def apply_processor(scenario):
-                        return processor_fn(scenario)
-
-                    unified_batch = processor.process_batch_parallel(
-                        items=unified_batch,
-                        process_fn=apply_processor,
-                        num_workers=num_workers,
-                        desc=f"Batch {batch_num}/{total_batches} - {processor_fn.__name__}",
-                    )
-                stage2_time = time.time() - stage2_start
-                total_stage2_time += stage2_time
-
-            # Stage 3: Format → Save (in-memory, batch)
-            stage3_start = time.time()
-            _convert_scenarios_to_format(
-                scenarios=unified_batch,
-                output_path=dataset_output,  # Use dataset-specific subdirectory
-                postprocess_func=postprocess_func,
-                num_workers=num_workers,
-            )
-            stage3_time = time.time() - stage3_start
-            total_stage3_time += stage3_time
-
-            total_scenarios += len(batch)
-
-            # Clear batch from memory
-            del batch
-            del unified_batch
-
+        total_scenarios += scenario_count
         datasets_processed += 1
         logger.info(f"✅ Completed {dataset_name}")
 
@@ -656,11 +592,11 @@ def _run_pipeline_in_memory(
     if format == "tfexample":
         from scenariomax.stage3_format.tfexample import postprocess
 
-        postprocess.merge_dataset_workers(final_path, os.path.basename(final_path))
+        tfrecord_name = kwargs.get("tfrecord_name", "training")
+        postprocess.merge_multiple_datasets(final_path, f"{tfrecord_name}.tfrecord")
 
         # Shuffle the merged file
-        tfrecord_name = kwargs.get("tfrecord_name", "training")
-        merged_file = os.path.join(os.path.dirname(final_path), f"{os.path.basename(final_path)}.tfrecord")
+        merged_file = os.path.join(final_path, f"{tfrecord_name}.tfrecord")
         if os.path.exists(merged_file):
             postprocess.shuffle_tfrecord_file(merged_file)
 
@@ -671,8 +607,8 @@ def _run_pipeline_in_memory(
 
                 logger.info(f"Sharding into {num_shards} shards")
                 shard.shard_tfrecord(
-                    src=os.path.dirname(final_path),
-                    filename=os.path.basename(final_path),
+                    src=final_path,
+                    filename=tfrecord_name,
                     num_threads=num_workers,
                     num_shards=num_shards,
                 )
@@ -685,11 +621,13 @@ def _run_pipeline_in_memory(
     postprocess_time = time.time() - postprocess_start
 
     # Build statistics
+    total_time = time.time() - start_time_total
+
     stage1_stats = {
         "stage": "raw_to_unified",
         "datasets_processed": datasets_processed,
         "total_scenarios": total_scenarios,
-        "processing_time": total_stage1_time,
+        "processing_time": total_time - postprocess_time,
     }
 
     stage2_stats = None
@@ -698,25 +636,269 @@ def _run_pipeline_in_memory(
             "stage": "process_unified",
             "scenarios_processed": total_scenarios,
             "processors_applied": len(processors),
-            "processing_time": total_stage2_time,
+            "processing_time": 0,  # Included in stage1_stats
         }
 
     stage3_stats = {
         "stage": "unified_to_target",
         "format": format,
         "scenarios_processed": total_scenarios,
-        "processing_time": total_stage3_time + postprocess_time,
+        "processing_time": postprocess_time,
     }
 
-    total_time = time.time() - start_time_total
-    logger.info(f"🏁 Batch pipeline completed in {total_time:.2f}s")
-    logger.info(f"   • Stage 1 (convert): {total_stage1_time:.2f}s")
-    if processors:
-        logger.info(f"   • Stage 2 (process): {total_stage2_time:.2f}s")
-    logger.info(f"   • Stage 3 (format): {total_stage3_time:.2f}s")
-    logger.info(f"   • Postprocess: {postprocess_time:.2f}s")
+    logger.info(f"🏁 In-memory pipeline completed in {total_time:.2f}s")
 
     return stage1_stats, stage2_stats, stage3_stats
+
+
+def _process_scenarios_stage123_parallel(
+    scenario_files: list[str],
+    config: Any,
+    processors: list[Callable] | None,
+    format: str,
+    output_path: str,
+    num_workers: int,
+    additional_args: dict,
+) -> None:
+    """
+    Process scenarios in parallel through full Stage 1→2→3 pipeline.
+
+    Each worker:
+    1. Receives a chunk of FILE PATHS
+    2. Loads raw scenarios from those files
+    3. Converts to unified (Stage 1)
+    4. Applies processors (Stage 2 - optional)
+    5. Formats to target format (Stage 3)
+    6. Saves directly to target format (tfexample or json)
+
+    NO intermediate pickle saves. Workers process in chunks to control memory.
+    """
+    from functools import partial
+
+    from joblib import Parallel, delayed
+
+    # Setup worker directories
+    write._create_worker_directories(output_path, num_workers)
+
+    # Distribute file paths to workers
+    total_files = len(scenario_files)
+    if total_files < num_workers:
+        logger.info(f"Using {total_files} worker(s) as file count < worker count ({num_workers})")
+        num_workers = total_files
+
+    files_per_worker = total_files // num_workers
+    output_directory_basename = os.path.basename(output_path)
+
+    # Prepare worker arguments
+    worker_arguments_list = []
+    for worker_index in range(num_workers):
+        batch_start = worker_index * files_per_worker
+        batch_end = total_files if worker_index == num_workers - 1 else batch_start + files_per_worker
+
+        worker_file_chunk = scenario_files[batch_start:batch_end]
+        worker_output_dir = os.path.join(output_path, f"{output_directory_basename}_{worker_index}")
+
+        worker_arguments_list.append(
+            {
+                "worker_index": worker_index,
+                "file_chunk": worker_file_chunk,
+                "config": config,
+                "processors": processors,
+                "format": format,
+                "output_path": worker_output_dir,
+                "additional_args": additional_args,
+            },
+        )
+
+        logger.debug(
+            f"Worker {worker_index} assigned {len(worker_file_chunk)} files (indices {batch_start}:{batch_end})",
+        )
+
+    # Execute parallel processing
+    logger.debug(f"Starting parallel Stage 1→2→3 processing with {num_workers} workers")
+
+    worker_func = partial(_worker_process_stage123)
+
+    with Parallel(n_jobs=num_workers) as parallel_executor:
+        worker_results = parallel_executor(delayed(worker_func)(**worker_args) for worker_args in worker_arguments_list)
+
+    # Check for failures
+    for worker_index, success in enumerate(worker_results):
+        if not success:
+            from scenariomax.core.exceptions import WorkerProcessingError
+
+            raise WorkerProcessingError(worker_index, "Worker failed during Stage 1→2→3 processing")
+
+
+def _worker_process_stage123(
+    worker_index: int,
+    file_chunk: list[str],
+    config: Any,
+    processors: list[Callable] | None,
+    format: str,
+    output_path: str,
+    additional_args: dict,
+) -> bool:
+    """
+    Worker function that processes a chunk of files through Stage 1→2→3.
+
+    This is the core of the in-memory pipeline:
+    - Load raw scenario from file path
+    - Convert to unified (Stage 1)
+    - Apply processors (Stage 2 - optional)
+    - Format to target format (Stage 3)
+    - Save directly to target format
+
+    NO intermediate saves. Each scenario flows through all stages in memory.
+
+    Args:
+        worker_index: Index of this worker
+        file_chunk: List of file paths to process
+        config: Dataset configuration
+        processors: Optional processor functions for Stage 2
+        format: Target format ('tfexample' or 'json')
+        output_path: Worker's output directory
+        additional_args: Additional arguments for conversion
+
+    Returns:
+        True if successful, False otherwise
+    """
+    from scenariomax.stage1_convert.datasets import utils as converter_utils
+
+    memory_before = converter_utils.process_memory()
+    logger.debug(f"Worker {worker_index} starting - Memory: {memory_before:.2f} MB")
+
+    # Get preprocessing function for this dataset
+    from scenariomax.core.write import default_preprocess_func
+
+    preprocess_func = config.preprocess_func if config.preprocess_func else default_preprocess_func
+
+    # Preprocess to get actual scenario iterator/generator
+    scenarios = preprocess_func(file_chunk, worker_index)
+
+    # Get scenario count (special handling for Waymo)
+    from scenariomax.core.write import _get_scenario_count
+
+    num_scenarios = _get_scenario_count(scenarios, file_chunk, config.name)
+
+    logger.debug(f"Worker {worker_index} processing {num_scenarios} scenarios")
+
+    # Setup progress tracking
+    pbar = tqdm(desc=f"Worker {worker_index}", total=num_scenarios, unit=" scenario", leave=True)
+
+    processed_count = 0
+    filtered_count = 0
+    error_count = 0
+
+    # Setup format-specific writer
+    if format == "tfexample":
+        from scenariomax.core.unified_scenario import UnifiedScenario
+        from scenariomax.stage3_format.tfexample import convert_to_tfexample, exceptions
+        from scenariomax.tf_utils import get_tensorflow
+
+        tf = get_tensorflow()
+        tf_record_file = os.path.join(output_path, "training.tfrecord")
+        logger.debug(f"Worker {worker_index} writing to TFRecord: {tf_record_file}")
+
+        try:
+            with tf.io.TFRecordWriter(tf_record_file) as writer:
+                for raw_scenario in scenarios:
+                    try:
+                        # Stage 1: Convert to unified
+                        unified_scenario = config.convert_func(raw_scenario, config.version, **additional_args)
+
+                        # Stage 2: Apply processors (optional)
+                        if processors:
+                            for processor_fn in processors:
+                                unified_scenario = processor_fn(unified_scenario)
+
+                        # Stage 3: Convert to TFExample and save
+                        if not isinstance(unified_scenario, UnifiedScenario):
+                            unified_scenario = UnifiedScenario.from_dict(unified_scenario)
+
+                        dict_to_convert = convert_to_tfexample.convert(unified_scenario)
+                        example = tf.train.Example(features=tf.train.Features(feature=dict_to_convert))
+
+                        if example is not None:
+                            writer.write(example.SerializeToString())
+                            processed_count += 1
+
+                    except (exceptions.OverpassException, exceptions.NotEnoughValidObjectsException):
+                        filtered_count += 1
+                    except Exception as e:
+                        error_count += 1
+                        logger.error(f"Worker {worker_index} failed to process scenario: {e}")
+
+                    pbar.update(1)
+                    pbar.set_postfix({"processed": processed_count, "filtered": filtered_count, "errors": error_count})
+
+        except Exception as e:
+            logger.error(f"Worker {worker_index} encountered critical error: {e}")
+            pbar.close()
+            return False
+        finally:
+            pbar.close()
+
+    elif format == "json":
+        from scenariomax.stage3_format.json import convert_to_json
+
+        json_file = os.path.join(output_path, "scenarios.json")
+        logger.debug(f"Worker {worker_index} writing to JSON: {json_file}")
+
+        scenarios_list = []
+
+        try:
+            for raw_scenario in scenarios:
+                try:
+                    # Stage 1: Convert to unified
+                    unified_scenario = config.convert_func(raw_scenario, config.version, **additional_args)
+
+                    # Stage 2: Apply processors (optional)
+                    if processors:
+                        for processor_fn in processors:
+                            unified_scenario = processor_fn(unified_scenario)
+
+                    # Stage 3: Convert to GPUDrive JSON format
+                    json_scenario = convert_to_json.convert(unified_scenario)
+                    scenarios_list.append(json_scenario)
+                    processed_count += 1
+
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"Worker {worker_index} failed to process scenario: {e}")
+
+                pbar.update(1)
+                pbar.set_postfix({"processed": processed_count, "errors": error_count})
+
+            # Save all scenarios to JSON file
+            import json
+
+            with open(json_file, "w") as f:
+                json.dump(scenarios_list, f, indent=2)
+
+        except Exception as e:
+            logger.error(f"Worker {worker_index} encountered critical error: {e}")
+            pbar.close()
+            return False
+        finally:
+            pbar.close()
+
+    else:
+        logger.error(f"Unsupported format: {format}")
+        pbar.close()
+        return False
+
+    memory_final = converter_utils.process_memory()
+
+    logger.debug(f"Worker {worker_index} COMPLETED:")
+    logger.debug(f"  ✅ Processed: {processed_count} scenarios")
+    if format == "tfexample":
+        logger.debug(f"  🔍 Filtered: {filtered_count} scenarios")
+    logger.debug(f"  ❌ Errors: {error_count} scenarios")
+    logger.debug(f"  📊 Memory: {memory_final:.2f} MB")
+    logger.debug(f"  📁 Output: {output_path}")
+
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════════════════
