@@ -120,7 +120,7 @@ def extract_dynamic_agents(scenario: NuPlanScenario, center: list[float]) -> dic
                 "position": np.zeros((episode_length, 3), dtype=np.float32),
                 "heading": np.zeros((episode_length,), dtype=np.float32),
                 "velocity": np.zeros((episode_length, 2), dtype=np.float32),
-                "valid": np.zeros((episode_length,), dtype=np.float32),
+                "valid": np.zeros((episode_length,), dtype=np.bool8),
                 "length": np.zeros((episode_length,), dtype=np.float32),
                 "width": np.zeros((episode_length,), dtype=np.float32),
                 "height": np.zeros((episode_length,), dtype=np.float32),
@@ -157,11 +157,11 @@ def extract_dynamic_agents(scenario: NuPlanScenario, center: list[float]) -> dic
             trajectory["position"][frame_idx] = [
                 agent_frame_state["position"][0],
                 agent_frame_state["position"][1],
-                0.0,  # Z-coordinate (ground level)
+                0.0,  # Fill value for z-coordinate
             ]
             trajectory["heading"][frame_idx] = agent_frame_state["heading"]
             trajectory["velocity"][frame_idx] = agent_frame_state["velocity"]
-            trajectory["valid"][frame_idx] = 1.0  # Mark frame as valid
+            trajectory["valid"][frame_idx] = agent_frame_state["valid"]
             trajectory["length"][frame_idx] = agent_frame_state["length"]
             trajectory["width"][frame_idx] = agent_frame_state["width"]
             trajectory["height"][frame_idx] = agent_frame_state["height"]
@@ -179,7 +179,7 @@ def extract_dynamic_agents(scenario: NuPlanScenario, center: list[float]) -> dic
     for frame_idx, ego_frame_state in enumerate(ego_trajectory):
         ego_states = ego_track["states"]
         ego_states["position"][frame_idx] = [ego_frame_state["position"][0], ego_frame_state["position"][1], 0.0]
-        ego_states["valid"][frame_idx] = 1.0
+        ego_states["valid"][frame_idx] = ego_frame_state["valid"]
         ego_states["heading"][frame_idx] = ego_frame_state["heading"]
         ego_states["length"][frame_idx] = ego_frame_state["length"]
         ego_states["width"][frame_idx] = ego_frame_state["width"]
@@ -218,7 +218,7 @@ def extract_dynamic_map_elements(nuplan_scenario: NuPlanScenario, center: list[f
             "type": types.TRAFFIC_LIGHT,
             "position": np.array([position[0], position[1], 0.0], dtype=np.float32),
             "states": [types.TRAFFIC_LIGHT_UNKNOWN] * episode_len,
-            "lane": lane_id,
+            "lane": int(lane_id),
         }
 
     # Fill in traffic light states for each frame
@@ -300,16 +300,13 @@ def extract_static_map_elements(
                     # Skip unsupported geometry types (e.g., Point, empty geometries)
                     continue
 
-                polygon = [[points[0][i], points[1][i]] for i in range(len(points[0]))]
-                polygon = nuplan_utils.get_center_vector(polygon, center)
-
                 # Extract lane centerline
                 lane_polyline = nuplan_utils.extract_centerline(lane_data, center)
 
                 # Get speed limit (convert from m/s to mph and km/h)
                 speed_limit_mps = lane_data.speed_limit_mps
-                speed_limit_mph = speed_limit_mps * 2.23694 if speed_limit_mps else None
-                speed_limit_kmh = converter_utils.mph_to_kmh(speed_limit_mph) if speed_limit_mph else None
+                speed_limit_mph = speed_limit_mps * 2.23694 if speed_limit_mps else -1
+                speed_limit_kmh = converter_utils.mph_to_kmh(speed_limit_mph) if speed_limit_mph > 0 else -1
 
                 # Create lane element
                 static_map_elements[lane_data.id] = {
@@ -329,7 +326,6 @@ def extract_static_map_elements(
                         if layer == SemanticMapLayer.ROADBLOCK
                         else []
                     ),
-                    "polygon": polygon,
                 }
 
                 # Process lane boundaries (only for roadblocks)
@@ -396,6 +392,9 @@ def extract_static_map_elements(
             polygon = [[points[0][i], points[1][i]] for i in range(len(points[0]))]
             polygon = nuplan_utils.get_center_vector(polygon, center)
 
+            # Add z-coordinate of 0
+            polygon = np.hstack((polygon, np.zeros((polygon.shape[0], 1))))
+
             static_map_elements[crosswalk.id] = {
                 "type": types.CROSSWALK,
                 "polygon": polygon,
@@ -425,6 +424,9 @@ def extract_static_map_elements(
             # (reversal ensures consistent boundary direction)
             boundary_points = nuplan_utils.get_center_vector(boundary_points, center)[::-1]
             boundary_id = f"boundary_{idx}"
+
+            # Add z-coordinate of 0
+            boundary_points = np.hstack((boundary_points, np.zeros((boundary_points.shape[0], 1))))
 
             static_map_elements[boundary_id] = {
                 "type": types.ROAD_EDGE_BOUNDARY,

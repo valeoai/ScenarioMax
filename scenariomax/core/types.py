@@ -127,6 +127,14 @@ def is_road_map_element(obj_type: str) -> bool:
     return obj_type in LANE_TYPES or obj_type in ROAD_LINE_TYPES or obj_type in ROAD_EDGE_TYPES
 
 
+def is_marking_element(obj_type: str) -> bool:
+    return obj_type in [CROSSWALK, SPEED_BUMP, DRIVEWAY, PARKING_LOT]
+
+
+def is_traffic_object(obj_type: str) -> bool:
+    return obj_type in [STOP_SIGN, TRAFFIC_CONE, TRAFFIC_BARRIER, GUARDRAIL]
+
+
 def is_traffic_sign(obj_type: str) -> bool:
     return obj_type in [STOP_SIGN, SPEED_BUMP, DRIVEWAY]
 

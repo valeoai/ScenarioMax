@@ -36,8 +36,9 @@ class UnifiedScenario(dict):
         "static_map_elements": {      # Static map features
             "element_id": {             # str: Unique map element identifier
                 "type": str,                    # From types.LANE_TYPES, ROAD_LINE_TYPES, etc.
-                # IF TYPE IS LANE:
                 "polyline": np.ndarray,         # (N, 3) - (x, y, z)
+
+                # IF TYPE IS LANE:
                 "speed_limit_mph": float,       # Speed limit in mph # lane only
                 "speed_limit_kmh": float,       # Speed limit in km/h # lane only
                 "entry_lanes": list[int],       # List of entry lane IDs # lane only
@@ -46,8 +47,6 @@ class UnifiedScenario(dict):
                 "right_boundaries": list[int],  # Extracted right boundaries
                 "left_neighbor": list[int],     # IDs of left neighbor lanes
                 "right_neighbor": list[int],    # IDs of right neighbor lanes
-                # ELSE:
-                "polyline": np.ndarray,         # (N, 3) - (x, y, z)
             },
         },
 

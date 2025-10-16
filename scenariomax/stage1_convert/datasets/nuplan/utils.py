@@ -17,6 +17,7 @@ def get_center_vector(vector, nuplan_center=(0, 0)):
     "All vec in nuplan should be centered in (0,0) to avoid numerical explosion"
     vector = np.array(vector)
     vector -= np.asarray(nuplan_center)
+
     return vector
 
 
@@ -51,6 +52,10 @@ def get_points_from_boundary(boundary, center):
     points = [(pose.x, pose.y) for pose in path]
     points = get_center_vector(points, center)
 
+    if points.shape[1] == 2:
+        # Add a z-coordinate of 0 if not present
+        points = np.hstack((points, np.zeros((points.shape[0], 1))))
+
     return points
 
 
@@ -58,6 +63,10 @@ def extract_centerline(map_obj, nuplan_center):
     """Extract centerline points from map object with coordinate transformation."""
     path = map_obj.baseline_path.discrete_path
     points = np.array([get_center_vector([pose.x, pose.y], nuplan_center) for pose in path])
+
+    if points.shape[1] == 2:
+        # Add a z-coordinate of 0 if not present
+        points = np.hstack((points, np.zeros((points.shape[0], 1))))
 
     return points
 

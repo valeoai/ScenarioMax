@@ -219,7 +219,7 @@ def extract_dynamic_map_elements(waymo_scenario: Any) -> dict[str, dict]:
                         ],
                         dtype="float32",
                     ),
-                    "states": [None] * len(waymo_scenario.timestamps_seconds),
+                    "states": [types.TRAFFIC_LIGHT_UNKNOWN] * len(waymo_scenario.timestamps_seconds),
                     "lane": lane,
                 }
 
