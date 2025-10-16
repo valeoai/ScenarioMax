@@ -6,8 +6,8 @@ from tqdm import tqdm
 
 from scenariomax import logger_utils
 from scenariomax.core.unified_scenario import UnifiedScenario
-from scenariomax.tf_utils import get_tensorflow
 from scenariomax.stage3_format.tfexample import convert_to_tfexample, exceptions
+from scenariomax.tf_utils import get_tensorflow
 
 
 logger = logger_utils.get_logger(__name__)

@@ -49,14 +49,14 @@ def convert_nuscenes_scenario(
             if last_sample["prev"] == "":
                 break
             last_sample = nusc.get("sample", last_sample["prev"])
-            past_samples.append(parse_frame(last_sample, nusc))
+            past_samples.append(nuscenes_utils.parse_frame(last_sample, nusc))
 
         for _ in range(future_num):
             if next_sample["next"] == "":
                 break
             next_sample = nusc.get("sample", next_sample["next"])
-            future_samples.append(parse_frame(next_sample, nusc))
-        frames = past_samples[::-1] + [parse_frame(current_sample, nusc)] + future_samples
+            future_samples.append(nuscenes_utils.parse_frame(next_sample, nusc))
+        frames = past_samples[::-1] + [nuscenes_utils.parse_frame(current_sample, nusc)] + future_samples
         scene_info = copy.copy(nusc.get("scene", current_sample["scene_token"]))
         scene_info["name"] = scene_info["name"] + "_" + token
         scene_info["prediction"] = True
