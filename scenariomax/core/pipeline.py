@@ -32,6 +32,7 @@ def convert_raw_to_unified(
     datasets: dict[str, str] | str,
     output_path: str,
     num_workers: int = 8,
+    validate: bool = False,
     **kwargs,
 ) -> dict[str, Any]:
     """
@@ -42,6 +43,7 @@ def convert_raw_to_unified(
                  Or single path string (will auto-detect dataset type)
         output_path: Output directory for unified pickles
         num_workers: Number of parallel workers
+        validate: If True, perform soft validation on converted scenarios
         **kwargs: Dataset-specific arguments (num_files, split, etc.)
 
     Returns:
@@ -367,6 +369,7 @@ def process_scenarios(
     processors: list[Callable] | None = None,
     num_workers: int = 8,
     save_intermediate: bool = False,
+    validate: bool = True,
     **kwargs,
 ) -> dict[str, Any]:
     """
@@ -380,6 +383,7 @@ def process_scenarios(
         num_workers: Number of parallel workers
         save_intermediate: If True, save intermediate pickles to disk.
                           If False, process everything in memory (saves disk space)
+        validate: If True, perform soft validation on unified scenarios
         **kwargs: Additional arguments for stages
 
     Returns:
@@ -413,6 +417,7 @@ def process_scenarios(
     logger.info(f"   • Target format: {format}")
     logger.info(f"   • Processors: {len(processors) if processors else 0}")
     logger.info(f"   • Mode: {'Disk I/O' if save_intermediate else 'In-memory (streaming)'}")
+    logger.info(f"   • Validation: {'enabled' if validate else 'disabled'}")
 
     if save_intermediate:
         # Disk-based pipeline: save intermediate pickles
@@ -422,6 +427,7 @@ def process_scenarios(
             format=format,
             processors=processors,
             num_workers=num_workers,
+            validate=validate,
             **kwargs,
         )
     else:
@@ -432,6 +438,7 @@ def process_scenarios(
             format=format,
             processors=processors,
             num_workers=num_workers,
+            validate=validate,
             **kwargs,
         )
 
@@ -462,6 +469,7 @@ def _run_pipeline_with_disk_io(
     format: str,
     processors: list[Callable] | None,
     num_workers: int,
+    validate: bool = False,
     **kwargs,
 ) -> tuple[dict, dict | None, dict]:
     """Run pipeline with intermediate pickle saves (for debugging/inspection)."""
@@ -477,6 +485,7 @@ def _run_pipeline_with_disk_io(
         datasets=datasets,
         output_path=unified_path,
         num_workers=num_workers,
+        validate=validate,
         **kwargs,
     )
 
@@ -518,6 +527,7 @@ def _run_pipeline_in_memory(
     format: str,
     processors: list[Callable] | None,
     num_workers: int,
+    validate: bool = False,
     **kwargs,
 ) -> tuple[dict, dict | None, dict]:
     """
@@ -579,6 +589,7 @@ def _run_pipeline_in_memory(
             output_path=dataset_output,
             num_workers=num_workers,
             additional_args=additional_args,
+            validate=validate,
         )
 
         total_scenarios += scenario_count
@@ -659,6 +670,7 @@ def _process_scenarios_stage123_parallel(
     output_path: str,
     num_workers: int,
     additional_args: dict,
+    validate: bool = False,
 ) -> None:
     """
     Process scenarios in parallel through full Stage 1→2→3 pipeline.
@@ -667,9 +679,10 @@ def _process_scenarios_stage123_parallel(
     1. Receives a chunk of FILE PATHS
     2. Loads raw scenarios from those files
     3. Converts to unified (Stage 1)
-    4. Applies processors (Stage 2 - optional)
-    5. Formats to target format (Stage 3)
-    6. Saves directly to target format (tfexample or json)
+    4. Validates unified scenarios (optional)
+    5. Applies processors (Stage 2 - optional)
+    6. Formats to target format (Stage 3)
+    7. Saves directly to target format (tfexample or json)
 
     NO intermediate pickle saves. Workers process in chunks to control memory.
     """
@@ -707,6 +720,7 @@ def _process_scenarios_stage123_parallel(
                 "format": format,
                 "output_path": worker_output_dir,
                 "additional_args": additional_args,
+                "validate": validate,
             },
         )
 
@@ -738,6 +752,7 @@ def _worker_process_stage123(
     format: str,
     output_path: str,
     additional_args: dict,
+    validate: bool = False,
 ) -> bool:
     """
     Worker function that processes a chunk of files through Stage 1→2→3.
@@ -745,6 +760,7 @@ def _worker_process_stage123(
     This is the core of the in-memory pipeline:
     - Load raw scenario from file path
     - Convert to unified (Stage 1)
+    - Validate unified scenario (optional)
     - Apply processors (Stage 2 - optional)
     - Format to target format (Stage 3)
     - Save directly to target format
@@ -759,6 +775,7 @@ def _worker_process_stage123(
         format: Target format ('tfexample' or 'json')
         output_path: Worker's output directory
         additional_args: Additional arguments for conversion
+        validate: If True, perform soft validation on unified scenarios
 
     Returns:
         True if successful, False otherwise
@@ -789,6 +806,7 @@ def _worker_process_stage123(
     processed_count = 0
     filtered_count = 0
     error_count = 0
+    validation_error_count = 0
 
     # Setup format-specific writer
     if format == "tfexample":
@@ -806,6 +824,24 @@ def _worker_process_stage123(
                     try:
                         # Stage 1: Convert to unified
                         unified_scenario = config.convert_func(raw_scenario, config.version, **additional_args)
+
+                        # Soft validation (optional)
+                        if validate:
+                            if not isinstance(unified_scenario, UnifiedScenario):
+                                unified_scenario = UnifiedScenario.from_dict(unified_scenario)
+
+                            is_valid, errors, warnings = unified_scenario.strict_validate()
+                            if not is_valid:
+                                validation_error_count += 1
+                                logger.warning(
+                                    f"Worker {worker_index} validation failed for scenario {unified_scenario.get('id', 'unknown')}:"
+                                )
+                                for error in errors[:3]:  # Show first 3 errors
+                                    logger.warning(f"  - {error}")
+                                if len(errors) > 3:
+                                    logger.warning(f"  ... and {len(errors) - 3} more errors")
+                                pbar.update(1)
+                                continue
 
                         # Stage 2: Apply processors (optional)
                         if processors:
@@ -830,7 +866,14 @@ def _worker_process_stage123(
                         logger.error(f"Worker {worker_index} failed to process scenario: {e}")
 
                     pbar.update(1)
-                    pbar.set_postfix({"processed": processed_count, "filtered": filtered_count, "errors": error_count})
+                    pbar.set_postfix(
+                        {
+                            "processed": processed_count,
+                            "filtered": filtered_count,
+                            "validation_errors": validation_error_count,
+                            "errors": error_count,
+                        },
+                    )
 
         except Exception as e:
             logger.error(f"Worker {worker_index} encountered critical error: {e}")
@@ -840,6 +883,7 @@ def _worker_process_stage123(
             pbar.close()
 
     elif format == "json":
+        from scenariomax.core.unified_scenario import UnifiedScenario
         from scenariomax.stage3_format.json import convert_to_json
 
         json_file = os.path.join(output_path, "scenarios.json")
@@ -852,6 +896,24 @@ def _worker_process_stage123(
                 try:
                     # Stage 1: Convert to unified
                     unified_scenario = config.convert_func(raw_scenario, config.version, **additional_args)
+
+                    # Soft validation (optional)
+                    if validate:
+                        if not isinstance(unified_scenario, UnifiedScenario):
+                            unified_scenario = UnifiedScenario.from_dict(unified_scenario)
+
+                        is_valid, errors, warnings = unified_scenario.strict_validate()
+                        if not is_valid:
+                            validation_error_count += 1
+                            logger.warning(
+                                f"Worker {worker_index} validation failed for scenario {unified_scenario.get('id', 'unknown')}:"
+                            )
+                            for error in errors[:3]:  # Show first 3 errors
+                                logger.warning(f"  - {error}")
+                            if len(errors) > 3:
+                                logger.warning(f"  ... and {len(errors) - 3} more errors")
+                            pbar.update(1)
+                            continue
 
                     # Stage 2: Apply processors (optional)
                     if processors:
@@ -868,7 +930,9 @@ def _worker_process_stage123(
                     logger.error(f"Worker {worker_index} failed to process scenario: {e}")
 
                 pbar.update(1)
-                pbar.set_postfix({"processed": processed_count, "errors": error_count})
+                pbar.set_postfix(
+                    {"processed": processed_count, "validation_errors": validation_error_count, "errors": error_count}
+                )
 
             # Save all scenarios to JSON file
             import json
@@ -894,6 +958,8 @@ def _worker_process_stage123(
     logger.debug(f"  ✅ Processed: {processed_count} scenarios")
     if format == "tfexample":
         logger.debug(f"  🔍 Filtered: {filtered_count} scenarios")
+    if validate and validation_error_count > 0:
+        logger.debug(f"  ⚠️  Validation errors: {validation_error_count} scenarios")
     logger.debug(f"  ❌ Errors: {error_count} scenarios")
     logger.debug(f"  📊 Memory: {memory_final:.2f} MB")
     logger.debug(f"  📁 Output: {output_path}")

@@ -122,4 +122,5 @@ include = ["scenariomax*"]
 nuplan-devkit = { path = "devkit/nuplan-devkit", editable = true }
 nuscenes-devkit = { path = "devkit/nuscenes-devkit/setup", editable = true }
 
-
+[tool.pytest.ini_options]
+testpaths = "tests"
