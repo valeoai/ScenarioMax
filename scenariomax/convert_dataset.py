@@ -127,9 +127,24 @@ Examples:
 
     # Processor options
     process_parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Run soft validation (structure checks)",
+    )
+    process_parser.add_argument(
+        "--validate-strict",
+        action="store_true",
+        help="Run strict validation (physics checks)",
+    )
+    process_parser.add_argument(
         "--traffic-lights",
         action="store_true",
         help="Add traffic light data",
+    )
+    process_parser.add_argument(
+        "--no-output",
+        action="store_true",
+        help="Skip saving output (validation-only mode)",
     )
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -310,19 +325,38 @@ def handle_convert_command(args):
 
 def handle_process_command(args):
     """Handle Stage 2: Unified → Processed."""
-    # Build processors list
+    # Build processors list based on flags
     processors = []
+
+    # Validation (runs first if specified)
+    if args.validate or args.validate_strict:
+        from scenariomax.stage2_process import validate_scenario
+
+        # Create validation processor with appropriate strictness
+        def validation_processor(scenario):
+            return validate_scenario(scenario, True)  #  strict=args.validate_strict)
+
+        processors.append(validation_processor)
+
+    # Traffic lights (legacy/default)
     if args.traffic_lights:
         from scenariomax.stage2_process import enhance_scenarios
 
         processors.append(enhance_scenarios)
 
+    # Default behavior if no processors specified
     if not processors:
-        logger.warning("⚠️  No processors specified. Use --traffic-lights")
-        logger.warning("   Proceeding with default processor (currently a no-op)")
+        logger.warning("⚠️  No processors specified. Available options:")
+        logger.warning("   --validate / --validate-strict: Validate scenarios")
+        logger.warning("")
+        logger.warning("   Proceeding with default processor (enhance_scenarios)")
+
         from scenariomax.stage2_process import enhance_scenarios
 
         processors = [enhance_scenarios]
+
+    # Determine if output should be saved
+    save_output = not args.no_output
 
     # Run Stage 2
     stats = pipeline.process_unified_scenarios(
@@ -330,6 +364,7 @@ def handle_process_command(args):
         output_path=args.dst,
         processors=processors,
         num_workers=args.num_workers,
+        save_output=save_output,
     )
 
     logger.info(f"✅ Stage 2 completed: {stats}")

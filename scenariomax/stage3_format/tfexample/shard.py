@@ -54,7 +54,7 @@ def shard_tfrecord(src: str, filename: str, num_threads: int, num_shards: int = 
 
     # Calculate the width needed for shard numbering
     shard_width = max(5, int(math.log10(num_shards) + 1))
-    format_str = src_path + "-%0" + str(shard_width) + "d-of-%05d"
+    format_str = os.path.join(src, f"{filename}-%0{shard_width}d-of-%05d.tfrecord")
 
     # Process shards in parallel using thread-based parallelism for I/O operations
     logger.debug(f"Starting parallel sharding with {num_threads} threads")

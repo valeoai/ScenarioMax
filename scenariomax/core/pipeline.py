@@ -134,6 +134,7 @@ def process_unified_scenarios(
     output_path: str,
     processors: list[Callable] | None = None,
     num_workers: int = 8,
+    save_output: bool = True,
 ) -> dict[str, Any]:
     """
     Stage 2: Process unified scenarios with transformations.
@@ -147,6 +148,8 @@ def process_unified_scenarios(
         processors: List of processor functions to apply
                    Each function should take and return a UnifiedScenario
         num_workers: Number of parallel workers
+        save_output: If True, save processed scenarios to output_path
+                    If False, skip saving
 
     Returns:
         Dict with processing statistics
@@ -161,6 +164,17 @@ def process_unified_scenarios(
             processors=[enhance_scenarios],
             num_workers=8
         )
+
+        # Validation only (no output)
+        from scenariomax.stage2_process import validate_scenario
+
+        process_unified_scenarios(
+            input_path='/output/unified',
+            output_path='/tmp/ignore',
+            processors=[validate_scenario],
+            save_output=False,
+            num_workers=8
+        )
     """
     start_time = time.time()
 
@@ -171,9 +185,11 @@ def process_unified_scenarios(
 
     logger.info("🚀 Stage 2: Processing unified scenarios")
     logger.info(f"   • Processors: {len(processors)}")
+    logger.info(f"   • Save output: {save_output}")
 
-    # Setup output directory
-    processor.setup_output_directory(output_path, clean=True)
+    # Setup output directory only if saving
+    if save_output:
+        processor.setup_output_directory(output_path, clean=True)
 
     # Load all pickle files
     scenarios = processor.load_pickle_files(input_path)
@@ -195,13 +211,18 @@ def process_unified_scenarios(
             desc=f"Processor {i + 1}/{len(processors)}",
         )
 
-    # Save processed scenarios
-    processor.save_pickle_files(processed_scenarios, output_path)
+    # Save processed scenarios only if requested
+    if save_output:
+        processor.save_pickle_files(processed_scenarios, output_path)
+        logger.info(f"💾 Saved {len(processed_scenarios)} processed scenarios to {output_path}")
+    else:
+        logger.info("⏭️  Skipping save (save_output=False)")
 
     stats = {
         "stage": "process_unified",
         "scenarios_processed": len(scenarios),
         "processors_applied": len(processors),
+        "output_saved": save_output,
         "processing_time": time.time() - start_time,
     }
 
@@ -600,34 +621,7 @@ def _run_pipeline_in_memory(
     logger.info("🔄 Final postprocessing")
     postprocess_start = time.time()
 
-    if format == "tfexample":
-        from scenariomax.stage3_format.tfexample import postprocess
-
-        tfrecord_name = kwargs.get("tfrecord_name", "training")
-        postprocess.merge_multiple_datasets(final_path, f"{tfrecord_name}.tfrecord")
-
-        # Shuffle the merged file
-        merged_file = os.path.join(final_path, f"{tfrecord_name}.tfrecord")
-        if os.path.exists(merged_file):
-            postprocess.shuffle_tfrecord_file(merged_file)
-
-            # Shard if requested
-            num_shards = kwargs.get("shard", 1)
-            if num_shards > 1:
-                from scenariomax.stage3_format.tfexample import shard
-
-                logger.info(f"Sharding into {num_shards} shards")
-                shard.shard_tfrecord(
-                    src=final_path,
-                    filename=tfrecord_name,
-                    num_threads=num_workers,
-                    num_shards=num_shards,
-                )
-
-    elif format == "json":
-        from scenariomax.stage3_format.json import postprocess
-
-        postprocess.merge_dataset_workers(final_path, os.path.basename(final_path))
+    _final_postprocess(format, final_path, **kwargs)
 
     postprocess_time = time.time() - postprocess_start
 
@@ -834,7 +828,7 @@ def _worker_process_stage123(
                             if not is_valid:
                                 validation_error_count += 1
                                 logger.warning(
-                                    f"Worker {worker_index} validation failed for scenario {unified_scenario.get('id', 'unknown')}:"
+                                    f"Worker {worker_index} validation failed for scenario {unified_scenario.get('id', 'unknown')}:",  # noqa: E501
                                 )
                                 for error in errors[:3]:  # Show first 3 errors
                                     logger.warning(f"  - {error}")
@@ -906,7 +900,7 @@ def _worker_process_stage123(
                         if not is_valid:
                             validation_error_count += 1
                             logger.warning(
-                                f"Worker {worker_index} validation failed for scenario {unified_scenario.get('id', 'unknown')}:"
+                                f"Worker {worker_index} validation failed for scenario {unified_scenario.get('id', 'unknown')}:",  # noqa: E501
                             )
                             for error in errors[:3]:  # Show first 3 errors
                                 logger.warning(f"  - {error}")
@@ -931,7 +925,7 @@ def _worker_process_stage123(
 
                 pbar.update(1)
                 pbar.set_postfix(
-                    {"processed": processed_count, "validation_errors": validation_error_count, "errors": error_count}
+                    {"processed": processed_count, "validation_errors": validation_error_count, "errors": error_count},
                 )
 
             # Save all scenarios to JSON file
