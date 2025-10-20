@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from scenariomax.core import types
-from scenariomax.core.validation import soft_validate
 from scenariomax.core.unified_scenario import UnifiedScenario
+from scenariomax.core.validation import soft_validate
 
 
 class TestSoftValidator:

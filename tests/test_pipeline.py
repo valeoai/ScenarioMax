@@ -367,7 +367,7 @@ class TestStage3FormatToTarget:
         # Verify JSON is valid
         import json
 
-        with open(json_files[0], "r") as f:
+        with open(json_files[0]) as f:
             data = json.load(f)
             assert isinstance(data, list), "JSON should contain a list of scenarios"
 

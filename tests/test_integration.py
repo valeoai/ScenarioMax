@@ -166,7 +166,7 @@ class TestValidationWaymo:
         assert valid_count > 0, "No scenarios passed soft validation"
 
         # Print summary
-        print(f"\nSoft Validation Results:")
+        print("\nSoft Validation Results:")
         print(f"  Total scenarios: {len(results)}")
         print(f"  Valid: {valid_count}")
         print(f"  Invalid: {len(results) - valid_count}")
@@ -181,16 +181,16 @@ class TestValidationWaymo:
 
             # Print details for first scenario
             if len(results) == 1:
-                print(f"\nFirst Waymo Scenario Strict Validation:")
+                print("\nFirst Waymo Scenario Strict Validation:")
                 print(f"  Valid: {is_valid}")
                 print(f"  Errors: {len(errors)}")
                 print(f"  Warnings: {len(warnings)}")
                 if errors:
-                    print(f"  Sample errors:")
+                    print("  Sample errors:")
                     for error in errors[:3]:
                         print(f"    - {error}")
                 if warnings:
-                    print(f"  Sample warnings:")
+                    print("  Sample warnings:")
                     for warning in warnings[:3]:
                         print(f"    - {warning}")
 
@@ -234,7 +234,7 @@ class TestValidationNuPlan:
         assert valid_count > 0, "No scenarios passed soft validation"
 
         # Print summary
-        print(f"\nSoft Validation Results:")
+        print("\nSoft Validation Results:")
         print(f"  Total scenarios: {len(results)}")
         print(f"  Valid: {valid_count}")
         print(f"  Invalid: {len(results) - valid_count}")
@@ -249,16 +249,16 @@ class TestValidationNuPlan:
 
             # Print details for first scenario
             if len(results) == 1:
-                print(f"\nFirst nuPlan Scenario Strict Validation:")
+                print("\nFirst nuPlan Scenario Strict Validation:")
                 print(f"  Valid: {is_valid}")
                 print(f"  Errors: {len(errors)}")
                 print(f"  Warnings: {len(warnings)}")
                 if errors:
-                    print(f"  Sample errors:")
+                    print("  Sample errors:")
                     for error in errors[:3]:
                         print(f"    - {error}")
                 if warnings:
-                    print(f"  Sample warnings:")
+                    print("  Sample warnings:")
                     for warning in warnings[:3]:
                         print(f"    - {warning}")
 
@@ -304,7 +304,7 @@ class TestScenarioStatistics:
         assert "static_map_element_types" in stats
 
         # Print stats
-        print(f"\nWaymo Scenario Stats:")
+        print("\nWaymo Scenario Stats:")
         print(f"  Dynamic agents: {stats['num_dynamic_agents']}")
         print(f"  Static map elements: {stats['num_static_map_elements']}")
         print(f"  Dynamic map elements: {stats['num_dynamic_map_elements']}")

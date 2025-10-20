@@ -16,8 +16,6 @@ from scenariomax.core import types
 class ValidationError(Exception):
     """Raised when validation fails."""
 
-    pass
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SOFT VALIDATION - Structural checks
@@ -152,7 +150,7 @@ def _validate_dynamic_agents(dynamic_agents: dict, errors: list, warnings: list,
                 errors.append(f"Agent '{agent_id}' type must be a string, got {type(agent_type).__name__}")
             elif not types.is_participant(agent_type):
                 errors.append(
-                    f"Agent '{agent_id}' has invalid type '{agent_type}'. Must be one of: {types.PARTICIPANT_TYPES}"
+                    f"Agent '{agent_id}' has invalid type '{agent_type}'. Must be one of: {types.PARTICIPANT_TYPES}",
                 )
 
         if "states" in agent:
@@ -198,10 +196,10 @@ def _validate_state_array(
 
     if expected_last_dim is not None and arr.ndim == expected_ndim and arr.shape[-1] != expected_last_dim:
         errors.append(
-            f"Agent '{agent_id}' state '{key}' last dimension must be {expected_last_dim}, got shape {arr.shape}"
+            f"Agent '{agent_id}' state '{key}' last dimension must be {expected_last_dim}, got shape {arr.shape}",
         )
 
-    if expected_dtype is not None and expected_dtype == bool and arr.dtype != bool:
+    if expected_dtype is not None and expected_dtype is bool and arr.dtype != bool:
         errors.append(f"Agent '{agent_id}' state '{key}' must be boolean, got dtype {arr.dtype}")
 
 
@@ -246,7 +244,7 @@ def _validate_static_map_elements(static_map_elements: dict, errors: list, warni
         else:
             errors.append(
                 f"Map element '{element_id}' has invalid type '{element_type}'. "
-                f"Must be a valid lane, road line, road edge, map feature, or traffic object type."
+                f"Must be a valid lane, road line, road edge, map feature, or traffic object type.",
             )
 
         if not isinstance(element_type, str):
@@ -262,11 +260,11 @@ def _validate_static_map_elements(static_map_elements: dict, errors: list, warni
 
             if "speed_limit_mph" in element and not isinstance(element["speed_limit_mph"], (int, float)):
                 errors.append(
-                    f"Lane '{element_id}' speed_limit_mph must be numeric, got {type(element['speed_limit_mph']).__name__}"
+                    f"Lane '{element_id}' speed_limit_mph must be numeric, got {type(element['speed_limit_mph']).__name__}",  # noqa: E501
                 )
             if "speed_limit_kmh" in element and not isinstance(element["speed_limit_kmh"], (int, float)):
                 errors.append(
-                    f"Lane '{element_id}' speed_limit_kmh must be numeric, got {type(element['speed_limit_kmh']).__name__}"
+                    f"Lane '{element_id}' speed_limit_kmh must be numeric, got {type(element['speed_limit_kmh']).__name__}",  # noqa: E501
                 )
 
             for list_key in [
@@ -278,7 +276,9 @@ def _validate_static_map_elements(static_map_elements: dict, errors: list, warni
                 "right_neighbor",
             ]:
                 if list_key in element and not isinstance(element[list_key], list):
-                    errors.append(f"Lane '{element_id}' {list_key} must be a list, got {type(element[list_key]).__name__}")
+                    errors.append(
+                        f"Lane '{element_id}' {list_key} must be a list, got {type(element[list_key]).__name__}",
+                    )
 
         # Validate polyline
         if "polyline" in element:
@@ -299,9 +299,7 @@ def _validate_geometry_array(element_id: str, geometry: Any, geom_type: str, err
         errors.append(f"Map element '{element_id}' {geom_type} last dimension must be 3, got shape {geometry.shape}")
 
 
-def _validate_dynamic_map_elements(
-    dynamic_map_elements: dict, errors: list, warnings: list, strict_keys: bool
-) -> None:
+def _validate_dynamic_map_elements(dynamic_map_elements: dict, errors: list, warnings: list, strict_keys: bool) -> None:
     """Validate dynamic_map_elements section (traffic lights)."""
     if not isinstance(dynamic_map_elements, dict):
         errors.append(f"'dynamic_map_elements' must be a dict, got {type(dynamic_map_elements).__name__}")
@@ -329,27 +327,27 @@ def _validate_dynamic_map_elements(
             element_type = element["type"]
             if not isinstance(element_type, str):
                 errors.append(
-                    f"Dynamic map element '{element_id}' type must be a string, got {type(element_type).__name__}"
+                    f"Dynamic map element '{element_id}' type must be a string, got {type(element_type).__name__}",
                 )
             elif element_type != types.TRAFFIC_LIGHT:
                 errors.append(
                     f"Dynamic map element '{element_id}' has invalid type '{element_type}'. "
-                    f"Must be '{types.TRAFFIC_LIGHT}'"
+                    f"Must be '{types.TRAFFIC_LIGHT}'",
                 )
 
         if "position" in element:
             position = element["position"]
             if not isinstance(position, np.ndarray):
                 errors.append(
-                    f"Dynamic map element '{element_id}' position must be an ndarray, got {type(position).__name__}"
+                    f"Dynamic map element '{element_id}' position must be an ndarray, got {type(position).__name__}",
                 )
             elif position.ndim != 1:
                 errors.append(
-                    f"Dynamic map element '{element_id}' position must be 1D (3,), got shape {position.shape}"
+                    f"Dynamic map element '{element_id}' position must be 1D (3,), got shape {position.shape}",
                 )
             elif position.shape[0] != 3:
                 errors.append(
-                    f"Dynamic map element '{element_id}' position must have 3 elements (x, y, z), got shape {position.shape}"
+                    f"Dynamic map element '{element_id}' position must have 3 elements (x, y, z), got shape {position.shape}",  # noqa: E501
                 )
 
         if "states" in element:
@@ -360,16 +358,18 @@ def _validate_dynamic_map_elements(
                 for i, state in enumerate(states):
                     if not isinstance(state, str):
                         errors.append(
-                            f"Dynamic map element '{element_id}' state at index {i} must be a string, got {type(state).__name__}"
+                            f"Dynamic map element '{element_id}' state at index {i} must be a string, got {type(state).__name__}",  # noqa: E501
                         )
                     elif not types.is_traffic_light_state(state):
                         errors.append(
                             f"Dynamic map element '{element_id}' state at index {i} has invalid value '{state}'. "
-                            f"Must be one of: {types.TRAFFIC_LIGHT_STATES}"
+                            f"Must be one of: {types.TRAFFIC_LIGHT_STATES}",
                         )
 
         if "lane" in element and not isinstance(element["lane"], int):
-            errors.append(f"Dynamic map element '{element_id}' lane must be an int, got {type(element['lane']).__name__}")
+            errors.append(
+                f"Dynamic map element '{element_id}' lane must be an int, got {type(element['lane']).__name__}",
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -410,7 +410,13 @@ def strict_validate(
     warnings = []
 
     try:
-        _validate_strict_map(scenario.get("static_map_elements", {}), validation_level, speed_limit_tolerance, errors, warnings)
+        _validate_strict_map(
+            scenario.get("static_map_elements", {}),
+            validation_level,
+            speed_limit_tolerance,
+            errors,
+            warnings,
+        )
         _validate_strict_agents(
             scenario.get("dynamic_agents", {}),
             scenario.get("metadata", {}),
@@ -438,7 +444,11 @@ def strict_validate(
 
 
 def _validate_strict_map(
-    static_map_elements: dict, validation_level: int, speed_limit_tolerance: float, errors: list, warnings: list
+    static_map_elements: dict,
+    validation_level: int,
+    speed_limit_tolerance: float,
+    errors: list,
+    warnings: list,
 ) -> None:
     """Validate static map elements with strict checks."""
     for element_id, element in static_map_elements.items():
@@ -448,10 +458,24 @@ def _validate_strict_map(
             _validate_polyline_quality(element_id, element["polyline"], validation_level, errors, warnings)
 
         if types.is_lane(element_type):
-            _validate_strict_lane(element_id, element, static_map_elements, validation_level, speed_limit_tolerance, errors, warnings)
+            _validate_strict_lane(
+                element_id,
+                element,
+                static_map_elements,
+                validation_level,
+                speed_limit_tolerance,
+                errors,
+                warnings,
+            )
 
 
-def _validate_polyline_quality(element_id: str, polyline: np.ndarray, validation_level: int, errors: list, warnings: list) -> None:
+def _validate_polyline_quality(
+    element_id: str,
+    polyline: np.ndarray,
+    validation_level: int,
+    errors: list,
+    warnings: list,
+) -> None:
     """Validate polyline quality."""
     if len(polyline) < 2:
         warnings.append(f"Map element '{element_id}' has polyline with < 2 points")
@@ -480,7 +504,9 @@ def _validate_polyline_quality(element_id: str, polyline: np.ndarray, validation
                 angle_deg = np.degrees(np.arccos(dot_product))
 
                 if angle_deg > 170:
-                    warnings.append(f"Map element '{element_id}' has sharp corner at point {i} (angle={angle_deg:.1f}°)")
+                    warnings.append(
+                        f"Map element '{element_id}' has sharp corner at point {i} (angle={angle_deg:.1f}°)",
+                    )
 
 
 def _validate_strict_lane(
@@ -507,7 +533,7 @@ def _validate_strict_lane(
         if relative_error > speed_limit_tolerance:
             errors.append(
                 f"Lane '{lane_id}' speed limit conversion inconsistent: "
-                f"{mph} mph should be {expected_kmh:.1f} km/h, got {kmh} km/h"
+                f"{mph} mph should be {expected_kmh:.1f} km/h, got {kmh} km/h",
             )
 
         if not (5 <= mph <= 130):
@@ -519,7 +545,12 @@ def _validate_strict_lane(
 
 
 def _validate_lane_connectivity(
-    lane_id: str, lane: dict, all_elements: dict, validation_level: int, errors: list, warnings: list
+    lane_id: str,
+    lane: dict,
+    all_elements: dict,
+    validation_level: int,
+    errors: list,
+    warnings: list,
 ) -> None:
     """Validate lane connectivity."""
     all_lane_ids = {eid for eid, elem in all_elements.items() if types.is_lane(elem.get("type", ""))}
@@ -540,7 +571,7 @@ def _validate_lane_connectivity(
                 exit_entries = [str(e) for e in exit_lane.get("entry_lanes", [])]
                 if lane_id not in exit_entries:
                     warnings.append(
-                        f"Lane '{lane_id}' exits to '{exit_id_str}', but '{exit_id_str}' doesn't list '{lane_id}' as entry"
+                        f"Lane '{lane_id}' exits to '{exit_id_str}', but '{exit_id_str}' doesn't list '{lane_id}' as entry",  # noqa: E501
                     )
 
 
@@ -556,7 +587,12 @@ def _validate_lane_boundaries(lane_id: str, lane: dict, all_elements: dict, erro
 
 
 def _validate_lane_neighbors(
-    lane_id: str, lane: dict, all_elements: dict, validation_level: int, errors: list, warnings: list
+    lane_id: str,
+    lane: dict,
+    all_elements: dict,
+    validation_level: int,
+    errors: list,
+    warnings: list,
 ) -> None:
     """Validate lane neighbors."""
     all_lane_ids = {eid for eid, elem in all_elements.items() if types.is_lane(elem.get("type", ""))}
@@ -578,7 +614,7 @@ def _validate_lane_neighbors(
                 if lane_id not in left_neighbors:
                     warnings.append(
                         f"Lane '{lane_id}' has right neighbor '{right_neighbor_id_str}', "
-                        f"but '{right_neighbor_id_str}' doesn't list '{lane_id}' as left neighbor"
+                        f"but '{right_neighbor_id_str}' doesn't list '{lane_id}' as left neighbor",
                     )
 
 
@@ -602,7 +638,16 @@ def _validate_strict_agents(
         states = agent.get("states", {})
 
         _validate_trajectory_coherence(
-            agent_id, agent_type, states, dt, length, position_jump_threshold, velocity_tolerance, heading_tolerance_deg, errors, warnings
+            agent_id,
+            agent_type,
+            states,
+            dt,
+            length,
+            position_jump_threshold,
+            velocity_tolerance,
+            heading_tolerance_deg,
+            errors,
+            warnings,
         )
         _validate_physical_constraints(agent_id, agent_type, states, dt, validation_level, errors, warnings)
         _validate_temporal_consistency(agent_id, states, length, errors, warnings)
@@ -644,7 +689,7 @@ def _validate_trajectory_coherence(
             if dist > position_jump_threshold and dist > 1.0:
                 errors.append(
                     f"Agent '{agent_id}' teleports at timestep {i}: "
-                    f"moved {dist:.2f}m in {dt:.3f}s (max allowed: {position_jump_threshold:.2f}m)"
+                    f"moved {dist:.2f}m in {dt:.3f}s (max allowed: {position_jump_threshold:.2f}m)",
                 )
 
     # Velocity-position consistency
@@ -658,7 +703,7 @@ def _validate_trajectory_coherence(
                 if velocity_error > velocity_tolerance:
                     warnings.append(
                         f"Agent '{agent_id}' at timestep {i}: velocity-position mismatch "
-                        f"(error={velocity_error:.2f} m/s, tolerance={velocity_tolerance} m/s)"
+                        f"(error={velocity_error:.2f} m/s, tolerance={velocity_tolerance} m/s)",
                     )
 
     # Heading-velocity consistency
@@ -676,12 +721,18 @@ def _validate_trajectory_coherence(
                     if angle_diff_deg > heading_tolerance_deg:
                         warnings.append(
                             f"Agent '{agent_id}' at timestep {i}: heading-velocity misalignment "
-                            f"(diff={angle_diff_deg:.1f}°, tolerance={heading_tolerance_deg}°)"
+                            f"(diff={angle_diff_deg:.1f}°, tolerance={heading_tolerance_deg}°)",
                         )
 
 
 def _validate_physical_constraints(
-    agent_id: str, agent_type: str, states: dict, dt: float, validation_level: int, errors: list, warnings: list
+    agent_id: str,
+    agent_type: str,
+    states: dict,
+    dt: float,
+    validation_level: int,
+    errors: list,
+    warnings: list,
 ) -> None:
     """Validate physical constraints."""
     # Dimension validation
@@ -697,7 +748,9 @@ def _validate_physical_constraints(
 
             mean_dim = np.mean(dim_values)
             if not (min_val <= mean_dim <= max_val):
-                warnings.append(f"Agent '{agent_id}' has unusual {dim_key}={mean_dim:.2f}m (expected {min_val}-{max_val}m)")
+                warnings.append(
+                    f"Agent '{agent_id}' has unusual {dim_key}={mean_dim:.2f}m (expected {min_val}-{max_val}m)",
+                )
 
     # Type-specific dimensions
     if "length" in states and "width" in states and "height" in states:
@@ -743,7 +796,7 @@ def _validate_physical_constraints(
                 if speed > max_speed:
                     warnings.append(
                         f"Agent '{agent_id}' ({agent_type}) at timestep {i}: "
-                        f"speed={speed:.2f} m/s exceeds limit {max_speed} m/s"
+                        f"speed={speed:.2f} m/s exceeds limit {max_speed} m/s",
                     )
 
     # Acceleration limits
@@ -761,11 +814,17 @@ def _validate_physical_constraints(
                 if acceleration > max_accel:
                     warnings.append(
                         f"Agent '{agent_id}' at timestep {i}: "
-                        f"acceleration={acceleration:.2f} m/s² exceeds limit {max_accel} m/s²"
+                        f"acceleration={acceleration:.2f} m/s² exceeds limit {max_accel} m/s²",
                     )
 
 
-def _validate_temporal_consistency(agent_id: str, states: dict, expected_length: int, errors: list, warnings: list) -> None:
+def _validate_temporal_consistency(
+    agent_id: str,
+    states: dict,
+    expected_length: int,
+    errors: list,
+    warnings: list,
+) -> None:
     """Validate temporal consistency."""
     state_lengths = {key: len(value) for key, value in states.items() if isinstance(value, np.ndarray)}
 
@@ -804,7 +863,16 @@ def _validate_strict_traffic_lights(
 
     for element_id, element in dynamic_map_elements.items():
         if element.get("type") == types.TRAFFIC_LIGHT:
-            _validate_traffic_light(element_id, element, all_lane_ids, static_map_elements, length, validation_level, errors, warnings)
+            _validate_traffic_light(
+                element_id,
+                element,
+                all_lane_ids,
+                static_map_elements,
+                length,
+                validation_level,
+                errors,
+                warnings,
+            )
 
 
 def _validate_traffic_light(
@@ -830,7 +898,7 @@ def _validate_traffic_light(
 
             if min_distance > 50.0:
                 warnings.append(
-                    f"Traffic light '{tl_id}' is {min_distance:.1f}m away from controlled lane '{lane_id}' (expected < 50m)"
+                    f"Traffic light '{tl_id}' is {min_distance:.1f}m away from controlled lane '{lane_id}' (expected < 50m)",  # noqa: E501
                 )
 
     if "position" in traffic_light:
@@ -848,13 +916,13 @@ def _validate_traffic_light(
             for i in range(len(states) - 1):
                 if states[i] == types.TRAFFIC_LIGHT_GREEN and states[i + 1] == types.TRAFFIC_LIGHT_RED:
                     warnings.append(
-                        f"Traffic light '{tl_id}' at timestep {i}: invalid transition GREEN -> RED (should go through YELLOW)"
+                        f"Traffic light '{tl_id}' at timestep {i}: invalid transition GREEN -> RED (should go through YELLOW)",  # noqa: E501
                     )
 
             state_changes = sum(1 for i in range(len(states) - 1) if states[i] != states[i + 1])
             if state_changes > len(states) * 0.5:
                 warnings.append(
-                    f"Traffic light '{tl_id}' has rapid flickering: {state_changes} state changes in {len(states)} timesteps"
+                    f"Traffic light '{tl_id}' has rapid flickering: {state_changes} state changes in {len(states)} timesteps",  # noqa: E501
                 )
 
 
