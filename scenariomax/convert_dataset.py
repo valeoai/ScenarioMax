@@ -55,6 +55,9 @@ Examples:
   # Stage 3: Convert to JSON
   scenariomax format --src /output/processed --dst /output/json --format json
 
+  # Stage 3: Convert to Puffer
+  scenariomax format --src /output/processed --dst /output/puffer --format puffer
+
   # Visualize unified scenarios (BEV PNG images at first timestep)
   scenariomax viz --src /output/unified --dst /output/viz --format png --max-scenarios 100
 
@@ -161,7 +164,7 @@ Examples:
     format_parser.add_argument(
         "--format",
         required=True,
-        choices=["tfexample", "json"],
+        choices=["tfexample", "json", "puffer"],
         help="Target format",
     )
     format_parser.add_argument("--num_workers", type=int, default=8, help="Number of workers (default: 8)")
@@ -236,7 +239,7 @@ Examples:
     pipeline_parser.add_argument(
         "--format",
         required=True,
-        choices=["tfexample", "json"],
+        choices=["tfexample", "json", "puffer"],
         help="Target format",
     )
 

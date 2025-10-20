@@ -1,0 +1,106 @@
+"""
+Convert traffic control elements from unified format to Puffer format.
+"""
+
+import numpy as np
+
+from scenariomax import logger_utils
+from scenariomax.core import types
+
+
+logger = logger_utils.get_logger(__name__)
+
+
+def convert_traffic_control_elements(dynamic_map_elements: dict, length: int) -> list[dict]:
+    """
+    Convert dynamic map elements to Puffer traffic_control_elements.
+
+    Args:
+        dynamic_map_elements: Dict of dynamic map elements from unified scenario
+        length: Number of timesteps
+
+    Returns:
+        List of traffic control element dictionaries in Puffer format
+    """
+    puffer_elements = []
+
+    for element_id, element_data in dynamic_map_elements.items():
+        element_type = element_data.get("type", types.TRAFFIC_LIGHT_UNKNOWN)
+        position = element_data.get("position", np.zeros(3))
+        states = element_data.get("states", [types.TRAFFIC_LIGHT_UNKNOWN] * length)
+        controlled_lane = element_data.get("lane", None)
+
+        # Convert traffic light type to int
+        element_type_int = _convert_traffic_light_type_to_int(element_type)
+
+        # Convert states to int array
+        # States might be a list or numpy array
+        states_list = states.tolist() if isinstance(states, np.ndarray) else states
+
+        states_int = [_convert_traffic_light_state_to_int(s) if isinstance(s, str) else int(s) for s in states_list]
+        states_int = np.array(states_int, dtype=np.int32)
+
+        puffer_element = {
+            "id": int(hash(element_id) & 0x7FFFFFFF),
+            "type": element_type_int,
+            "xyz": position.astype(np.float32),
+            "states": states_int,
+        }
+
+        # Add controlled lane if available
+        if controlled_lane is not None:
+            puffer_element["lane"] = int(hash(str(controlled_lane)) & 0x7FFFFFFF)
+
+        puffer_elements.append(puffer_element)
+
+    return puffer_elements
+
+
+def _convert_traffic_light_type_to_int(traffic_light_type: str) -> int:
+    """
+    Convert traffic light type string to integer.
+
+    Args:
+        traffic_light_type: Traffic light type string from types.py
+
+    Returns:
+        Integer representation
+    """
+    # Map traffic light states to types
+    type_map = {
+        types.TRAFFIC_LIGHT: 0,  # Generic traffic light
+        types.TRAFFIC_LIGHT_UNKNOWN: 0,
+        types.TRAFFIC_LIGHT_ARROW_RED: 1,
+        types.TRAFFIC_LIGHT_ARROW_YELLOW: 2,
+        types.TRAFFIC_LIGHT_ARROW_GREEN: 3,
+        types.TRAFFIC_LIGHT_RED: 4,
+        types.TRAFFIC_LIGHT_YELLOW: 5,
+        types.TRAFFIC_LIGHT_GREEN: 6,
+        types.TRAFFIC_LIGHT_FLASHING_RED: 7,
+        types.TRAFFIC_LIGHT_FLASHING_YELLOW: 8,
+    }
+    return type_map.get(traffic_light_type, 0)
+
+
+def _convert_traffic_light_state_to_int(state: str) -> int:
+    """
+    Convert traffic light state string to integer.
+
+    Args:
+        state: Traffic light state string from types.py
+
+    Returns:
+        Integer representation
+    """
+    state_map = {
+        types.TRAFFIC_LIGHT_UNKNOWN: 0,
+        types.TRAFFIC_LIGHT_ARROW_RED: 1,
+        types.TRAFFIC_LIGHT_ARROW_YELLOW: 2,
+        types.TRAFFIC_LIGHT_ARROW_GREEN: 3,
+        types.TRAFFIC_LIGHT_RED: 4,
+        types.TRAFFIC_LIGHT_YELLOW: 5,
+        types.TRAFFIC_LIGHT_GREEN: 6,
+        types.TRAFFIC_LIGHT_FLASHING_RED: 7,
+        types.TRAFFIC_LIGHT_FLASHING_YELLOW: 8,
+    }
+    return state_map.get(state, 0)

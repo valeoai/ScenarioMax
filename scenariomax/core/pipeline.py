@@ -280,8 +280,8 @@ def format_unified_to_target(
     """
     start_time = time.time()
 
-    if format not in ["tfexample", "json"]:
-        raise ValueError(f"Unsupported format: {format}. Use 'tfexample' or 'json'")
+    if format not in ["tfexample", "json", "puffer"]:
+        raise ValueError(f"Unsupported format: {format}. Use 'tfexample', 'json', or 'puffer'")
 
     logger.info(f"🚀 Stage 3: Converting unified → {format.upper()}")
 
@@ -361,6 +361,11 @@ def format_unified_to_target(
 
         elif format == "json":
             from scenariomax.stage3_format.json import postprocess
+
+            postprocess.merge_dataset_workers(output_path, os.path.basename(output_path))
+
+        elif format == "puffer":
+            from scenariomax.stage3_format.puffer import postprocess
 
             postprocess.merge_dataset_workers(output_path, os.path.basename(output_path))
 
@@ -941,6 +946,71 @@ def _worker_process_stage123(
         finally:
             pbar.close()
 
+    elif format == "puffer":
+        import json
+
+        from scenariomax.core.unified_scenario import UnifiedScenario
+        from scenariomax.stage3_format.puffer import convert_to_puffer
+
+        logger.debug(f"Worker {worker_index} writing to Puffer JSON format: {output_path}")
+
+        try:
+            for raw_scenario in scenarios:
+                try:
+                    # Stage 1: Convert to unified
+                    unified_scenario = config.convert_func(raw_scenario, config.version, **additional_args)
+
+                    # Soft validation (optional)
+                    if validate:
+                        if not isinstance(unified_scenario, UnifiedScenario):
+                            unified_scenario = UnifiedScenario.from_dict(unified_scenario)
+
+                        is_valid, errors, warnings = unified_scenario.strict_validate()
+                        if not is_valid:
+                            validation_error_count += 1
+                            logger.warning(
+                                f"Worker {worker_index} validation failed for scenario {unified_scenario.get('id', 'unknown')}:",  # noqa: E501
+                            )
+                            for error in errors[:3]:  # Show first 3 errors
+                                logger.warning(f"  - {error}")
+                            if len(errors) > 3:
+                                logger.warning(f"  ... and {len(errors) - 3} more errors")
+                            pbar.update(1)
+                            continue
+
+                    # Stage 2: Apply processors (optional)
+                    if processors:
+                        for processor_fn in processors:
+                            unified_scenario = processor_fn(unified_scenario)
+
+                    # Stage 3: Convert to Puffer format (already JSON-serializable)
+                    puffer_scenario = convert_to_puffer.convert(unified_scenario)
+
+                    # Save each scenario as individual JSON file
+                    scenario_id = puffer_scenario.get("scenario_id", f"scenario_{processed_count}")
+                    json_file_path = os.path.join(output_path, f"{scenario_id}.json")
+
+                    with open(json_file_path, "w") as f:
+                        json.dump(puffer_scenario, f, indent=2)
+
+                    processed_count += 1
+
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"Worker {worker_index} failed to process scenario: {e}")
+
+                pbar.update(1)
+                pbar.set_postfix(
+                    {"processed": processed_count, "validation_errors": validation_error_count, "errors": error_count},
+                )
+
+        except Exception as e:
+            logger.error(f"Worker {worker_index} encountered critical error: {e}")
+            pbar.close()
+            return False
+        finally:
+            pbar.close()
+
     else:
         logger.error(f"Unsupported format: {format}")
         pbar.close()
@@ -1019,6 +1089,10 @@ def _get_postprocess_func(format: str) -> Callable:
         from scenariomax.stage3_format.json import postprocess
 
         return postprocess.postprocess_gpudrive
+    elif format == "puffer":
+        from scenariomax.stage3_format.puffer import postprocess
+
+        return postprocess.postprocess_puffer
     else:
         raise ValueError(f"Unknown format: {format}")
 
@@ -1114,6 +1188,17 @@ def _final_postprocess(format: str, output_path: str, **kwargs) -> None:
 
         # Step 1: Merge workers for each dataset
         logger.info("🔄 Merging JSON workers for each dataset")
+        for dataset_name in os.listdir(output_path):
+            dataset_dir = os.path.join(output_path, dataset_name)
+            if os.path.isdir(dataset_dir):
+                logger.info(f"Merging {dataset_name} workers")
+                postprocess.merge_dataset_workers(dataset_dir, dataset_name)
+
+    elif format == "puffer":
+        from scenariomax.stage3_format.puffer import postprocess
+
+        # Step 1: Merge workers for each dataset
+        logger.info("🔄 Merging Puffer workers for each dataset")
         for dataset_name in os.listdir(output_path):
             dataset_dir = os.path.join(output_path, dataset_name)
             if os.path.isdir(dataset_dir):
