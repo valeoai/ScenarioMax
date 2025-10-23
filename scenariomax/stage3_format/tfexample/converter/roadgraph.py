@@ -4,11 +4,13 @@ from typing import Any
 import numpy as np
 from scipy.spatial import KDTree
 
+from scenariomax import logger_utils
 from scenariomax.stage3_format.tfexample.constants import DEFAULT_NUM_ROADMAPS, DIST_INTERPOLATION
 from scenariomax.stage3_format.tfexample.converter.datatypes import RoadGraphSamples
 from scenariomax.stage3_format.tfexample.exceptions import OverpassException
 
 
+logger = logger_utils.get_logger(__name__)
 warnings.filterwarnings("ignore")
 
 # Road types that are filtered out
@@ -142,7 +144,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
 
     if debug:
         for key, value in mean_distances_types.items():
-            print(
+            logger.debug(
                 f"- {key} - Num types: {count_types[key]}, "
                 f"Mean distance: {round(value, 2)} - std: {round(std_distances_types[key], 2)}",
             )

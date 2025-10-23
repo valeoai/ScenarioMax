@@ -140,13 +140,7 @@ def _compute_agent_paths(scenario, trajectory, heading, roadgraph_samples, debug
     # Sort root_ids by score in descending order
     root_ids = sorted(root_ids, key=lambda x: lane_scores.get(x, 0), reverse=True)
 
-    # if debug:
-    #     print(f"Root IDs with scores: {[(id, lane_scores.get(id, 0)) for id in root_ids]}")
-
     paths = _create_sdc_tree_path(root_ids, scenario.static_map_elements)
-
-    # if debug:
-    #     print(f"Number of paths: {len(paths)}")
 
     if len(paths) == 0:
         return path_samples

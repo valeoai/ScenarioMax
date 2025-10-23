@@ -265,12 +265,6 @@ Examples:
         action="store_true",
         help="Save intermediate pickles to disk (default: in-memory streaming)",
     )
-    pipeline_parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=100,
-        help="Batch size for in-memory processing (default: 100 scenarios)",
-    )
 
     # Format-specific options
     pipeline_parser.add_argument("--shard", type=int, default=1, help="Number of output shards (tfexample only)")
@@ -337,7 +331,7 @@ def handle_process_command(args):
 
         # Create validation processor with appropriate strictness
         def validation_processor(scenario):
-            return validate_scenario(scenario, True)  #  strict=args.validate_strict)
+            return validate_scenario(scenario, strict=args.validate_strict)
 
         processors.append(validation_processor)
 
@@ -444,7 +438,6 @@ def handle_pipeline_command(args):
         processors=processors,
         num_workers=args.num_workers,
         save_intermediate=args.save_intermediate,
-        batch_size=args.batch_size,
         num_files=args.num_files,
         split=args.split,
         shard=args.shard,

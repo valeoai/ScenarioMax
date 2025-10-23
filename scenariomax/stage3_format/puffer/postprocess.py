@@ -97,7 +97,6 @@ def merge_dataset_workers(dataset_dir: str, dataset_name: str) -> None:
         dataset_name: Name of the dataset (for logging)
     """
     json_files = []
-    parent_dir = os.path.dirname(dataset_dir)
 
     # Look for worker subdirectories and their JSON files
     logger.info(f"Merging {dataset_name} workers from: {dataset_dir}")
