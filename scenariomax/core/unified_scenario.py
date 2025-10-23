@@ -19,22 +19,22 @@ class UnifiedScenario(dict):
         "id": str,                    # Unique scenario identifier
 
         "dynamic_agents": {           # Dynamic objects (vehicles, pedestrians, etc.)
-            "obj_id": {                 # Unique object identifier
+            obj_id: {                   # int: Unique object identifier
                 "type": str,                # Type of participant
                 "states": {                 # State data for each timestep
                     "position": np.ndarray,     # (length, 3) - x, y
                     "heading": np.ndarray,      # (length,) - heading angle
                     "velocity": np.ndarray,     # (length, 2) - vx, vy
-                    "length": np.ndarray,            # (length,) - Object length
-                    "width": np.ndarray,             # (length,) - Object width
-                    "height": np.ndarray,            # (length,) - Object height
+                    "length": np.ndarray,       # (length,) - Object length
+                    "width": np.ndarray,        # (length,) - Object width
+                    "height": np.ndarray,       # (length,) - Object height
                     "valid": np.ndarray,        # (length,) - boolean validity mask
                 },
             },
         },
 
         "static_map_elements": {      # Static map features
-            "element_id": {             # str: Unique map element identifier
+            element_id: {               # int: Unique map element identifier
                 "type": str,                    # From types.LANE_TYPES, ROAD_LINE_TYPES, etc.
                 "polyline": np.ndarray,         # (N, 3) - (x, y, z)
 
@@ -51,11 +51,11 @@ class UnifiedScenario(dict):
         },
 
         "dynamic_map_elements": {     # Dynamic traffic light states
-            "element_id": {             # str: Unique traffic light identifier
+            element_id: {               # int: Unique traffic light identifier
                 "type": str,               # From types.TRAFFIC_LIGHT_TYPES
                 "position": np.ndarray,    # (3,) - x, y, z position
                 "states": list,            # (length,) - state at each timestep
-                "lane": int,               # Controlled lane ID (if applicable)
+                "controlled_lane": int,    # Controlled lane ID (if applicable)
             },
         },
 
@@ -66,12 +66,12 @@ class UnifiedScenario(dict):
             "source_file": str,           # Original source file name
             "length": int,                # Number of timesteps
             "timesteps": np.ndarray,      # Timestamp array (length,)
-            "ego_id": str,                # Self-driving car ID
+            "ego_id": int,                # Self-driving car ID
             # Waymo-specific
             "current_frame_index": int,       # Current frame index
             "sdc_track_index": int,           # SDC track index
             "objects_of_interest": list[int], # List of object indices of interest
-            "tracks_to_predict": list[int],   # List of track indices to predict
+            "tracks_to_predict": dict,        # Dict of tracks to predict {"track_index": int, "difficulty": float}
         },
     }
     """

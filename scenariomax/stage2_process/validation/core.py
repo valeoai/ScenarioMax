@@ -121,8 +121,8 @@ def _validate_metadata(metadata: dict, errors: list, warnings: list, strict_keys
     if "length" in metadata and not isinstance(metadata["length"], int):
         errors.append(f"metadata['length'] must be an int, got {type(metadata['length']).__name__}")
 
-    if "ego_id" in metadata and not isinstance(metadata["ego_id"], str):
-        errors.append(f"metadata['ego_id'] must be a string, got {type(metadata['ego_id']).__name__}")
+    if "ego_id" in metadata and not isinstance(metadata["ego_id"], int):
+        errors.append(f"metadata['ego_id'] must be an int, got {type(metadata['ego_id']).__name__}")
 
     if "timesteps" in metadata and not isinstance(metadata["timesteps"], (list, np.ndarray)):
         errors.append(f"metadata['timesteps'] must be a list or ndarray, got {type(metadata['timesteps']).__name__}")
@@ -135,8 +135,8 @@ def _validate_dynamic_agents(dynamic_agents: dict, errors: list, warnings: list,
         return
 
     for agent_id, agent in dynamic_agents.items():
-        if not isinstance(agent_id, str):
-            errors.append(f"Agent ID must be a string, got {type(agent_id).__name__}")
+        if not isinstance(agent_id, int):
+            errors.append(f"Agent ID must be an int, got {type(agent_id).__name__}")
 
         if not isinstance(agent, dict):
             errors.append(f"Agent '{agent_id}' must be a dict, got {type(agent).__name__}")
@@ -212,8 +212,8 @@ def _validate_static_map_elements(static_map_elements: dict, errors: list, warni
         return
 
     for element_id, element in static_map_elements.items():
-        if not isinstance(element_id, str):
-            errors.append(f"Map element ID must be a string, got {type(element_id).__name__}")
+        if not isinstance(element_id, int):
+            errors.append(f"Map element ID must be an int, got {type(element_id).__name__}")
 
         if not isinstance(element, dict):
             errors.append(f"Map element '{element_id}' must be a dict, got {type(element).__name__}")
@@ -308,8 +308,8 @@ def _validate_dynamic_map_elements(dynamic_map_elements: dict, errors: list, war
         return
 
     for element_id, element in dynamic_map_elements.items():
-        if not isinstance(element_id, str):
-            errors.append(f"Dynamic map element ID must be a string, got {type(element_id).__name__}")
+        if not isinstance(element_id, int):
+            errors.append(f"Dynamic map element ID must be an int, got {type(element_id).__name__}")
 
         if not isinstance(element, dict):
             errors.append(f"Dynamic map element '{element_id}' must be a dict, got {type(element).__name__}")

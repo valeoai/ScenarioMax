@@ -18,7 +18,7 @@ class TestSoftValidator:
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
 
         # Add dynamic agent
-        scenario["dynamic_agents"]["agent_1"] = {
+        scenario["dynamic_agents"][1] = {
             "type": types.VEHICLE,
             "states": {
                 "position": np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]),
@@ -32,7 +32,7 @@ class TestSoftValidator:
         }
 
         # Add static map element
-        scenario["static_map_elements"]["lane_1"] = {
+        scenario["static_map_elements"][100] = {
             "type": types.LANE_FREEWAY,
             "polyline": np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]]),
             "speed_limit_mph": 65.0,
@@ -46,14 +46,15 @@ class TestSoftValidator:
         }
 
         # Add dynamic map element (traffic light)
-        scenario["dynamic_map_elements"]["tl_1"] = {
+        scenario["dynamic_map_elements"][200] = {
             "type": types.TRAFFIC_LIGHT,
             "position": np.array([5.0, 0.0, 3.0]),
             "states": [types.TRAFFIC_LIGHT_RED, types.TRAFFIC_LIGHT_GREEN],
-            "lane": 1,
+            "lane": 100,
         }
 
         # Update metadata
+        scenario["metadata"]["ego_id"] = 1
         scenario["metadata"]["length"] = 2
         scenario["metadata"]["timesteps"] = np.array([0.0, 0.1])
 
@@ -159,6 +160,7 @@ class TestSoftValidator:
     def test_strict_keys_mode(self):
         """Test that strict_keys mode catches unexpected keys."""
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario["metadata"]["ego_id"] = 1
 
         scenario["unexpected_key"] = "some_value"
 
@@ -178,6 +180,7 @@ class TestSoftValidator:
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
 
         # Valid scenario
+        scenario["metadata"]["ego_id"] = 1
         scenario["metadata"]["length"] = 0
         scenario["metadata"]["timesteps"] = np.array([])
 
@@ -251,9 +254,10 @@ class TestSoftValidator:
     def test_map_element_with_polygon(self):
         """Test that map elements can have polygon instead of polyline."""
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario["metadata"]["ego_id"] = 1
 
         # Map element with polygon (e.g., crosswalk)
-        scenario["static_map_elements"]["crosswalk_1"] = {
+        scenario["static_map_elements"][300] = {
             "type": types.CROSSWALK,
             "polygon": np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 5.0, 0.0], [0.0, 5.0, 0.0]]),
         }

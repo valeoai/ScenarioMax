@@ -55,7 +55,7 @@ def extract_dynamic_agents(waymo_scenario: Any) -> dict[str, dict]:
     dynamic_agents = {}
 
     for track in waymo_scenario.tracks:
-        obj_id = str(track.id)  # Use track index as ID
+        obj_id = track.id  # Use track index as ID
 
         # Map Waymo object type to unified type
         waymo_type = track.object_type
@@ -88,14 +88,6 @@ def extract_dynamic_agents(waymo_scenario: Any) -> dict[str, dict]:
         width = np.array(width, dtype=np.float32)
         height = np.array(height, dtype=np.float32)
 
-        # # Validate arrays
-        # position, heading, valid = self.validate_and_convert_arrays(
-        #     position,
-        #     heading,
-        #     valid,
-        #     len(waymo_scenario.timestamps_seconds),
-        # )
-
         # Add dynamic agent
         dynamic_agents[obj_id] = {
             "type": unified_type,
@@ -110,7 +102,7 @@ def extract_dynamic_agents(waymo_scenario: Any) -> dict[str, dict]:
             },
         }
 
-    ego_id = str(waymo_scenario.tracks[waymo_scenario.sdc_track_index].id)
+    ego_id = waymo_scenario.tracks[waymo_scenario.sdc_track_index].id
 
     return dynamic_agents, ego_id
 
@@ -120,7 +112,7 @@ def extract_static_map_elements(waymo_scenario: Any) -> dict[str, dict]:
     static_map_elements = {}
 
     for map_feature in waymo_scenario.map_features:
-        element_id = str(map_feature.id)
+        element_id = map_feature.id
 
         if map_feature.HasField("lane"):
             # Lane element
@@ -206,7 +198,7 @@ def extract_dynamic_map_elements(waymo_scenario: Any) -> dict[str, dict]:
 
         for traffic_light_states in lane_states:
             lane = traffic_light_states.lane
-            traffic_light_id = str(lane)
+            traffic_light_id = lane
 
             if traffic_light_id not in dynamic_map_elements:
                 dynamic_map_elements[traffic_light_id] = {
@@ -220,7 +212,7 @@ def extract_dynamic_map_elements(waymo_scenario: Any) -> dict[str, dict]:
                         dtype="float32",
                     ),
                     "states": [types.TRAFFIC_LIGHT_UNKNOWN] * len(waymo_scenario.timestamps_seconds),
-                    "lane": lane,
+                    "controlled_lane": lane,
                 }
 
             # Map traffic light state
