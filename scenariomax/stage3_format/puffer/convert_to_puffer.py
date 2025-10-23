@@ -9,7 +9,7 @@ Output is JSON format with numpy arrays converted to lists.
 import numpy as np
 
 from scenariomax import logger_utils
-from scenariomax.stage3_format.puffer.converter import agents, metadata, roadgraph, traffic_lights, utils
+from scenariomax.stage3_format.puffer.converter import agents, roadgraph, traffic_lights, utils
 
 
 logger = logger_utils.get_logger(__name__)
@@ -29,15 +29,15 @@ def convert(unified_scenario) -> dict:
     scenario_id = unified_scenario.get("id", "")
     scenario_metadata = unified_scenario.get("metadata", {})
 
+    # Convert static map elements to road_map_elements
+    road_map_elements = roadgraph.convert_road_map_elements(unified_scenario.get("static_map_elements", {}))
+
     # Convert dynamic agents
     dynamic_agents = agents.convert_dynamic_agents(
         unified_scenario.get("dynamic_agents", {}),
         scenario_metadata.get("length", 0),
         scenario_metadata.get("ego_id", ""),
     )
-
-    # Convert static map elements to road_map_elements
-    road_map_elements = roadgraph.convert_road_map_elements(unified_scenario.get("static_map_elements", {}))
 
     # Convert dynamic map elements to traffic_control_elements
     traffic_control_elements = traffic_lights.convert_traffic_control_elements(
@@ -46,6 +46,7 @@ def convert(unified_scenario) -> dict:
     )
 
     # Convert metadata
+    metadata = unified_scenario.get("metadata", {})
     puffer_metadata = {
         "dataset_name": metadata.get("dataset_name", ""),
         "dataset_version": metadata.get("dataset_version", ""),
