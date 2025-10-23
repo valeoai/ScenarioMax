@@ -1,9 +1,11 @@
 """
-Validation for UnifiedScenario.
+Standalone validation functions for UnifiedScenario data structures.
 
-This module provides two levels of validation:
+This module provides two levels of functional validation:
 1. Soft validation: Structural checks (keys, types, shapes)
 2. Strict validation: Physics-based checks (trajectory coherence, map topology)
+
+These are pure functions that take scenario dictionaries and return validation results.
 """
 
 from typing import Any

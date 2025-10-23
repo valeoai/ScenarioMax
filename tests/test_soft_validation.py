@@ -7,7 +7,7 @@ import pytest
 
 from scenariomax.core import types
 from scenariomax.core.unified_scenario import UnifiedScenario
-from scenariomax.core.validation import soft_validate
+from scenariomax.stage2_process.validation import soft_validate
 
 
 class TestSoftValidator:
@@ -173,15 +173,15 @@ class TestSoftValidator:
         assert not is_valid
         assert any("unexpected" in err.lower() for err in errors)
 
-    def test_unified_scenario_method(self):
-        """Test that UnifiedScenario.soft_validate() works correctly."""
+    def test_functional_validation(self):
+        """Test that functional soft_validate() works correctly."""
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
 
         # Valid scenario
         scenario["metadata"]["length"] = 0
         scenario["metadata"]["timesteps"] = np.array([])
 
-        is_valid, errors, warnings = scenario.soft_validate()
+        is_valid, errors, warnings = soft_validate(scenario, strict_keys=False)
 
         assert is_valid
         assert len(errors) == 0

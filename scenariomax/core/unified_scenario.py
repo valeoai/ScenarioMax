@@ -7,7 +7,7 @@ across different datasets (Waymo, nuPlan, nuScenes, Argoverse2).
 
 from typing import Any
 
-from scenariomax.core import types, validation
+from scenariomax.core import types
 
 
 class UnifiedScenario(dict):
@@ -120,81 +120,6 @@ class UnifiedScenario(dict):
     def get_static_map_elements_by_type(self, element_type: str) -> dict[str, dict]:
         """Get all static map elements of a specific type."""
         return {eid: element for eid, element in self["static_map_elements"].items() if element["type"] == element_type}
-
-    def soft_validate(self, strict_keys: bool = False) -> tuple[bool, list[str], list[str]]:
-        """
-        Perform soft validation on the scenario structure.
-
-        Soft validation checks:
-        - Key existence and spelling (against expected schema)
-        - Data types match expected types
-        - Array shapes (dimensions, not exact lengths)
-        - Type values are valid according to types.py
-
-        Args:
-            strict_keys: If True, fail on unexpected keys. If False, only warn.
-
-        Returns:
-            Tuple of (is_valid, errors, warnings)
-
-        Example:
-            >>> is_valid, errors, warnings = scenario.soft_validate()
-            >>> if not is_valid:
-            ...     print("Validation failed:")
-            ...     for error in errors:
-            ...         print(f"  - {error}")
-        """
-
-        return validation.soft_validate(self, strict_keys=strict_keys)
-
-    def strict_validate(
-        self,
-        validation_level: int = 2,
-        speed_limit_tolerance: float = 0.12,
-        position_jump_threshold: float = 50.0,
-        velocity_tolerance: float = 2.0,
-        heading_tolerance_deg: float = 30.0,
-    ) -> tuple[bool, list[str], list[str]]:
-        """
-        Perform strict validation on the scenario for driving coherence.
-
-        Strict validation checks:
-        - Map geometry and topology (lane connectivity, boundaries, neighbors)
-        - Agent trajectory physics (velocity-position consistency, heading alignment)
-        - Physical constraints (dimensions, speed limits, acceleration)
-        - Traffic light placement and state transitions
-        - Cross-element relationships (ego agent, objects of interest)
-
-        Args:
-            validation_level: Strictness level (1=basic, 2=standard, 3=strict, 4=pedantic)
-            speed_limit_tolerance: Relative tolerance for speed limit conversion check
-            position_jump_threshold: Maximum allowed position jump between timesteps (meters)
-            velocity_tolerance: Tolerance for velocity-position consistency (m/s)
-            heading_tolerance_deg: Tolerance for heading-velocity alignment (degrees)
-
-        Returns:
-            Tuple of (is_valid, errors, warnings)
-
-        Example:
-            >>> is_valid, errors, warnings = scenario.strict_validate(validation_level=2)
-            >>> if not is_valid:
-            ...     print("Validation failed:")
-            ...     for error in errors:
-            ...         print(f"  - {error}")
-            >>> if warnings:
-            ...     print("Warnings:")
-            ...     for warning in warnings:
-            ...         print(f"  - {warning}")
-        """
-
-        return validation.strict_validate(
-            self,
-            validation_level=validation_level,
-            speed_limit_tolerance=speed_limit_tolerance,
-            position_jump_threshold=position_jump_threshold,
-            velocity_tolerance=velocity_tolerance,
-            heading_tolerance_deg=heading_tolerance_deg,
-        )
 
     def validate(self) -> bool:
         """Validate the scenario structure and data consistency."""

@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from scenariomax.core import pipeline, processor
-from scenariomax.core.validation import soft_validate, strict_validate
+from scenariomax.stage2_process.validation import soft_validate, strict_validate
 
 
 # Test data paths

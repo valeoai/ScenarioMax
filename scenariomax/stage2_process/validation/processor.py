@@ -8,7 +8,7 @@ Validation is a read-only operation - scenarios are returned unchanged.
 from typing import Any
 
 from scenariomax import logger_utils
-from scenariomax.core.unified_scenario import UnifiedScenario
+from scenariomax.stage2_process.validation import core
 
 
 logger = logger_utils.get_logger(__name__)
@@ -62,17 +62,13 @@ def validate_scenario(
         # Fail on errors
         scenario = validate_scenario(scenario, fail_on_error=True)
     """
-    # Convert to UnifiedScenario if needed
-    if not isinstance(unified_scenario, UnifiedScenario):
-        scenario = UnifiedScenario.from_dict(unified_scenario)
-    else:
-        scenario = unified_scenario
+    # Get scenario ID
+    scenario_id = unified_scenario.get("id", "unknown")
 
-    scenario_id = scenario.get("id", "unknown")
-
-    # Perform validation
+    # Perform validation using standalone functions
     if strict:
-        is_valid, errors, warnings = scenario.strict_validate(
+        is_valid, errors, warnings = core.strict_validate(
+            unified_scenario,
             validation_level=validation_level,
             speed_limit_tolerance=speed_limit_tolerance,
             position_jump_threshold=position_jump_threshold,
@@ -81,7 +77,7 @@ def validate_scenario(
         )
         validation_type = "strict"
     else:
-        is_valid, errors, warnings = scenario.soft_validate(strict_keys=False)
+        is_valid, errors, warnings = core.soft_validate(unified_scenario, strict_keys=False)
         validation_type = "soft"
 
     # Log results

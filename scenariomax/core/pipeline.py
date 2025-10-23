@@ -18,6 +18,7 @@ from tqdm import tqdm
 from scenariomax import dataset_registry, logger_utils
 from scenariomax.core import processor, write
 from scenariomax.core.exceptions import DatasetLoadError
+from scenariomax.stage2_process.validation import soft_validate
 
 
 logger = logger_utils.get_logger(__name__)
@@ -848,10 +849,7 @@ def _worker_process_stage123(
 
                         # Soft validation (optional)
                         if validate:
-                            if not isinstance(unified_scenario, UnifiedScenario):
-                                unified_scenario = UnifiedScenario.from_dict(unified_scenario)
-
-                            is_valid, errors, warnings = unified_scenario.soft_validate()
+                            is_valid, errors, warnings = soft_validate(unified_scenario, strict_keys=False)
                             if not is_valid:
                                 validation_error_count += 1
                                 logger.warning(
@@ -919,10 +917,7 @@ def _worker_process_stage123(
 
                     # Soft validation (optional)
                     if validate:
-                        if not isinstance(unified_scenario, UnifiedScenario):
-                            unified_scenario = UnifiedScenario.from_dict(unified_scenario)
-
-                        is_valid, errors, warnings = unified_scenario.soft_validate()
+                        is_valid, errors, warnings = soft_validate(unified_scenario, strict_keys=False)
                         if not is_valid:
                             validation_error_count += 1
                             logger.warning(
@@ -984,10 +979,7 @@ def _worker_process_stage123(
 
                     # Soft validation (optional)
                     if validate:
-                        if not isinstance(unified_scenario, UnifiedScenario):
-                            unified_scenario = UnifiedScenario.from_dict(unified_scenario)
-
-                        is_valid, errors, warnings = unified_scenario.soft_validate()
+                        is_valid, errors, warnings = soft_validate(unified_scenario, strict_keys=False)
                         if not is_valid:
                             validation_error_count += 1
                             logger.warning(

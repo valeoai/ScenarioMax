@@ -7,7 +7,7 @@ import pytest
 
 from scenariomax.core import types
 from scenariomax.core.unified_scenario import UnifiedScenario
-from scenariomax.core.validation import strict_validate
+from scenariomax.stage2_process.validation import strict_validate
 
 
 class TestStrictValidator:
@@ -502,8 +502,8 @@ class TestStrictValidator:
         assert isinstance(is_valid_1, bool)
         assert isinstance(is_valid_3, bool)
 
-    def test_unified_scenario_method(self):
-        """Test that UnifiedScenario.strict_validate() works correctly."""
+    def test_functional_validation(self):
+        """Test that functional strict_validate() works correctly."""
         scenario = self.create_basic_scenario()
 
         num_steps = 10
@@ -517,7 +517,7 @@ class TestStrictValidator:
             },
         }
 
-        is_valid, errors, warnings = scenario.strict_validate(validation_level=2)
+        is_valid, errors, warnings = strict_validate(scenario, validation_level=2)
 
         assert isinstance(is_valid, bool)
         assert isinstance(errors, list)

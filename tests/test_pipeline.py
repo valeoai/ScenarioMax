@@ -574,7 +574,7 @@ class TestValidation:
         )
 
         # Load scenarios and validate manually
-        from scenariomax.core.validation import soft_validate
+        from scenariomax.stage2_process.validation import soft_validate
 
         scenarios = processor.load_pickle_files(str(unified_dir))
         assert len(scenarios) > 0
@@ -606,7 +606,7 @@ class TestValidation:
         )
 
         # Load scenarios and validate with strict validation
-        from scenariomax.core.validation import strict_validate
+        from scenariomax.stage2_process.validation import strict_validate
 
         scenarios = processor.load_pickle_files(str(unified_dir))
         assert len(scenarios) > 0
