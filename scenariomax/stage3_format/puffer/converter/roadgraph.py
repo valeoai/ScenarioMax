@@ -43,7 +43,7 @@ def convert_road_map_elements(static_map_elements: dict) -> list[dict]:
         element_type_int = _convert_map_element_type_to_int(element_type)
 
         puffer_element = {
-            "id": int(hash(element_id) & 0x7FFFFFFF),  # Convert string ID to positive int
+            "id": element_id,  # Use int ID directly
             "type": element_type_int,
             "xyz": polyline.astype(np.float32),
             "dir_xyz": dir_xyz.astype(np.float32),
@@ -60,16 +60,16 @@ def convert_road_map_elements(static_map_elements: dict) -> list[dict]:
             left_neighbor = element_data.get("left_neighbor", [])
             right_neighbor = element_data.get("right_neighbor", [])
 
-            # Convert to int IDs
-            puffer_element["entry"] = [int(hash(str(lid)) & 0x7FFFFFFF) for lid in entry_lanes] if entry_lanes else []
-            puffer_element["exit"] = [int(hash(str(lid)) & 0x7FFFFFFF) for lid in exit_lanes] if exit_lanes else []
+            # Use int IDs directly
+            puffer_element["entry"] = list(entry_lanes) if entry_lanes else []
+            puffer_element["exit"] = list(exit_lanes) if exit_lanes else []
 
             # Combine left and right neighbors
             neighbors = []
             if left_neighbor:
-                neighbors.extend([int(hash(str(lid)) & 0x7FFFFFFF) for lid in left_neighbor])
+                neighbors.extend(left_neighbor)
             if right_neighbor:
-                neighbors.extend([int(hash(str(lid)) & 0x7FFFFFFF) for lid in right_neighbor])
+                neighbors.extend(right_neighbor)
             puffer_element["neighbors"] = neighbors
 
         puffer_elements.append(puffer_element)

@@ -19,7 +19,7 @@ from scenariomax.stage1_convert.datasets.nuplan import utils as nuplan_utils
 
 
 # Constants
-EGO_ID = "ego"
+EGO_ID = 0
 NUPLAN_EGO_TYPE = TrackedObjectType.EGO
 SAMPLE_RATE = 0.1  # nuPlan default sample rate in seconds
 DEFAULT_MAP_EXTRACTION_RADIUS_METERS = 250
@@ -104,7 +104,6 @@ def extract_dynamic_agents(scenario: NuPlanScenario, center: list[float]) -> dic
     # Collect all tracked objects across all simulation frames
     tracked_frames = []
     all_agent_ids = set()
-    all_agent_ids.add(EGO_ID)  # Always include ego vehicle
 
     for frame_idx in range(episode_length):
         tracked_objects = scenario.get_tracked_objects_at_iteration(frame_idx).tracked_objects
@@ -114,7 +113,7 @@ def extract_dynamic_agents(scenario: NuPlanScenario, center: list[float]) -> dic
 
     # Initialize trajectory containers for all detected agents
     agent_trajectories = {
-        agent_id: {
+        nuplan_utils.safe_id_to_int(agent_id): {
             "type": None,
             "states": {
                 "position": np.zeros((episode_length, 3), dtype=np.float32),
@@ -138,6 +137,8 @@ def extract_dynamic_agents(scenario: NuPlanScenario, center: list[float]) -> dic
             # Validate agent state object type
             if not isinstance(agent_state, Agent | StaticObject):
                 continue
+
+            nuplan_agent_id = nuplan_utils.safe_id_to_int(nuplan_agent_id)
 
             # Map nuPlan agent type to unified type system
             unified_agent_type = nuplan_types.get_agent_type(agent_state.tracked_object_type)
@@ -172,12 +173,24 @@ def extract_dynamic_agents(scenario: NuPlanScenario, center: list[float]) -> dic
 
     # Process ego vehicle separately (more detailed state extraction)
     ego_trajectory = _extract_ego_vehicle_state_trajectory(scenario, center)
-    ego_track = agent_trajectories[EGO_ID]
-    ego_track["type"] = types.VEHICLE
+
+    agent_trajectories[EGO_ID] = {
+        "type": None,
+        "states": {
+            "position": np.zeros((episode_length, 3), dtype=np.float32),
+            "heading": np.zeros((episode_length,), dtype=np.float32),
+            "velocity": np.zeros((episode_length, 2), dtype=np.float32),
+            "valid": np.zeros((episode_length,), dtype=np.bool8),
+            "length": np.zeros((episode_length,), dtype=np.float32),
+            "width": np.zeros((episode_length,), dtype=np.float32),
+            "height": np.zeros((episode_length,), dtype=np.float32),
+        },
+    }
+    agent_trajectories[EGO_ID]["type"] = types.VEHICLE
 
     # Fill ego trajectory data frame by frame
     for frame_idx, ego_frame_state in enumerate(ego_trajectory):
-        ego_states = ego_track["states"]
+        ego_states = agent_trajectories[EGO_ID]["states"]
         ego_states["position"][frame_idx] = [ego_frame_state["position"][0], ego_frame_state["position"][1], 0.0]
         ego_states["valid"][frame_idx] = ego_frame_state["valid"]
         ego_states["heading"][frame_idx] = ego_frame_state["heading"]
@@ -186,10 +199,10 @@ def extract_dynamic_agents(scenario: NuPlanScenario, center: list[float]) -> dic
         ego_states["height"][frame_idx] = ego_frame_state["height"]
 
     # Compute ego velocity from position differences (numerical differentiation)
-    ego_positions = ego_track["states"]["position"]
+    ego_positions = agent_trajectories[EGO_ID]["states"]["position"]
     position_diffs = ego_positions[1:] - ego_positions[:-1]  # Frame-to-frame differences
-    ego_track["states"]["velocity"][:-1] = position_diffs[..., :2] / SAMPLE_RATE  # Convert to velocity
-    ego_track["states"]["velocity"][-1] = ego_track["states"]["velocity"][-2]  # Copy last velocity
+    agent_trajectories[EGO_ID]["states"]["velocity"][:-1] = position_diffs[..., :2] / SAMPLE_RATE  # Convert to velocity
+    agent_trajectories[EGO_ID]["states"]["velocity"][-1] = agent_trajectories[EGO_ID]["states"]["velocity"][-2]
 
     return agent_trajectories
 
@@ -213,12 +226,13 @@ def extract_dynamic_map_elements(nuplan_scenario: NuPlanScenario, center: list[f
     for lane_id in all_lane_connectors:
         # Get traffic light position
         position = nuplan_utils.set_light_position(nuplan_scenario, lane_id, center)
+        lane_id_int = int(lane_id)
 
-        dynamic_map_elements[lane_id] = {
+        dynamic_map_elements[lane_id_int] = {
             "type": types.TRAFFIC_LIGHT,
             "position": np.array([position[0], position[1], 0.0], dtype=np.float32),
             "states": [types.TRAFFIC_LIGHT_UNKNOWN] * episode_len,
-            "lane": int(lane_id),
+            "controlled_lane": lane_id_int,
         }
 
     # Fill in traffic light states for each frame
@@ -313,20 +327,20 @@ def extract_static_map_elements(
                     speed_limit_kmh = -1
 
                 # Create lane element
-                static_map_elements[lane_data.id] = {
+                static_map_elements[int(lane_data.id)] = {
                     "type": types.LANE_SURFACE_STREET,
                     "polyline": lane_polyline,
                     "speed_limit_mph": speed_limit_mph,
                     "speed_limit_kmh": speed_limit_kmh,
-                    "entry_lanes": [str(edge.id) for edge in lane_data.incoming_edges],
-                    "exit_lanes": [str(edge.id) for edge in lane_data.outgoing_edges],
+                    "entry_lanes": [int(edge.id) for edge in lane_data.incoming_edges],
+                    "exit_lanes": [int(edge.id) for edge in lane_data.outgoing_edges],
                     "left_neighbor": (
-                        [str(edge.id) for edge in block.interior_edges[:index]]
+                        [int(edge.id) for edge in block.interior_edges[:index]]
                         if layer == SemanticMapLayer.ROADBLOCK
                         else []
                     ),
                     "right_neighbor": (
-                        [str(edge.id) for edge in block.interior_edges[index + 1 :]]
+                        [int(edge.id) for edge in block.interior_edges[index + 1 :]]
                         if layer == SemanticMapLayer.ROADBLOCK
                         else []
                     ),
@@ -351,7 +365,7 @@ def extract_static_map_elements(
                                 left_line_type = types.ROAD_LINE_UNKNOWN
 
                             if left_line_type != types.ROAD_LINE_UNKNOWN:
-                                static_map_elements[left_boundary.id] = {
+                                static_map_elements[int(left_boundary.id)] = {
                                     "type": left_line_type,
                                     "polyline": nuplan_utils.get_points_from_boundary(left_boundary, center),
                                 }
@@ -367,7 +381,7 @@ def extract_static_map_elements(
                                 right_line_type = types.ROAD_LINE_UNKNOWN
 
                             if right_line_type != types.ROAD_LINE_UNKNOWN:
-                                static_map_elements[right_boundary.id] = {
+                                static_map_elements[int(right_boundary.id)] = {
                                     "type": right_line_type,
                                     "polyline": nuplan_utils.get_points_from_boundary(right_boundary, center),
                                 }
@@ -399,7 +413,7 @@ def extract_static_map_elements(
             # Add z-coordinate of 0
             polygon = np.hstack((polygon, np.zeros((polygon.shape[0], 1))))
 
-            static_map_elements[crosswalk.id] = {
+            static_map_elements[int(crosswalk.id)] = {
                 "type": types.CROSSWALK,
                 "polygon": polygon,
             }
@@ -427,7 +441,7 @@ def extract_static_map_elements(
             # Transform coordinates relative to scenario center and reverse point order
             # (reversal ensures consistent boundary direction)
             boundary_points = nuplan_utils.get_center_vector(boundary_points, center)[::-1]
-            boundary_id = f"boundary_{idx}"
+            boundary_id = max(static_map_elements.keys(), default=0) + idx
 
             # Add z-coordinate of 0
             boundary_points = np.hstack((boundary_points, np.zeros((boundary_points.shape[0], 1))))

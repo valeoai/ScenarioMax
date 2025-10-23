@@ -37,8 +37,6 @@ def convert_waymo_scenario(waymo_scenario: Any, version: str) -> UnifiedScenario
             "ego_id": ego_id,
             "timesteps": np.array(waymo_scenario.timestamps_seconds, dtype=np.float32),
             # Waymo-specific metadata
-            "current_time_index": waymo_scenario.current_time_index,
-            "sdc_track_index": waymo_scenario.sdc_track_index,
             "objects_of_interest": [int(obj) for obj in waymo_scenario.objects_of_interest],
             "tracks_to_predict": [
                 {"track_index": track.track_index, "difficulty": track.difficulty}

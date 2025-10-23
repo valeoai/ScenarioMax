@@ -41,7 +41,7 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, length: int) ->
         states_int = np.array(states_int, dtype=np.int32)
 
         puffer_element = {
-            "id": int(hash(element_id) & 0x7FFFFFFF),
+            "id": element_id,
             "type": element_type_int,
             "xyz": position.astype(np.float32),
             "states": states_int,
@@ -49,7 +49,7 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, length: int) ->
 
         # Add controlled lane if available
         if controlled_lane is not None:
-            puffer_element["lane"] = int(hash(str(controlled_lane)) & 0x7FFFFFFF)
+            puffer_element["controlled_lane"] = controlled_lane
 
         puffer_elements.append(puffer_element)
 

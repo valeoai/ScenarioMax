@@ -13,6 +13,14 @@ NuPlanEgoType = TrackedObjectType.EGO
 NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 
 
+
+
+def safe_id_to_int(id_string, bits=32):
+    hash_bytes = hashlib.sha256(id_string.encode()).digest()
+
+    return int.from_bytes(hash_bytes[:bits//8], 'big')
+
+
 def get_center_vector(vector, nuplan_center=(0, 0)):
     "All vec in nuplan should be centered in (0,0) to avoid numerical explosion"
     vector = np.array(vector)

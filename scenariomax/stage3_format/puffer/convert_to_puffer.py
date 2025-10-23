@@ -35,6 +35,7 @@ def convert(unified_scenario) -> dict:
     # Convert dynamic agents
     dynamic_agents = agents.convert_dynamic_agents(
         unified_scenario.get("dynamic_agents", {}),
+        unified_scenario.get("static_map_elements", {}),
         scenario_metadata.get("length", 0),
         scenario_metadata.get("ego_id", ""),
     )
