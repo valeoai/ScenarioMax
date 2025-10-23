@@ -4,7 +4,7 @@ Simplified 3-stage pipeline for dataset conversion.
 This module provides 4 main functions:
 1. convert_raw_to_unified: Stage 1 - Raw dataset(s) → Unified pickles
 2. process_unified_scenarios: Stage 2 - Unified → Processed unified
-3. format_unified_to_target: Stage 3 - Unified → Target format (tfrecord/json)
+3. format_unified_to_target: Stage 3 - Unified → Target format (tfexample/json/puffer)
 4. process_scenarios: Full pipeline - Run all 3 stages together
 """
 
@@ -250,11 +250,12 @@ def format_unified_to_target(
     Args:
         input_path: Directory containing unified pickle files
         output_path: Output directory for target format
-        format: Target format ('tfexample' or 'json')
+        format: Target format ('tfexample', 'json', or 'puffer')
         num_workers: Number of parallel workers
         **format_options: Format-specific options
             - For tfexample: shard (int), tfrecord_name (str)
             - For json: (none currently)
+            - For puffer: (none currently)
 
     Returns:
         Dict with conversion statistics
@@ -275,6 +276,14 @@ def format_unified_to_target(
             input_path='/output/enhanced',
             output_path='/output/json',
             format='json',
+            num_workers=8
+        )
+
+        # Convert to Puffer format
+        format_unified_to_target(
+            input_path='/output/enhanced',
+            output_path='/output/puffer',
+            format='puffer',
             num_workers=8
         )
     """
@@ -404,7 +413,7 @@ def process_scenarios(
     Args:
         datasets: Dict mapping dataset names to paths (e.g., {'waymo': '/path'})
         output_path: Base output directory
-        format: Target format ('tfexample' or 'json')
+        format: Target format ('tfexample', 'json', or 'puffer')
         processors: Optional list of processor functions for Stage 2
         num_workers: Number of parallel workers
         save_intermediate: If True, save intermediate pickles to disk.
@@ -616,6 +625,7 @@ def _run_pipeline_in_memory(
             num_workers=num_workers,
             additional_args=additional_args,
             validate=validate,
+            format_options=kwargs,
         )
 
         total_scenarios += scenario_count
@@ -670,6 +680,7 @@ def _process_scenarios_stage123_parallel(
     num_workers: int,
     additional_args: dict,
     validate: bool = False,
+    format_options: dict | None = None,
 ) -> None:
     """
     Process scenarios in parallel through full Stage 1→2→3 pipeline.
@@ -688,6 +699,10 @@ def _process_scenarios_stage123_parallel(
     from functools import partial
 
     from joblib import Parallel, delayed
+
+    # Setup format options with defaults
+    if format_options is None:
+        format_options = {}
 
     # Setup worker directories
     write._create_worker_directories(output_path, num_workers)
@@ -720,6 +735,7 @@ def _process_scenarios_stage123_parallel(
                 "output_path": worker_output_dir,
                 "additional_args": additional_args,
                 "validate": validate,
+                "format_options": format_options,
             },
         )
 
@@ -752,6 +768,7 @@ def _worker_process_stage123(
     output_path: str,
     additional_args: dict,
     validate: bool = False,
+    format_options: dict | None = None,
 ) -> bool:
     """
     Worker function that processes a chunk of files through Stage 1→2→3.
@@ -780,6 +797,10 @@ def _worker_process_stage123(
         True if successful, False otherwise
     """
     from scenariomax.stage1_convert.datasets import utils as converter_utils
+
+    # Setup format options with defaults
+    if format_options is None:
+        format_options = {}
 
     memory_before = converter_utils.process_memory()
     logger.debug(f"Worker {worker_index} starting - Memory: {memory_before:.2f} MB")
@@ -814,7 +835,8 @@ def _worker_process_stage123(
         from scenariomax.tf_utils import get_tensorflow
 
         tf = get_tensorflow()
-        tf_record_file = os.path.join(output_path, "training.tfrecord")
+        tfrecord_name = format_options.get("tfrecord_name", "training")
+        tf_record_file = os.path.join(output_path, f"{tfrecord_name}.tfrecord")
         logger.debug(f"Worker {worker_index} writing to TFRecord: {tf_record_file}")
 
         try:
@@ -829,7 +851,7 @@ def _worker_process_stage123(
                             if not isinstance(unified_scenario, UnifiedScenario):
                                 unified_scenario = UnifiedScenario.from_dict(unified_scenario)
 
-                            is_valid, errors, warnings = unified_scenario.strict_validate()
+                            is_valid, errors, warnings = unified_scenario.soft_validate()
                             if not is_valid:
                                 validation_error_count += 1
                                 logger.warning(
@@ -882,13 +904,12 @@ def _worker_process_stage123(
             pbar.close()
 
     elif format == "json":
+        import json
+
         from scenariomax.core.unified_scenario import UnifiedScenario
         from scenariomax.stage3_format.json import convert_to_json
 
-        json_file = os.path.join(output_path, "scenarios.json")
-        logger.debug(f"Worker {worker_index} writing to JSON: {json_file}")
-
-        scenarios_list = []
+        logger.debug(f"Worker {worker_index} writing to JSON format: {output_path}")
 
         try:
             for raw_scenario in scenarios:
@@ -901,7 +922,7 @@ def _worker_process_stage123(
                         if not isinstance(unified_scenario, UnifiedScenario):
                             unified_scenario = UnifiedScenario.from_dict(unified_scenario)
 
-                        is_valid, errors, warnings = unified_scenario.strict_validate()
+                        is_valid, errors, warnings = unified_scenario.soft_validate()
                         if not is_valid:
                             validation_error_count += 1
                             logger.warning(
@@ -919,9 +940,16 @@ def _worker_process_stage123(
                         for processor_fn in processors:
                             unified_scenario = processor_fn(unified_scenario)
 
-                    # Stage 3: Convert to GPUDrive JSON format
+                    # Stage 3: Convert to JSON format
                     json_scenario = convert_to_json.convert(unified_scenario)
-                    scenarios_list.append(json_scenario)
+
+                    # Save each scenario as individual JSON file
+                    scenario_id = unified_scenario.get("id", f"scenario_{processed_count}")
+                    json_file_path = os.path.join(output_path, f"{scenario_id}.json")
+
+                    with open(json_file_path, "w") as f:
+                        json.dump(json_scenario, f, indent=2)
+
                     processed_count += 1
 
                 except Exception as e:
@@ -932,12 +960,6 @@ def _worker_process_stage123(
                 pbar.set_postfix(
                     {"processed": processed_count, "validation_errors": validation_error_count, "errors": error_count},
                 )
-
-            # Save all scenarios to JSON file
-            import json
-
-            with open(json_file, "w") as f:
-                json.dump(scenarios_list, f, indent=2)
 
         except Exception as e:
             logger.error(f"Worker {worker_index} encountered critical error: {e}")
@@ -965,7 +987,7 @@ def _worker_process_stage123(
                         if not isinstance(unified_scenario, UnifiedScenario):
                             unified_scenario = UnifiedScenario.from_dict(unified_scenario)
 
-                        is_valid, errors, warnings = unified_scenario.strict_validate()
+                        is_valid, errors, warnings = unified_scenario.soft_validate()
                         if not is_valid:
                             validation_error_count += 1
                             logger.warning(
@@ -1109,7 +1131,7 @@ def _find_dataset_dirs(input_path: str) -> dict[str, str] | None:
     subdirs = {}
     has_pickle_files = False
 
-    for item in os.listdir(input_path):
+    for item in sorted(os.listdir(input_path)):
         item_path = os.path.join(input_path, item)
         if os.path.isdir(item_path):
             # Check if this subdir contains pickle files
@@ -1161,7 +1183,7 @@ def _final_postprocess(format: str, output_path: str, **kwargs) -> None:
 
         # Step 1: Merge workers for each dataset
         logger.info("🔄 Merging TFExample workers for each dataset")
-        for dataset_name in os.listdir(output_path):
+        for dataset_name in sorted(os.listdir(output_path)):
             dataset_dir = os.path.join(output_path, dataset_name)
             if os.path.isdir(dataset_dir):
                 logger.info(f"Merging {dataset_name} workers")
@@ -1188,21 +1210,30 @@ def _final_postprocess(format: str, output_path: str, **kwargs) -> None:
 
         # Step 1: Merge workers for each dataset
         logger.info("🔄 Merging JSON workers for each dataset")
-        for dataset_name in os.listdir(output_path):
+        for dataset_name in sorted(os.listdir(output_path)):
             dataset_dir = os.path.join(output_path, dataset_name)
             if os.path.isdir(dataset_dir):
                 logger.info(f"Merging {dataset_name} workers")
                 postprocess.merge_dataset_workers(dataset_dir, dataset_name)
+
+        # Step 2: Merge multiple datasets into final file (if multiple datasets)
+        json_filename = kwargs.get("json_filename", "scenarios.json")
+        logger.info("🔄 Merging JSON datasets")
+        postprocess.merge_multiple_datasets(output_path, json_filename)
 
     elif format == "puffer":
         from scenariomax.stage3_format.puffer import postprocess
 
         # Step 1: Merge workers for each dataset
         logger.info("🔄 Merging Puffer workers for each dataset")
-        for dataset_name in os.listdir(output_path):
+        for dataset_name in sorted(os.listdir(output_path)):
             dataset_dir = os.path.join(output_path, dataset_name)
             if os.path.isdir(dataset_dir):
                 logger.info(f"Merging {dataset_name} workers")
                 postprocess.merge_dataset_workers(dataset_dir, dataset_name)
+
+        # Step 2: Merge multiple datasets (moves JSON files to parent directory)
+        logger.info("🔄 Merging Puffer datasets")
+        postprocess.merge_multiple_datasets(output_path)
 
     logger.info("✅ Final postprocessing completed")

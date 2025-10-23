@@ -75,7 +75,7 @@ def load_pickle_files(input_path: str) -> list[dict[str, Any]]:
     pickle_files = []
 
     for root, _, files in os.walk(input_path):
-        for file in files:
+        for file in sorted(files):
             if file.endswith(".pkl"):
                 pickle_files.append(os.path.join(root, file))
 

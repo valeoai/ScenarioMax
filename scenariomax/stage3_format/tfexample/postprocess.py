@@ -97,18 +97,12 @@ def merge_dataset_workers(dataset_dir: str, dataset_name: str) -> str:
     # Look for worker subdirectories and their TFRecord files
     logger.info(f"Merging {dataset_name} workers from: {dataset_dir}")
 
-    for item in os.listdir(dataset_dir):
+    for item in sorted(os.listdir(dataset_dir)):
         dir_path = os.path.join(dataset_dir, item)
         if os.path.isdir(dir_path):
-            list_dir = os.listdir(dir_path)
-            for workder_dir in list_dir:
-                worker_tfrecord_files = [
-                    os.path.join(dir_path, workder_dir, f)
-                    for f in os.listdir(os.path.join(dir_path, workder_dir))
-                    if f.endswith(".tfrecord")
-                ]
-                tfrecord_files.extend(worker_tfrecord_files)
-                logger.debug(f"Found {len(worker_tfrecord_files)} TFRecord files in worker dir {dir_path}")
+            worker_tfrecord_files = [os.path.join(dir_path, f) for f in sorted(os.listdir(dir_path)) if f.endswith(".tfrecord")]
+            tfrecord_files.extend(worker_tfrecord_files)
+            logger.debug(f"Found {len(worker_tfrecord_files)} TFRecord files in worker dir {dir_path}")
 
     logger.info(f"Found {len(tfrecord_files)} worker TFRecord files for {dataset_name}")
 
@@ -174,7 +168,7 @@ def merge_multiple_datasets(output_dir: str, merged_filename: str) -> None:
     # Look for dataset TFRecord files (not in subdirectories)
     dataset_files = [
         os.path.join(output_dir, f)
-        for f in os.listdir(output_dir)
+        for f in sorted(os.listdir(output_dir))
         if f.endswith(".tfrecord") and os.path.isfile(os.path.join(output_dir, f))
     ]
 
