@@ -28,7 +28,8 @@ def compute_agent_route(
     agent_valid: np.ndarray,
     static_map_elements: dict,
     lane_data: tuple = None,
-) -> list[list[str]]:
+    agent_id: int | str = None,
+) -> list[list[int]]:
     """
     Compute routes (lists of lane IDs) for an agent based on ground truth trajectory.
 
@@ -42,9 +43,10 @@ def compute_agent_route(
         static_map_elements: Dict of static map elements (lanes, boundaries, etc.)
         lane_data: Optional precomputed lane data (lane_ids, lane_polylines, lane_metadata).
                    If None, will be computed from static_map_elements.
+        agent_id: Optional agent identifier for debugging logs
 
     Returns:
-        List of routes, where each route is a list of lane center IDs (as strings)
+        List of routes, where each route is a list of lane center IDs
     """
     if len(agent_trajectory) == 0 or not np.any(agent_valid):
         return []
@@ -56,27 +58,32 @@ def compute_agent_route(
     if len(valid_trajectory) == 0:
         return []
 
+    # Format agent identifier for logging
+    agent_str = f"Agent {agent_id}" if agent_id is not None else "Agent"
+
     # Check if agent has enough valid trajectory points
     if len(valid_trajectory) < MIN_VALID_TRAJECTORY_POINTS:
-        logger.debug(f"Trajectory too short: {len(valid_trajectory)} < {MIN_VALID_TRAJECTORY_POINTS}")
+        logger.debug(
+            f"{agent_str}: Trajectory too short ({len(valid_trajectory)} < {MIN_VALID_TRAJECTORY_POINTS} points)",
+        )
         return []
 
     lane_ids, lane_polylines, _ = lane_data
 
     if len(lane_ids) == 0:
-        logger.debug("No lane centers found in map")
+        logger.debug(f"{agent_str}: No lane centers found in map")
         return []
 
     # Check if agent is mostly on lanes (not parked/off-map)
     if not _is_agent_on_lanes(valid_trajectory, lane_polylines):
-        logger.debug("Agent is off-map or parked (not close enough to lanes)")
+        logger.debug(f"{agent_str}: Off-map or parked (not close enough to lanes)")
         return []
 
     # Step 1: Find current lane (root)
     root_lane = _find_root_lane(valid_trajectory, valid_heading, lane_data)
 
     if not root_lane:
-        logger.debug("No current lane found for agent")
+        logger.debug(f"{agent_str}: No current lane found")
         return []
 
     # Step 2: Build route paths by exploring exit lanes and matching with GT trajectory
@@ -537,5 +544,3 @@ def _get_lane_directions_at_indices(polylines: np.ndarray, indices: np.ndarray) 
     directions = directions / (norms + 1e-6)  # (N_lanes, 2)
 
     return directions
-
-

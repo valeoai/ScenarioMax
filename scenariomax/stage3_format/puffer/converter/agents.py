@@ -65,7 +65,7 @@ def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length
         # 3. Agents close to lanes (within 2m) - checked inside compute_agent_route()
         # 4. Agents not off-map/parked (≥50% of trajectory near lanes) - checked inside compute_agent_route()
         if agent_type_int == 1 and np.sum(valid) > 10:
-            agent_routes = _compute_routes(position, heading, valid, road_map_elements, lane_data)
+            agent_routes = _compute_routes(position, heading, valid, road_map_elements, lane_data, agent_id)
         else:
             agent_routes = []
 
@@ -135,6 +135,7 @@ def _compute_routes(
     valid: np.ndarray,
     road_map_elements: dict,
     lane_data: tuple,
+    agent_id: int | str,
 ) -> list:
     """
     Compute routes an agent follows based on ground truth trajectory.
@@ -150,6 +151,7 @@ def _compute_routes(
         valid: Validity mask for trajectory (N,) array
         road_map_elements: Dict of static map elements (for reference)
         lane_data: Precomputed lane data (lane_ids, lane_polylines, lane_metadata)
+        agent_id: Agent identifier for debugging
 
     Returns:
         List of route paths, where each path is a list of lane IDs
@@ -162,6 +164,7 @@ def _compute_routes(
         agent_valid=valid,
         static_map_elements=road_map_elements,
         lane_data=lane_data,
+        agent_id=agent_id,
     )
 
     # Return list of route paths
