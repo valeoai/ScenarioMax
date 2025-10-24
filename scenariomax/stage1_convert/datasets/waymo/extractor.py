@@ -234,15 +234,15 @@ def _extract_boundaries(boundaries) -> list[dict[str, Any]]:
     """
     result = []
     for boundary in boundaries:
-        boundary_info = {
-            "lane_start_index": boundary.lane_start_index,
-            "lane_end_index": boundary.lane_end_index,
-            "boundary_type": waymo_types.get_road_line_type(boundary.boundary_type),
-            "boundary_feature_id": boundary.boundary_feature_id,
-        }
-        boundary_info = waymo_utils.convert_values_to_str(boundary_info)
+        # boundary_info = {
+        #     "lane_start_index": boundary.lane_start_index,
+        #     "lane_end_index": boundary.lane_end_index,
+        #     "boundary_type": waymo_types.get_road_line_type(boundary.boundary_type),
+        #     "boundary_feature_id": boundary.boundary_feature_id,
+        # }
+        # boundary_info = waymo_utils.convert_values_to_str(boundary_info)
 
-        result.append(boundary_info)
+        result.append(boundary.boundary_feature_id)
 
     return result
 
@@ -259,16 +259,16 @@ def _extract_neighbors(neighbors) -> list[dict[str, Any]]:
     """
     result = []
     for neighbor in neighbors:
-        neighbor_info = {
-            "feature_id": neighbor.feature_id,
-            "self_start_index": neighbor.self_start_index,
-            "self_end_index": neighbor.self_end_index,
-            "neighbor_start_index": neighbor.neighbor_start_index,
-            "neighbor_end_index": neighbor.neighbor_end_index,
-        }
-        neighbor_info = waymo_utils.convert_values_to_str(neighbor_info)
-        neighbor_info["boundaries"] = _extract_boundaries(neighbor.boundaries)
+        # neighbor_info = {
+        #     "feature_id": neighbor.feature_id,
+        #     "self_start_index": neighbor.self_start_index,
+        #     "self_end_index": neighbor.self_end_index,
+        #     "neighbor_start_index": neighbor.neighbor_start_index,
+        #     "neighbor_end_index": neighbor.neighbor_end_index,
+        # }
+        # neighbor_info = waymo_utils.convert_values_to_str(neighbor_info)
+        # neighbor_info["boundaries"] = _extract_boundaries(neighbor.boundaries)
 
-        result.append(neighbor_info)
+        result.append(neighbor.feature_id)
 
     return result
