@@ -27,6 +27,9 @@ def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length
     """
     puffer_agents = []
 
+    # Extract lane centers once for all agents (optimization)
+    lane_data = routes.extract_lane_centers(road_map_elements)
+
     # Put ego agent first
     sorted_agent_items = sorted(dynamic_agents.items(), key=lambda item: (item[0] != ego_id, item[0]))
 
@@ -56,8 +59,15 @@ def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length
         # Convert agent type to int
         agent_type_int = _convert_agent_type_to_int(agent_data.get("type", "TYPE_UNSET"))
 
-        # Compute routes based on ground truth trajectory
-        agent_routes = _compute_routes(position, heading, valid, road_map_elements)
+        # Routes are computed only for:
+        # 1. VEHICLE type (type == 1)
+        # 2. Agents with sufficient valid trajectory points (>10)
+        # 3. Agents close to lanes (within 2m) - checked inside compute_agent_route()
+        # 4. Agents not off-map/parked (≥50% of trajectory near lanes) - checked inside compute_agent_route()
+        if agent_type_int == 1 and np.sum(valid) > 10:
+            agent_routes = _compute_routes(position, heading, valid, road_map_elements, lane_data)
+        else:
+            agent_routes = []
 
         puffer_agent = {
             "id": idx,  # Use int ID directly
@@ -124,34 +134,39 @@ def _compute_routes(
     heading: np.ndarray,
     valid: np.ndarray,
     road_map_elements: dict,
-) -> dict:
+    lane_data: tuple,
+) -> list:
     """
     Compute routes an agent follows based on ground truth trajectory.
 
     Routes are lists of lane center IDs that:
     1. Cover the ground truth trajectory
     2. Extend beyond the trajectory using lane connectivity
+    3. Explore multiple possible paths through exit lanes
 
     Args:
         position: Agent position trajectory (N, 3) array
         heading: Agent heading at each timestep (N,) array
         valid: Validity mask for trajectory (N,) array
         road_map_elements: Dict of static map elements (for reference)
+        lane_data: Precomputed lane data (lane_ids, lane_polylines, lane_metadata)
 
     Returns:
-        Dict of routes in Puffer format ({"0": {"lanes": [lane_ids]}})
+        List of route paths, where each path is a list of lane IDs
     """
-    # Compute route using the new route computation algorithm
-    route_lane_ids = routes.compute_agent_route(
+    # Compute routes using the new route computation algorithm
+    # Returns list of route paths: [[lane1, lane2, ...], [lane1, lane3, ...], ...]
+    route_paths = routes.compute_agent_route(
         agent_trajectory=position,
         agent_heading=heading,
         agent_valid=valid,
         static_map_elements=road_map_elements,
+        lane_data=lane_data,
     )
 
-    # Format as Puffer route dict
-    if not route_lane_ids:
+    # Return list of route paths
+    if not route_paths:
         return []
 
     # Lane IDs are already integers, return directly
-    return route_lane_ids
+    return route_paths

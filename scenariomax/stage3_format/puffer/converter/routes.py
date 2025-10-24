@@ -9,6 +9,7 @@ Routes are lists of lane center IDs that:
 import numpy as np
 
 from scenariomax import logger_utils
+from scenariomax.core import types
 
 
 logger = logger_utils.get_logger(__name__)
@@ -18,6 +19,7 @@ logger = logger_utils.get_logger(__name__)
 LANE_WIDTH_THRESHOLD = 3.5  # Meters - how close agent must be to lane
 ALIGNMENT_THRESHOLD = 0.3  # Cosine similarity threshold for direction alignment
 MAX_ROUTE_DEPTH = 10  # Maximum depth for route extension
+MIN_VALID_TRAJECTORY_POINTS = 10  # Minimum valid points to compute route
 
 
 def compute_agent_route(
@@ -25,20 +27,24 @@ def compute_agent_route(
     agent_heading: np.ndarray,
     agent_valid: np.ndarray,
     static_map_elements: dict,
-) -> list[str]:
+    lane_data: tuple = None,
+) -> list[list[str]]:
     """
-    Compute route (list of lane IDs) for an agent based on ground truth trajectory.
+    Compute routes (lists of lane IDs) for an agent based on ground truth trajectory.
 
-    The route covers the ground truth trajectory and extends beyond it using lane connectivity.
+    The routes cover the ground truth trajectory and extend beyond it using lane connectivity.
+    Multiple route paths are generated to explore different exit lane possibilities.
 
     Args:
         agent_trajectory: Agent position trajectory (N, 2) or (N, 3) array
         agent_heading: Agent heading at each timestep (N,) array
         agent_valid: Validity mask for trajectory (N,) array
         static_map_elements: Dict of static map elements (lanes, boundaries, etc.)
+        lane_data: Optional precomputed lane data (lane_ids, lane_polylines, lane_metadata).
+                   If None, will be computed from static_map_elements.
 
     Returns:
-        List of lane center IDs (as strings) forming the route
+        List of routes, where each route is a list of lane center IDs (as strings)
     """
     if len(agent_trajectory) == 0 or not np.any(agent_valid):
         return []
@@ -50,37 +56,36 @@ def compute_agent_route(
     if len(valid_trajectory) == 0:
         return []
 
-    # Get lane centers from map (vectorized format)
-    lane_data = _extract_lane_centers(static_map_elements)
-    lane_ids, lane_polylines, lane_metadata = lane_data
+    # Check if agent has enough valid trajectory points
+    if len(valid_trajectory) < MIN_VALID_TRAJECTORY_POINTS:
+        logger.debug(f"Trajectory too short: {len(valid_trajectory)} < {MIN_VALID_TRAJECTORY_POINTS}")
+        return []
+
+    lane_ids, lane_polylines, _ = lane_data
 
     if len(lane_ids) == 0:
         logger.debug("No lane centers found in map")
         return []
 
-    # Step 1: Find lanes that cover the ground truth trajectory (vectorized)
-    covered_lanes = _find_lanes_covering_trajectory(
-        valid_trajectory,
-        valid_heading,
-        lane_data,
-    )
-
-    if not covered_lanes:
-        logger.debug("No lanes found covering trajectory")
+    # Check if agent is mostly on lanes (not parked/off-map)
+    if not _is_agent_on_lanes(valid_trajectory, lane_polylines):
+        logger.debug("Agent is off-map or parked (not close enough to lanes)")
         return []
 
-    # Step 2: Extend route beyond trajectory using lane connectivity
-    route = _extend_route_with_connectivity(
-        covered_lanes,
-        static_map_elements,
-        valid_trajectory[-1],  # Last position
-        valid_heading[-1],  # Last heading
-    )
+    # Step 1: Find current lane (root)
+    root_lane = _find_root_lane(valid_trajectory, valid_heading, lane_data)
 
-    return route
+    if not root_lane:
+        logger.debug("No current lane found for agent")
+        return []
+
+    # Step 2: Build route paths by exploring exit lanes and matching with GT trajectory
+    routes = _build_route_paths_from_root(root_lane, valid_trajectory, valid_heading, static_map_elements, lane_data)
+
+    return routes
 
 
-def _extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, dict]:
+def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, dict]:
     """
     Extract lane center information as numpy arrays for vectorized operations.
 
@@ -103,10 +108,10 @@ def _extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, 
         element_type = element_data.get("type", "")
 
         # Only process lane centers
-        if "LANE" in element_type:
+        if element_type == types.LANE_SURFACE_STREET or element_type == types.LANE_FREEWAY:
             polyline = element_data.get("polyline")
 
-            if polyline is not None and len(polyline) > 0:
+            if len(polyline) > 0:
                 # Convert to 2D if needed
                 polyline_2d = polyline[:, :2] if polyline.shape[1] == 3 else polyline
 
@@ -132,13 +137,47 @@ def _extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, 
     return lane_ids, lane_polylines, lane_metadata
 
 
-def _find_lanes_covering_trajectory(
-    trajectory: np.ndarray,
-    heading: np.ndarray,
-    lane_data: tuple,
-) -> list[str]:
+def _is_agent_on_lanes(trajectory: np.ndarray, lane_polylines: np.ndarray) -> bool:
     """
-    Find ordered list of lane IDs that cover the ground truth trajectory (vectorized).
+    Check if an agent's trajectory is mostly on lanes (not parked or off-map).
+
+    Args:
+        trajectory: Agent trajectory points (M, 2/3)
+        lane_polylines: Array of lane polylines (N_lanes, max_points, 2)
+
+    Returns:
+        True if agent is mostly on lanes, False if parked or off-map
+    """
+    if len(trajectory) == 0 or len(lane_polylines) == 0:
+        return False
+
+    # Extract 2D positions
+    trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
+
+    # Check distance of trajectory
+    if np.linalg.norm(trajectory_2d, axis=1).max() < 1e-3:
+        trajectory_2d = trajectory_2d[:1]
+    else:
+        trajectory_2d = [trajectory_2d[0], trajectory_2d[-1]]
+
+    # Count how many trajectory points are within LANE_WIDTH_THRESHOLD of any lane
+    points_near_lanes = 0
+
+    for pos in trajectory_2d:
+        # Vectorized distance calculation for all lanes
+        min_distances, _ = _point_to_polylines_distance(pos, lane_polylines)
+
+        # Check if any lane is within threshold
+        if np.any(min_distances < LANE_WIDTH_THRESHOLD):
+            points_near_lanes += 1
+
+    # Agent is on lanes if at least threshold_ratio of points are near lanes
+    return points_near_lanes >= 1
+
+
+def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tuple) -> str | None:
+    """
+    Find the current lane where the agent is located using the first 3 trajectory points.
 
     Args:
         trajectory: Valid trajectory points (M, 2/3)
@@ -146,29 +185,24 @@ def _find_lanes_covering_trajectory(
         lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata) from _extract_lane_centers
 
     Returns:
-        Ordered list of lane IDs covering the trajectory
+        The current lane ID (root lane) or None if no lane is found
     """
-    if len(trajectory) == 0:
-        return []
-
-    lane_ids, lane_polylines, lane_metadata = lane_data
-
-    if len(lane_ids) == 0:
-        return []
+    lane_ids, lane_polylines, _ = lane_data
 
     # Extract 2D positions
     trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
 
-    # For each trajectory point, find the closest matching lane
-    trajectory_lanes = []
-    last_lane_id = None
+    # Use only the first 3 points to determine current lane
+    num_points_for_current_lane = min(10, len(trajectory_2d))
+    first_points = trajectory_2d[:num_points_for_current_lane]
+    first_headings = heading[:num_points_for_current_lane]
 
-    # Vectorized computation for each trajectory point
-    for pos, hdg in zip(trajectory_2d, heading):
-        # Vectorized distance calculation for all lanes
-        # lane_polylines: (N_lanes, max_points, 2)
-        # pos: (2,)
-        min_distances, closest_indices = _vectorized_point_to_polylines_distance(pos, lane_polylines)
+    # Compute lane matches for the first 3 points
+    lane_vote_scores = {}  # lane_idx -> total score
+
+    for pos, hdg in zip(first_points, first_headings):
+        # Distance calculation for all lanes
+        min_distances, closest_indices = _point_to_polylines_distance(pos, lane_polylines)
 
         # Filter lanes within threshold
         valid_lanes_mask = min_distances < LANE_WIDTH_THRESHOLD
@@ -176,13 +210,13 @@ def _find_lanes_covering_trajectory(
         if not np.any(valid_lanes_mask):
             continue
 
-        # Calculate lane directions at closest points (vectorized)
+        # Calculate lane directions at closest points
         lane_directions = _get_lane_directions_at_indices(lane_polylines, closest_indices)
 
         # Calculate agent direction
         agent_dir = np.array([np.cos(hdg), np.sin(hdg)])
 
-        # Vectorized alignment calculation: dot product for all lanes
+        # Vectorized alignment calculation
         alignments = np.sum(lane_directions * agent_dir, axis=1)  # (N_lanes,)
 
         # Filter by alignment threshold
@@ -191,28 +225,240 @@ def _find_lanes_covering_trajectory(
         if not np.any(valid_lanes_mask):
             continue
 
-        # Vectorized score calculation
+        # Calculate scores
         distance_scores = 1.0 / (1.0 + min_distances)
         scores = 0.7 * alignments + 0.3 * distance_scores
 
-        # Mask out invalid lanes
-        scores = np.where(valid_lanes_mask, scores, -np.inf)
+        # Accumulate scores for each valid lane
+        for lane_idx in np.where(valid_lanes_mask)[0]:
+            if lane_idx not in lane_vote_scores:
+                lane_vote_scores[lane_idx] = 0.0
+            lane_vote_scores[lane_idx] += scores[lane_idx]
 
-        # Find best lane
-        best_idx = np.argmax(scores)
+    if not lane_vote_scores:
+        return None
 
-        if scores[best_idx] > -np.inf:
-            best_lane_id = lane_ids[best_idx]
-
-            # Add lane if different from last
-            if best_lane_id != last_lane_id:
-                trajectory_lanes.append(best_lane_id)
-                last_lane_id = best_lane_id
-
-    return trajectory_lanes
+    # Return the lane with the highest total score
+    best_lane_idx = max(lane_vote_scores, key=lane_vote_scores.get)
+    return lane_ids[best_lane_idx]
 
 
-def _vectorized_point_to_polylines_distance(point: np.ndarray, polylines: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _build_route_paths_from_root(
+    root_lane: str,
+    trajectory: np.ndarray,
+    heading: np.ndarray,
+    static_map_elements: dict,
+    lane_data: tuple,
+) -> list[list[str]]:
+    """
+    Build multiple route paths starting from the root lane.
+
+    For each exit lane choice, determines if it follows the GT trajectory.
+    Creates new route paths when beyond the GT trajectory.
+    Each route path contains the GT trajectory.
+
+    Args:
+        root_lane: The current lane ID where the agent starts
+        trajectory: Valid trajectory points (M, 2/3)
+        heading: Valid headings (M,)
+        static_map_elements: Dict of static map elements
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
+
+    Returns:
+        List of route paths, each containing lane IDs covering the GT trajectory
+    """
+    lane_ids, lane_polylines, lane_metadata = lane_data
+
+    # Build a mapping from lane_id to lane_idx for quick lookup
+    lane_id_to_idx = {lane_id: idx for idx, lane_id in enumerate(lane_ids)}
+
+    # Extract 2D positions
+    trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
+
+    # Start with the root lane
+    all_routes = []
+
+    # Use DFS/BFS to explore all paths through exit lanes
+    # State: (current_route, current_trajectory_idx, current_lane_id)
+    queue = [(([root_lane], 0, root_lane))]
+
+    while queue:
+        current_route, traj_idx, current_lane_id = queue.pop(0)
+
+        # Check if we've covered the entire trajectory
+        if traj_idx >= len(trajectory_2d):
+            # Extend beyond GT trajectory using exit lanes
+            extended_route = _extend_beyond_trajectory(current_route, static_map_elements)
+            all_routes.append(extended_route)
+            continue
+
+        # Get exit lanes from current lane
+        if current_lane_id not in static_map_elements:
+            # No exit lanes, save current route
+            all_routes.append(current_route)
+            continue
+
+        current_lane_data = static_map_elements[current_lane_id]
+        exit_lanes = current_lane_data.get("exit_lanes", [])
+
+        if not exit_lanes:
+            # No exit lanes, extend beyond trajectory
+            extended_route = _extend_beyond_trajectory(current_route, static_map_elements)
+            all_routes.append(extended_route)
+            continue
+
+        # Score each exit lane based on how well it matches the remaining GT trajectory
+        exit_lane_scores = []
+        for exit_lane_id in exit_lanes:
+            if exit_lane_id not in lane_id_to_idx:
+                continue
+
+            score, next_traj_idx = _score_lane_against_trajectory(
+                exit_lane_id, lane_id_to_idx, lane_polylines, trajectory_2d, heading, traj_idx
+            )
+
+            exit_lane_scores.append((exit_lane_id, score, next_traj_idx))
+
+        if not exit_lane_scores:
+            # No valid exit lanes, save current route
+            all_routes.append(current_route)
+            continue
+
+        # Sort by score (descending) and select the best matching exit lanes
+        exit_lane_scores.sort(key=lambda x: x[1], reverse=True)
+
+        # Add paths for all exit lanes with positive scores (following GT)
+        # This creates multiple route possibilities
+        for exit_lane_id, score, next_traj_idx in exit_lane_scores:
+            if score > 0:  # Only follow lanes that match GT
+                new_route = current_route + [exit_lane_id]
+                queue.append((new_route, next_traj_idx, exit_lane_id))
+            else:
+                # Beyond GT trajectory, create new route path
+                new_route = current_route + [exit_lane_id]
+                extended_route = _extend_beyond_trajectory(new_route, static_map_elements)
+                all_routes.append(extended_route)
+
+    # If no routes were found, return just the root lane
+    if not all_routes:
+        all_routes = [[root_lane]]
+
+    return all_routes
+
+
+def _score_lane_against_trajectory(
+    lane_id: str,
+    lane_id_to_idx: dict,
+    lane_polylines: np.ndarray,
+    trajectory: np.ndarray,
+    heading: np.ndarray,
+    start_traj_idx: int,
+) -> tuple[float, int]:
+    """
+    Score how well a lane matches the remaining ground truth trajectory.
+
+    Args:
+        lane_id: Lane ID to score
+        lane_id_to_idx: Mapping from lane_id to lane_idx
+        lane_polylines: Array of lane polylines (N_lanes, max_points, 2)
+        trajectory: Trajectory points (M, 2)
+        heading: Headings (M,)
+        start_traj_idx: Index in trajectory to start matching from
+
+    Returns:
+        Tuple of (score, next_trajectory_idx) where score > 0 means lane follows GT
+    """
+    if lane_id not in lane_id_to_idx:
+        return 0.0, start_traj_idx
+
+    lane_idx = lane_id_to_idx[lane_id]
+    lane_polyline = lane_polylines[lane_idx]
+
+    # Check trajectory points that fall within this lane
+    total_score = 0.0
+    points_matched = 0
+    next_traj_idx = start_traj_idx
+
+    for traj_idx in range(start_traj_idx, len(trajectory)):
+        pos = trajectory[traj_idx]
+        hdg = heading[traj_idx]
+
+        # Calculate distance to lane
+        # Get single lane polyline
+        lane_poly_single = lane_polyline[np.newaxis, :, :]  # (1, max_points, 2)
+        min_distances, closest_indices = _point_to_polylines_distance(pos, lane_poly_single)
+        min_dist = min_distances[0]
+        closest_idx = closest_indices[0]
+
+        # Check if point is close to lane
+        if min_dist > LANE_WIDTH_THRESHOLD:
+            break  # Point is too far from lane
+
+        # Check alignment
+        lane_directions = _get_lane_directions_at_indices(lane_poly_single, np.array([closest_idx]))
+        lane_dir = lane_directions[0]
+        agent_dir = np.array([np.cos(hdg), np.sin(hdg)])
+        alignment = np.dot(lane_dir, agent_dir)
+
+        if alignment < ALIGNMENT_THRESHOLD:
+            break  # Direction mismatch
+
+        # Calculate score for this point
+        distance_score = 1.0 / (1.0 + min_dist)
+        point_score = 0.7 * alignment + 0.3 * distance_score
+
+        total_score += point_score
+        points_matched += 1
+        next_traj_idx = traj_idx + 1
+
+    if points_matched == 0:
+        return 0.0, start_traj_idx
+
+    # Average score
+    avg_score = total_score / points_matched
+
+    return avg_score, next_traj_idx
+
+
+def _extend_beyond_trajectory(route: list[str], static_map_elements: dict) -> list[str]:
+    """
+    Extend route beyond the GT trajectory using exit lanes.
+
+    Simply follows the first exit lane at each step.
+
+    Args:
+        route: Current route
+        static_map_elements: Dict of static map elements
+
+    Returns:
+        Extended route
+    """
+    extended_route = route.copy()
+    current_lane_id = route[-1] if route else None
+
+    if not current_lane_id:
+        return extended_route
+
+    # Extend using exit lanes
+    for _ in range(MAX_ROUTE_DEPTH):
+        if current_lane_id not in static_map_elements:
+            break
+
+        current_lane = static_map_elements[current_lane_id]
+        exit_lanes = current_lane.get("exit_lanes", [])
+
+        if not exit_lanes:
+            break
+
+        # Take first exit lane
+        next_lane_id = exit_lanes[0]
+        extended_route.append(next_lane_id)
+        current_lane_id = next_lane_id
+
+    return extended_route
+
+
+def _point_to_polylines_distance(point: np.ndarray, polylines: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Vectorized calculation of distance from a point to multiple polylines.
 
@@ -225,8 +471,6 @@ def _vectorized_point_to_polylines_distance(point: np.ndarray, polylines: np.nda
         - min_distances: Array of minimum distances for each lane (N_lanes,)
         - closest_indices: Array of closest segment indices for each lane (N_lanes,)
     """
-    n_lanes, max_points, _ = polylines.shape
-
     # Compute distances for all segments of all lanes
     # polylines[:, :-1]: (N_lanes, max_points-1, 2) - segment starts
     # polylines[:, 1:]: (N_lanes, max_points-1, 2) - segment ends
@@ -295,150 +539,3 @@ def _get_lane_directions_at_indices(polylines: np.ndarray, indices: np.ndarray) 
     return directions
 
 
-def _point_to_polyline_distance(point: np.ndarray, polyline: np.ndarray) -> tuple[float, int]:
-    """
-    Calculate minimum distance from a point to a polyline (considering segments).
-
-    Args:
-        point: 2D point (2,)
-        polyline: 2D polyline (N, 2)
-
-    Returns:
-        Tuple of (min_distance, closest_segment_index)
-    """
-    if len(polyline) < 2:
-        # Degenerate case: single point
-        dist = np.linalg.norm(polyline[0] - point)
-        return dist, 0
-
-    min_dist = np.inf
-    closest_seg_idx = 0
-
-    for i in range(len(polyline) - 1):
-        p1 = polyline[i]
-        p2 = polyline[i + 1]
-
-        # Calculate distance to line segment
-        seg_dist = _point_to_segment_distance(point, p1, p2)
-
-        if seg_dist < min_dist:
-            min_dist = seg_dist
-            closest_seg_idx = i
-
-    return min_dist, closest_seg_idx
-
-
-def _point_to_segment_distance(point: np.ndarray, seg_start: np.ndarray, seg_end: np.ndarray) -> float:
-    """
-    Calculate distance from a point to a line segment.
-
-    Args:
-        point: 2D point (2,)
-        seg_start: Segment start point (2,)
-        seg_end: Segment end point (2,)
-
-    Returns:
-        Minimum distance to segment
-    """
-    # Vector from seg_start to seg_end
-    seg_vec = seg_end - seg_start
-    seg_len_sq = np.dot(seg_vec, seg_vec)
-
-    if seg_len_sq < 1e-10:
-        # Degenerate segment (single point)
-        return np.linalg.norm(point - seg_start)
-
-    # Project point onto line
-    # t = [(point - seg_start) · seg_vec] / |seg_vec|^2
-    t = np.dot(point - seg_start, seg_vec) / seg_len_sq
-
-    # Clamp t to [0, 1] to stay on segment
-    t = np.clip(t, 0, 1)
-
-    # Find closest point on segment
-    closest = seg_start + t * seg_vec
-
-    # Return distance to closest point
-    return np.linalg.norm(point - closest)
-
-
-def _extend_route_with_connectivity(
-    covered_lanes: list[str],
-    static_map_elements: dict,
-    last_position: np.ndarray,
-    last_heading: float,
-) -> list[str]:
-    """
-    Extend route beyond covered lanes using lane connectivity.
-
-    Args:
-        covered_lanes: List of lane IDs covering ground truth
-        static_map_elements: Dict of static map elements
-        last_position: Last position of agent (2,) or (3,)
-        last_heading: Last heading of agent
-
-    Returns:
-        Extended route as list of lane IDs
-    """
-    if not covered_lanes:
-        return []
-
-    route = covered_lanes.copy()
-    current_lane_id = covered_lanes[-1]
-
-    # Extract agent direction vector
-    agent_dir = np.array([np.cos(last_heading), np.sin(last_heading)])
-
-    # Recursively extend using exit lanes
-    for _ in range(MAX_ROUTE_DEPTH):
-        if current_lane_id not in static_map_elements:
-            break
-
-        current_lane = static_map_elements[current_lane_id]
-        exit_lanes = current_lane.get("exit_lanes", [])
-
-        if not exit_lanes:
-            break
-
-        # Choose best exit lane based on alignment
-        best_exit_lane = None
-        best_alignment = -np.inf
-
-        for exit_lane_id in exit_lanes:
-            exit_lane_id_str = str(exit_lane_id)
-
-            # Avoid loops
-            if exit_lane_id_str in route:
-                continue
-
-            if exit_lane_id_str not in static_map_elements:
-                continue
-
-            exit_lane = static_map_elements[exit_lane_id_str]
-            exit_polyline = exit_lane.get("polyline")
-
-            if exit_polyline is None or len(exit_polyline) < 2:
-                continue
-
-            # Extract 2D polyline
-            exit_polyline_2d = exit_polyline[:, :2] if exit_polyline.shape[1] == 3 else exit_polyline
-
-            # Calculate direction of exit lane at start
-            lane_dir = exit_polyline_2d[1] - exit_polyline_2d[0]
-            lane_dir = lane_dir / (np.linalg.norm(lane_dir) + 1e-6)
-
-            # Calculate alignment with agent direction
-            alignment = np.dot(lane_dir, agent_dir)
-
-            if alignment > best_alignment:
-                best_alignment = alignment
-                best_exit_lane = exit_lane_id_str
-
-        # Add best exit lane if found and aligned
-        if best_exit_lane is not None and best_alignment > ALIGNMENT_THRESHOLD:
-            route.append(best_exit_lane)
-            current_lane_id = best_exit_lane
-        else:
-            break
-
-    return route
