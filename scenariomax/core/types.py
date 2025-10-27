@@ -105,6 +105,13 @@ ALL_TYPES = (
     PARTICIPANT_TYPES | LANE_TYPES | ROAD_LINE_TYPES | ROAD_EDGE_TYPES | MAP_FEATURE_TYPES | TRAFFIC_LIGHT_STATES
 )
 
+# ===== Output Formats =====
+FORMAT_TFEXAMPLE = "tfexample"
+FORMAT_JSON = "json"
+FORMAT_PUFFER = "puffer"
+
+SUPPORTED_FORMATS = {FORMAT_TFEXAMPLE, FORMAT_JSON, FORMAT_PUFFER}
+
 
 # ===== Type Checking Functions =====
 def is_participant(obj_type: str) -> bool:

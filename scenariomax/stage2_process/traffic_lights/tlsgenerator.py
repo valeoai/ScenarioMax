@@ -3,8 +3,7 @@ from typing import Any
 
 import numpy as np
 
-from scenariomax.stage2_process.traffic_lights.utils import TLS, Direction, UnionFind
-from scenariomax.stage2_process.traffic_lights.utils.intersection import ApproachingLane
+from scenariomax.stage2_process.traffic_lights.utils import TLS, Direction, UnionFind, ApproachingLane
 
 
 class TLSGenerator:
@@ -556,10 +555,14 @@ class TLSGenerator:
                         # if any vehicle has passed the stopping line a bit and is moving,
                         # this must be a green light
                         # if this incoming lane does not have right turn connection
-                        if not have_right_turn_conn and abs(tt - curr_step) <= 2 and (
-                            veh_state_record.lane_pos_idx >= 0
-                            and veh_state_record.lane_pos_idx < 10
-                            and veh_state_record.speed > 0
+                        if (
+                            not have_right_turn_conn
+                            and abs(tt - curr_step) <= 2
+                            and (
+                                veh_state_record.lane_pos_idx >= 0
+                                and veh_state_record.lane_pos_idx < 10
+                                and veh_state_record.speed > 0
+                            )
                         ):
                             return 0, 0, 0, 0, True
 

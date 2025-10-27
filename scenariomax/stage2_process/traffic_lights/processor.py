@@ -1,8 +1,8 @@
 import copy
 from typing import Any
 
-from scenariomax.stage2_process.traffic_lights.processor.waymonic_tlsgen import WaymonicTLSGenerator
-from scenariomax.stage2_process.traffic_lights.processor.waymonizer import Waymonizer
+from scenariomax.stage2_process.traffic_lights.waymonic_tlsgen import WaymonicTLSGenerator
+from scenariomax.stage2_process.traffic_lights.waymonizer import Waymonizer
 
 
 class ScenarioProcessor(Waymonizer, WaymonicTLSGenerator):

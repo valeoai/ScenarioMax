@@ -100,7 +100,9 @@ def merge_dataset_workers(dataset_dir: str, dataset_name: str) -> str:
     for item in sorted(os.listdir(dataset_dir)):
         dir_path = os.path.join(dataset_dir, item)
         if os.path.isdir(dir_path):
-            worker_tfrecord_files = [os.path.join(dir_path, f) for f in sorted(os.listdir(dir_path)) if f.endswith(".tfrecord")]
+            worker_tfrecord_files = [
+                os.path.join(dir_path, f) for f in sorted(os.listdir(dir_path)) if f.endswith(".tfrecord")
+            ]
             tfrecord_files.extend(worker_tfrecord_files)
             logger.debug(f"Found {len(worker_tfrecord_files)} TFRecord files in worker dir {dir_path}")
 

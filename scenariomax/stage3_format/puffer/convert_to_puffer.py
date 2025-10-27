@@ -71,7 +71,9 @@ def convert(unified_scenario) -> dict:
                 for t in tracks_to_predict
             ]
         else:
-            puffer_metadata["tracks_to_predict"] = [{"track_index": int(t), "difficulty": 0.0} for t in tracks_to_predict]
+            puffer_metadata["tracks_to_predict"] = [
+                {"track_index": int(t), "difficulty": 0.0} for t in tracks_to_predict
+            ]
 
     puffer_scenario = {
         "scenario_id": scenario_id,

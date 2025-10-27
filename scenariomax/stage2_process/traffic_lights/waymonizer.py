@@ -109,9 +109,9 @@ class Waymonizer:
 
         # embde traffic light data into lane features
         for id_, dynamic_state in scenario["dynamic_map_elements"].items():
-            lane = dynamic_state["lane"]
+            lane = dynamic_state["controlled_lane"]
 
-            lane_type = scenario["static_map_elements"][str(lane)]["type"]
+            lane_type = scenario["static_map_elements"][lane]["type"]
 
             if lane_type == types.LANE_BIKE_LANE:
                 continue
@@ -315,14 +315,14 @@ class Waymonizer:
                 else:
                     return "merged-parallel"
 
-            elif (
-                (neighbor.self_end_index - neighbor.self_start_index) / len(feature1.lane.polyline)
-                > self._OVERLAP_PROPORTION_THRESHOLD
-            ) or (
-                (neighbor.neighbor_end_index - neighbor.neighbor_start_index) / len(feature2.lane.polyline)
-                > self._OVERLAP_PROPORTION_THRESHOLD
-            ):
-                return "real"
+            # elif (
+            #     (neighbor.self_end_index - neighbor.self_start_index) / len(feature1.lane.polyline)
+            #     > self._OVERLAP_PROPORTION_THRESHOLD
+            # ) or (
+            #     (neighbor.neighbor_end_index - neighbor.neighbor_start_index) / len(feature2.lane.polyline)
+            #     > self._OVERLAP_PROPORTION_THRESHOLD
+            # ):
+            #     return "real"
             else:
                 return "other"
 
@@ -419,16 +419,16 @@ class Waymonizer:
                     zero_closest_idx = find_polyline_nearest_point(feature.lane.polyline, boundary.polyline[0])
 
                     boundary1 = Boundary(
-                        zero_closest_idx,
-                        lane_start_index,
-                        boundary.type,
+                        # zero_closest_idx,
+                        # lane_start_index,
+                        # boundary.type,
                         boundary.feature_id,
                         polyline1,
                     )
                     boundary2 = Boundary(
-                        lane_end_index,
-                        max_closeset_idx,
-                        boundary.type,
+                        # lane_end_index,
+                        # max_closeset_idx,
+                        # boundary.type,
                         boundary.feature_id,
                         polyline2,
                     )
@@ -438,9 +438,9 @@ class Waymonizer:
                 else:
                     polyline = boundary.polyline[boundary_end_idx : boundary_start_idx + 1][::-1]
                     new_boundary = Boundary(
-                        lane_start_index,
-                        lane_end_index,
-                        boundary.type,
+                        # lane_start_index,
+                        # lane_end_index,
+                        # boundary.type,
                         boundary.feature_id,
                         polyline,
                     )
@@ -451,9 +451,9 @@ class Waymonizer:
                 if boundary_start_idx < boundary_end_idx:
                     polyline = boundary.polyline[boundary_start_idx : boundary_end_idx + 1]
                     new_boundary = Boundary(
-                        lane_start_index,
-                        lane_end_index,
-                        boundary.type,
+                        # lane_start_index,
+                        # lane_end_index,
+                        # boundary.type,
                         boundary.feature_id,
                         polyline,
                     )
@@ -467,16 +467,16 @@ class Waymonizer:
                     zero_closest_idx = find_polyline_nearest_point(feature.lane.polyline, boundary.polyline[0])
 
                     boundary1 = Boundary(
-                        zero_closest_idx,
-                        lane_end_index,
-                        boundary.type,
+                        # zero_closest_idx,
+                        # lane_end_index,
+                        # boundary.type,
                         boundary.feature_id,
                         polyline1,
                     )
                     boundary2 = Boundary(
-                        max_closeset_idx,
-                        lane_end_index,
-                        boundary.type,
+                        # max_closeset_idx,
+                        # lane_end_index,
+                        # boundary.type,
                         boundary.feature_id,
                         polyline2,
                     )
@@ -489,7 +489,8 @@ class Waymonizer:
 
             elif boundary_end_idx < boundary_start_idx:
                 polyline = boundary.polyline[boundary_end_idx : boundary_start_idx + 1][::-1]
-            new_boundary = Boundary(lane_start_index, lane_end_index, boundary.type, boundary.feature_id, polyline)
+            # new_boundary = Boundary(lane_start_index, lane_end_index, boundary.type, boundary.feature_id, polyline)
+            new_boundary = Boundary(boundary.feature_id, polyline)
             return [new_boundary]
 
     def _find_special_intersections(self, type: str) -> list[list[int]]:

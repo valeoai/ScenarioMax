@@ -5,15 +5,17 @@ from typing import Any
 import numpy as np
 
 from scenariomax.core import types
-from scenariomax.stage2_process.traffic_lights.processor.tlsgenerator import TLSGenerator
-from scenariomax.stage2_process.traffic_lights.processor.utils import (
+from scenariomax.stage2_process.traffic_lights.tlsgenerator import TLSGenerator
+from scenariomax.stage2_process.traffic_lights.utils import (
+    TLS,
+    Direction,
     assign_veh_states_to_lane,
     group_lanes_into_ways,
     has_unprotected_left_turns,
     load_veh_states_assignment,
+    points_to_vector,
     save_veh_states_assignment,
 )
-from scenariomax.stage2_process.traffic_lights.utils import TLS, Direction, points_to_vector
 from scenariomax.stage2_process.traffic_lights.utils.intersection import ApproachingLane, InJunctionLane, VehicleState
 from scenariomax.stage2_process.traffic_lights.utils.waymo import (
     LaneCenter,
@@ -79,8 +81,6 @@ class WaymonicTLSGenerator:
             - tuple: Tuple containing intersections, dynamic map states, traffic light data by time,
             and traffic light data by head.
         """
-        print("Generating waymonic traffic light programs...")
-
         intersections: list[list[list[ApproachingLane]]] = []
         tls_data_by_head: dict[int, dict[str, Any]] = {}
         tls_data_by_time = [[] for _ in range(self.T)]

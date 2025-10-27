@@ -17,12 +17,12 @@ Usage:
     scenario = validate_scenario(scenario, strict=True)
 """
 
-from scenariomax.stage2_process.validation.core import (
+from scenariomax.stage2_process.validation.processor import validate_scenario
+from scenariomax.stage2_process.validation.validate import (
     ValidationError,
     soft_validate,
     strict_validate,
 )
-from scenariomax.stage2_process.validation.processor import validate_scenario
 
 
 __all__ = [

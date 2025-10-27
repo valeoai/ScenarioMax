@@ -1,6 +1,6 @@
 from enum import Enum
 
-from scenariomax.stage2_process.traffic_lights.utils import TLS, Pt
+from scenariomax.stage2_process.traffic_lights.utils.generic import TLS, Pt
 
 
 class LaneType(Enum):
@@ -73,40 +73,40 @@ class WaymoLane:
         self.exit_lanes: list[int] = [lane for lane in exit_lanes]
         self.left_neighbors: list[Neighbor] = [
             Neighbor(
-                neighbor["feature_id"],
-                neighbor["self_start_index"],
-                neighbor["self_end_index"],
-                neighbor["neighbor_start_index"],
-                neighbor["neighbor_end_index"],
+                neighbor,
+                # neighbor["self_start_index"],
+                # neighbor["self_end_index"],
+                # neighbor["neighbor_start_index"],
+                # neighbor["neighbor_end_index"],
             )
             for neighbor in left_neighbors
         ]
         self.right_neighbors: list[Neighbor] = [
             Neighbor(
-                neighbor["feature_id"],
-                neighbor["self_start_index"],
-                neighbor["self_end_index"],
-                neighbor["neighbor_start_index"],
-                neighbor["neighbor_end_index"],
+                neighbor,
+                # neighbor["self_start_index"],
+                # neighbor["self_end_index"],
+                # neighbor["neighbor_start_index"],
+                # neighbor["neighbor_end_index"],
             )
             for neighbor in right_neighbors
         ]
 
         self.left_boundaries: list[Boundary] = [
             Boundary(
-                boundary["lane_start_index"],
-                boundary["lane_end_index"],
-                boundary["boundary_type"],
-                boundary["boundary_feature_id"],
+                # boundary["lane_start_index"],
+                # boundary["lane_end_index"],
+                # boundary["boundary_type"],
+                boundary,
             )
             for boundary in left_boundaries
         ]
         self.right_boundaries: list[Boundary] = [
             Boundary(
-                boundary["lane_start_index"],
-                boundary["lane_end_index"],
-                boundary["boundary_type"],
-                boundary["boundary_feature_id"],
+                # boundary["lane_start_index"],
+                # boundary["lane_end_index"],
+                # boundary["boundary_type"],
+                boundary,
             )
             for boundary in right_boundaries
         ]
@@ -119,23 +119,24 @@ class Neighbor:
     def __init__(
         self,
         feature_id: int,
-        self_start_index: int = 0,
-        self_end_index: int = 0,
-        neighbor_start_index: int = 0,
-        neighbor_end_index: int = 0,
+        # self_start_index: int = 0,
+        # self_end_index: int = 0,
+        # neighbor_start_index: int = 0,
+        # neighbor_end_index: int = 0,
     ) -> None:
         self.feature_id: int = int(feature_id)
-        self.self_start_index: int = int(self_start_index)
-        self.self_end_index: int = int(self_end_index)
-        self.neighbor_start_index: int = int(neighbor_start_index)
-        self.neighbor_end_index: int = int(neighbor_end_index)
+        # self.self_start_index: int = int(self_start_index)
+        # self.self_end_index: int = int(self_end_index)
+        # self.neighbor_start_index: int = int(neighbor_start_index)
+        # self.neighbor_end_index: int = int(neighbor_end_index)
 
 
 class Boundary:
-    def __init__(self, lane_start_index, lane_end_index, type, feature_id, polyline: list = []) -> None:
-        self.lane_start_index: int = int(lane_start_index)
-        self.lane_end_index: int = int(lane_end_index)
-        self.type: int = type
+    # def __init__(self, lane_start_index, lane_end_index, type, feature_id, polyline: list = []) -> None:
+    def __init__(self, feature_id, polyline: list = []) -> None:
+        # self.lane_start_index: int = int(lane_start_index)
+        # self.lane_end_index: int = int(lane_end_index)
+        # self.type: int = type
         """
         type: 0 - unknown | road edges
         1~8 different road lines

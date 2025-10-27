@@ -1,0 +1,138 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# ScenarioMax Configuration File (Simplified Pipeline)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Architecture:
+#   - Core function: process_single_scenario() handles one file at a time
+#   - Parallelization: Automatic via joblib.Parallel (no complex worker management)
+#   - Clean & Simple: ~676 lines of code (down from 1600+ lines)
+#
+# Usage Examples:
+#   # Stage 1: Convert raw → unified
+#   scenariomax command=convert datasets.waymo=/data/waymo output.dst=/output/unified
+#
+#   # Stage 2: Process unified scenarios
+#   scenariomax command=process input_path=/unified output.dst=/processed \
+#               processing.processors=[validation,traffic_lights]
+#
+#   # Stage 3: Format unified → target
+#   scenariomax command=format input_path=/unified output.dst=/output \
+#               output.format=puffer format_options.processors=[traffic_lights]
+#
+#   # Full pipeline (all 3 stages)
+#   scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
+#               output.format=tfexample processing.processors=[validation] \
+#               pipeline.save_intermediate=false
+#
+# ═══════════════════════════════════════════════════════════════════════════
+defaults:
+  - _self_
+  - override hydra/hydra_logging: disabled
+  - override hydra/job_logging: disabled
+
+
+# Command to execute (convert, process, format, pipeline, viz)
+command: pipeline
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Dataset Sources
+# ═══════════════════════════════════════════════════════════════════════════
+datasets:
+  waymo: null              # Path to Waymo dataset
+  nuplan: null             # Path to nuPlan dataset
+  nuscenes: null           # Path to nuScenes dataset (WIP)
+  argoverse2: null         # Path to Argoverse2 dataset (WIP)
+  openscenes: null         # Path to OpenScenes dataset (uses nuplan loader)
+
+# Dataset-specific options
+dataset_options:
+  split: "v1.0-trainval"                 # nuScenes split
+  openscenes_metadata_src: null          # OpenScenes metadata directory
+  nuplan_direct_from_logs: false         # Parse nuPlan directly from logs
+  num_files: null                        # Limit number of files to process (useful for testing)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Input/Output Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+input_path: null                         # Input directory (for process/format/viz commands)
+
+output:
+  dst: "./output"                        # Base output directory
+  format: "tfexample"                    # Target format: tfexample, json, puffer
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Stage 2: Processing Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+processing:
+  # Processor selection (use processor names as strings)
+  # Available processors: validation, traffic_lights
+  processors: []                         # List of processor names (e.g., [validation, traffic_lights])
+
+  # Processor-specific configurations
+  processor_configs:
+    validation:
+      strict: false                      # Use strict validation (physics checks)
+      fail_on_error: false               # Raise exception on validation failure
+      validation_level: 2                # Strictness level (1-4) for strict validation
+      speed_limit_tolerance: 0.12        # Relative tolerance for speed limit checks
+      position_jump_threshold: 50.0      # Max position jump between timesteps (meters)
+      velocity_tolerance: 2.0            # Tolerance for velocity-position consistency (m/s)
+      heading_tolerance_deg: 30.0        # Tolerance for heading-velocity alignment (degrees)
+
+    traffic_lights: {}                   # Traffic lights processor config (no options currently)
+
+  # Processing behavior
+  save_output: true                      # Save processed scenarios (false for validation-only)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Stage 3: Format Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+format_options:
+  # TFRecord-specific options
+  shard: 1                               # Number of output shards (tfexample only)
+  tfrecord_name: "training"              # TFRecord filename (default: training)
+
+  # Optional: Apply processors before conversion to target format
+  # This allows processing during Stage 3 without running Stage 2 separately
+  processors: []                         # List of processor names (e.g., [validation, traffic_lights])
+  processor_configs: {}                  # Processor-specific configurations (same structure as processing.processor_configs)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Visualization Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+visualization:
+  output_format: "png"                   # Output format: png (first timestep) or video (animated)
+  fps: 10                                # Frames per second for video output
+  max_scenarios: null                    # Maximum number of scenarios to visualize
+  show_trajectory: true                  # Show trajectory history
+  scatter_map: false                     # Render road map as scattered points
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Pipeline Configuration (Full Pipeline: All 3 Stages)
+# ═══════════════════════════════════════════════════════════════════════════
+pipeline:
+  # Pipeline mode options
+  save_intermediate: false               # If true: Save intermediate unified & processed pickles (for debugging)
+                                         # If false: In-memory streaming (faster, no intermediate files)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Execution Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+execution:
+  num_workers: 8                         # Number of parallel workers (joblib.Parallel)
+                                         # Each worker processes files independently using process_single_scenario()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Logging Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+logging:
+  level: "INFO"                          # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_file: null                         # Log file path (null for stdout only)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Hydra Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+hydra:
+  output_subdir: null
+  run:
+    dir: .

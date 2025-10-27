@@ -141,7 +141,9 @@ def merge_multiple_datasets(output_dir: str, merged_filename: str = None) -> Non
         if os.path.isdir(os.path.join(output_dir, d))
     ]
 
-    logger.info(f"Found {len(dataset_dirs)} dataset directories to merge: {[os.path.basename(d) for d in dataset_dirs]}")
+    logger.info(
+        f"Found {len(dataset_dirs)} dataset directories to merge: {[os.path.basename(d) for d in dataset_dirs]}",
+    )
 
     if not dataset_dirs:
         logger.warning("No dataset directories found to merge")

@@ -1,4 +1,5 @@
-from scenariomax.stage2_process.traffic_lights.utils import TLS, Direction, Pt, classify_direction
+from .generic import TLS, Direction, Pt
+from .geometry import classify_direction
 
 
 class VehicleState:
