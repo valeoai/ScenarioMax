@@ -32,6 +32,7 @@ def process_single_scenario(
     process_func: Callable | None = None,
     format_func: Callable | None = None,
     output_path: str | None = None,
+    target_format: str | None = None,
 ) -> dict[str, Any]:
     """
     Process a single scenario through the pipeline.
@@ -48,6 +49,7 @@ def process_single_scenario(
         process_func: Optional Stage 2 processor (unified → unified)
         format_func: Optional Stage 3 formatter (unified → target)
         output_path: Optional path to save result
+        target_format: Optional target format string (tfexample, json, puffer)
 
     Returns:
         Dict with keys: 'scenario' (result), 'success' (bool), 'error' (str if failed)
@@ -67,23 +69,28 @@ def process_single_scenario(
     if process_func:
         scenario = process_func(scenario)
 
+    scenario_id = scenario["id"]
+
     # Stage 3: Format unified → target (optional)
     if format_func:
         scenario = format_func(scenario)
 
     # Save result if output_path specified
     if output_path:
-        _save_result(scenario, output_path, format_func)
+        _save_result(scenario, scenario_id, output_path, format_func, target_format)
 
     return {"scenario": scenario, "success": True, "error": None}
 
 
-
-def _save_result(scenario: Any, output_path: str, format_func: Callable | None) -> None:
+def _save_result(
+    scenario: Any,
+    scenario_id: str,
+    output_path: str,
+    format_func: Callable | None,
+    target_format: str | None,
+) -> None:
     """Save result based on format."""
     os.makedirs(output_path, exist_ok=True)
-
-    scenario_id = scenario["id"]
 
     # If no format function, save as pickle
     if format_func is None:
@@ -93,15 +100,17 @@ def _save_result(scenario: Any, output_path: str, format_func: Callable | None) 
         return
 
     # For TFExample, we need special handling (write to TFRecord)
-    if isinstance(scenario, bytes):
+    if target_format == FORMAT_TFEXAMPLE:
         # This is a serialized TFExample
         tfrecord_file = os.path.join(output_path, f"{scenario_id}.tfrecord")
         from scenariomax.tf_utils import get_tensorflow
 
         tf = get_tensorflow()
+        scenario = tf.train.Example(features=tf.train.Features(feature=scenario))
+
         with tf.io.TFRecordWriter(tfrecord_file) as writer:
-            writer.write(scenario)
-    elif isinstance(scenario, dict):
+            writer.write(scenario.SerializeToString())
+    elif target_format in [FORMAT_JSON, FORMAT_PUFFER]:
         # This is JSON or Puffer format
         import json
 
@@ -387,6 +396,7 @@ def format_unified_to_target(
             process_func=process_all if processors else None,
             format_func=format_func,
             output_path=output_path,
+            target_format=format,
         )
         for pkl_file in tqdm(pickle_files, desc="Formatting", unit=" file")
     )
@@ -436,11 +446,7 @@ def _postprocess_tfexample(output_path: str, format_options: dict) -> None:
         all_tfrecord_files = []
         for subdir in subdirs:
             subdir_path = os.path.join(output_path, subdir)
-            tfrecord_files = [
-                os.path.join(subdir_path, f)
-                for f in os.listdir(subdir_path)
-                if f.endswith(".tfrecord")
-            ]
+            tfrecord_files = [os.path.join(subdir_path, f) for f in os.listdir(subdir_path) if f.endswith(".tfrecord")]
             all_tfrecord_files.extend(tfrecord_files)
             logger.info(f"  {subdir}: {len(tfrecord_files)} TFRecord files")
 
@@ -455,6 +461,7 @@ def _postprocess_tfexample(output_path: str, format_options: dict) -> None:
             num_shards = format_options.get("shard", 1)
             if num_shards > 1:
                 from scenariomax.stage3_format.tfexample import shard
+
                 logger.info(f"Sharding into {num_shards} shards")
                 shard.shard_tfrecord(
                     src=output_path,
@@ -673,6 +680,7 @@ def process_scenarios(
                 process_func=process_all,
                 format_func=format_func,
                 output_path=dataset_output,
+                target_format=format,
             )
             for scenario in tqdm_iterator
         )
