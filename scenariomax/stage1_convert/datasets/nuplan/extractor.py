@@ -238,9 +238,10 @@ def extract_dynamic_map_elements(nuplan_scenario: NuPlanScenario, center: list[f
     # Fill in traffic light states for each frame
     for frame_idx, frame_data in enumerate(traffic_light_frames):
         for lane_id, status in frame_data.items():
-            if lane_id in dynamic_map_elements:
+            lane_id_int = int(lane_id)
+            if lane_id_int in dynamic_map_elements:
                 unified_status = nuplan_types.get_traffic_light_state(status)
-                dynamic_map_elements[lane_id]["states"][frame_idx] = unified_status
+                dynamic_map_elements[lane_id_int]["states"][frame_idx] = unified_status
 
     return dynamic_map_elements
 
@@ -344,6 +345,8 @@ def extract_static_map_elements(
                         if layer == SemanticMapLayer.ROADBLOCK
                         else []
                     ),
+                    "left_boundaries": [],
+                    "right_boundaries": [],
                 }
 
                 # Process lane boundaries (only for roadblocks)

@@ -151,7 +151,8 @@ class LaneCenter:
         id,
         lane,
         needs_stop: bool = False,
-        tl_state_record: list[WaymonicTLS] = [WaymonicTLS.ABSENT for _ in range(91)],
+        tl_state_record: list[WaymonicTLS] = [],
+        length: int = 0,
     ) -> None:
         self.id: int = id
         self.lane: WaymoLane = WaymoLane(
@@ -170,4 +171,8 @@ class LaneCenter:
         self.needs_stop: bool = needs_stop
         self.to_SUMO_edge: int = None
         self.to_SUMO_lane: int = None
+
+        if len(tl_state_record) == 0:
+            tl_state_record = [WaymonicTLS.ABSENT for _ in range(length)]
+
         self.record_tls: list[WaymonicTLS] = tl_state_record[:]  # -1 when there is no associated tl

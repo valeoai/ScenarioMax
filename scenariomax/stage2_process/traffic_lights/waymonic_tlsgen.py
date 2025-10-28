@@ -81,6 +81,7 @@ class WaymonicTLSGenerator:
             - tuple: Tuple containing intersections, dynamic map states, traffic light data by time,
             and traffic light data by head.
         """
+        self.scenario_length = end_step
         intersections: list[list[list[ApproachingLane]]] = []
         tls_data_by_head: dict[int, dict[str, Any]] = {}
         tls_data_by_time = [[] for _ in range(self.T)]
@@ -95,6 +96,7 @@ class WaymonicTLSGenerator:
                     self.scenario["dynamic_agents"],
                     lane_center_matrix,
                     row_to_lc_id,
+                    end_step=self.scenario_length,
                 )
                 if veh_states_file:
                     save_veh_states_assignment(veh_assignment, veh_states_file)
@@ -205,6 +207,7 @@ class WaymonicTLSGenerator:
                 shape=self.lanecenters[lc_id].lane.polyline,
                 record_vehs=veh_assignment[str(lc_id)],
                 id=lc_id,
+                length=self.scenario_length,
             )
             for in_junction_lc_id in self.lanecenters[lc_id].lane.exit_lanes:
                 injunction_lane = InJunctionLane(
@@ -212,6 +215,7 @@ class WaymonicTLSGenerator:
                     record_tls=self.lanecenters[in_junction_lc_id].record_tls,
                     record_vehs=veh_assignment[str(in_junction_lc_id)],
                     id=in_junction_lc_id,
+                    length=self.scenario_length,
                 )
                 approaching.injunction_lanes.append(injunction_lane)
             approaching_lanes.append(approaching)

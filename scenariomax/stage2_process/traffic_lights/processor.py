@@ -15,7 +15,10 @@ class ScenarioProcessor(Waymonizer, WaymonicTLSGenerator):
 def add_traffic_lights_to_scenario(unified_scenario: dict[str, Any]) -> dict[str, Any]:
     sp = ScenarioProcessor(unified_scenario)
 
-    dynamic_map_states = sp.generate_waymonic_tls(return_data="dynamic_states")
+    dynamic_map_states = sp.generate_waymonic_tls(
+        return_data="dynamic_states",
+        end_step=unified_scenario["metadata"]["length"],
+    )
 
     # after that, you can replace the old dynamic_map_states object with the new one
     scenario_copied = copy.deepcopy(unified_scenario)

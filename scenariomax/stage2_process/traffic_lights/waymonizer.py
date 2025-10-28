@@ -94,7 +94,7 @@ class Waymonizer:
         for _id, feature in scenario["static_map_elements"].items():
             _id = int(_id)
             if feature["type"] in [types.LANE_SURFACE_STREET, types.LANE_FREEWAY]:
-                self.lanecenters[_id] = LaneCenter(_id, feature)
+                self.lanecenters[_id] = LaneCenter(_id, feature, length=scenario["metadata"]["length"])
             elif types.is_road_edge(feature["type"]) or types.is_road_line(feature["type"]):
                 roadedge_roadline_features[_id] = feature
 

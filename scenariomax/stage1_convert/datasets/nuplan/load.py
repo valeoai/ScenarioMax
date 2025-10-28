@@ -19,14 +19,15 @@ NuPlanEgoType = TrackedObjectType.EGO
 
 NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 
+MAPS_PATH = os.path.join(NUPLAN_PACKAGE_PATH, "maps")
 
 def get_nuplan_scenarios(
     data_path,
-    maps_path,
     num_files: int | None = None,
     logs: list | None = None,
     builder="nuplan_mini",
-) -> list[NuPlanScenario]:
+    **kwargs,
+    ) -> list[NuPlanScenario]:
     """Gets NuPlan scenarios based on provided parameters.
 
     Retrieves scenarios from the NuPlan dataset using the specified parameters.
@@ -60,7 +61,7 @@ def get_nuplan_scenarios(
         f"scenario_builder={builder}",
         "scenario_builder.scenario_mapping.subsample_ratio_override=0.5",  # 10 hz
         f"scenario_builder.data_root={data_path}",
-        f"scenario_builder.map_root={maps_path}",
+        f"scenario_builder.map_root={os.environ.get('NUPLAN_MAPS_ROOT', None)}",
         # filter
         "scenario_filter=all_scenarios",  # simulate only one log
         "scenario_filter.remove_invalid_goals=true",
