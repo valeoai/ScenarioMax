@@ -73,17 +73,17 @@ def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length
             "id": idx,  # Use int ID directly
             "type": agent_type_int,
             "states": {
-                "xyz": position.astype(np.float32),
-                "heading": heading.astype(np.float32),
-                "velocity": velocity.astype(np.float32),
-                "length": agent_length.astype(np.float32),
-                "width": width.astype(np.float32),
-                "height": height.astype(np.float32),
-                "valid": valid.astype(bool),
+                "xyz": position,
+                "heading": heading,
+                "velocity": velocity,
+                "length": agent_length,
+                "width": width,
+                "height": height,
+                "valid": valid,
             },
             "routes": agent_routes,
             "mark_as_expert": mark_as_expert,
-            "total_distance_traveled": float(total_distance),
+            "total_distance_traveled": total_distance,
         }
 
         puffer_agents.append(puffer_agent)

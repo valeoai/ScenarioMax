@@ -45,8 +45,8 @@ def convert_road_map_elements(static_map_elements: dict) -> list[dict]:
         puffer_element = {
             "id": element_id,  # Use int ID directly
             "type": element_type_int,
-            "xyz": polyline.astype(np.float32),
-            "dir_xyz": dir_xyz.astype(np.float32),
+            "xyz": polyline,
+            "dir_xyz": dir_xyz,
         }
 
         # Add lane-specific attributes if this is a lane

@@ -43,7 +43,7 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, length: int) ->
         puffer_element = {
             "id": element_id,
             "type": element_type_int,
-            "xyz": position.astype(np.float32),
+            "xyz": position,
             "states": states_int,
         }
 

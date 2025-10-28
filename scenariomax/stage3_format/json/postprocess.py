@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from scenariomax import logger_utils
 from scenariomax.core.unified_scenario import UnifiedScenario
+from scenariomax.core.utils import NumpyEncoder
 from scenariomax.stage3_format.json import convert_to_json
 
 
@@ -65,7 +66,7 @@ def postprocess_gpudrive(
                 json_file_path = os.path.join(output_path, f"{scenario_id}.json")
 
                 with open(json_file_path, "w") as f:
-                    json.dump(scenario_json, f, indent=2)
+                    json.dump(scenario_json, f, indent=2, cls=NumpyEncoder)
 
                 processed_count += 1
                 pbar.update(1)

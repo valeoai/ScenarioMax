@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from scenariomax import logger_utils
 from scenariomax.core.unified_scenario import UnifiedScenario
+from scenariomax.core.utils import NumpyEncoder
 from scenariomax.stage3_format.puffer import convert_to_puffer
 
 
@@ -73,7 +74,7 @@ def postprocess_puffer(
                 json_file_path = os.path.join(output_path, f"{scenario_id}.json")
 
                 with open(json_file_path, "w") as f:
-                    json.dump(puffer_scenario, f, indent=2)
+                    json.dump(puffer_scenario, f, indent=2, cls=NumpyEncoder)
 
                 processed_count += 1
                 pbar.update(1)

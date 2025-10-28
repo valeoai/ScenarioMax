@@ -9,7 +9,7 @@ Output is JSON format with numpy arrays converted to lists.
 import numpy as np
 
 from scenariomax import logger_utils
-from scenariomax.stage3_format.puffer.converter import agents, roadgraph, traffic_lights, utils
+from scenariomax.stage3_format.puffer.converter import agents, roadgraph, traffic_lights
 
 
 logger = logger_utils.get_logger(__name__)
@@ -52,7 +52,7 @@ def convert(unified_scenario) -> dict:
         "dataset_name": metadata.get("dataset_name", ""),
         "dataset_version": metadata.get("dataset_version", ""),
         "length": metadata.get("length", 0),
-        "timesteps": metadata.get("timesteps", np.array([])).astype(np.float32),
+        "timesteps": metadata.get("timesteps", np.array([])),
         "ego_id": metadata.get("ego_id", ""),
     }
 
@@ -81,8 +81,5 @@ def convert(unified_scenario) -> dict:
         "traffic_control_elements": traffic_control_elements,
         "metadata": puffer_metadata,
     }
-
-    # Convert all numpy arrays to lists for JSON serialization
-    puffer_scenario = utils.convert_numpy_to_json(puffer_scenario)
 
     return puffer_scenario

@@ -16,7 +16,7 @@ def convert_waymo_scenario(data: Any, version: str) -> UnifiedScenario:
     waymo_scenario = scenario_pb2.Scenario()
     waymo_scenario.ParseFromString(data)
 
-    scenario_id = waymo_scenario.scenario_id.split(waymo_utils.SPLIT_KEY)[0]
+    scenario_id = waymo_scenario.scenario_id
 
     # Create unified scenario
     scenario = UnifiedScenario(scenario_id=scenario_id, dataset_name="waymo", dataset_version=version)

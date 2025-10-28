@@ -16,6 +16,7 @@ from tqdm import tqdm
 
 from scenariomax import dataset_registry, logger_utils
 from scenariomax.core.types import FORMAT_JSON, FORMAT_PUFFER, FORMAT_TFEXAMPLE, SUPPORTED_FORMATS
+from scenariomax.core.utils import NumpyEncoder
 
 
 logger = logger_utils.get_logger(__name__)
@@ -116,7 +117,7 @@ def _save_result(
 
         json_file = os.path.join(output_path, f"{scenario_id}.json")
         with open(json_file, "w") as f:
-            json.dump(scenario, f, indent=2)
+            json.dump(scenario, f, indent=2, cls=NumpyEncoder)
     else:
         # Fallback to pickle
         pkl_file = os.path.join(output_path, f"{scenario_id}.pkl")

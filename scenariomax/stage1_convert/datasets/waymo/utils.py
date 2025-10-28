@@ -1,9 +1,6 @@
 import numpy as np
 
 
-SPLIT_KEY = "|"
-
-
 def convert_values_to_str(data_dict: dict) -> None:
     """Convert all values in the dictionary to strings in-place."""
     for key in data_dict:
@@ -17,6 +14,6 @@ def compute_polygon(message):
     y = [i.y for i in message]
     z = [i.z for i in message]
 
-    coord = np.stack((x, y, z), axis=1).astype("float32")
+    coord = np.stack((x, y, z), axis=1)
 
     return coord

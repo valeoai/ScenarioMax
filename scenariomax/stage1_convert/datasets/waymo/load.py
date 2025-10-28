@@ -1,8 +1,6 @@
 import os
 
-import scenariomax.stage1_convert.datasets.waymo.waymo_protos.scenario_pb2 as scenario_pb2
 from scenariomax import logger_utils
-from scenariomax.stage1_convert.datasets.waymo import utils as waymo_utils
 from scenariomax.tf_utils import get_tensorflow
 
 
