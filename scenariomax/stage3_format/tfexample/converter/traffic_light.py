@@ -42,7 +42,7 @@ def get_traffic_lights_state(scenario, debug=False):
             if len(scenario.dynamic_map_elements[k]["position"]) > 2
             else -1.0
         )
-        traffic_lights_state.current_id[i] = scenario.dynamic_map_elements[k]["lane"]
+        traffic_lights_state.current_id[i] = scenario.dynamic_map_elements[k]["controlled_lane"]
 
         states = scenario.dynamic_map_elements[k]["states"][: constants.NUM_TS_ALL]
         states_int = [from_traffic_light_state_to_int(state) for state in states]
