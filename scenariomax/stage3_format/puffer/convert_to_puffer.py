@@ -51,7 +51,6 @@ def convert(unified_scenario) -> dict:
     puffer_metadata = {
         "dataset_name": metadata.get("dataset_name", ""),
         "dataset_version": metadata.get("dataset_version", ""),
-        "source_file": metadata.get("source_file", ""),
         "length": metadata.get("length", 0),
         "timesteps": metadata.get("timesteps", np.array([])).astype(np.float32),
         "ego_id": metadata.get("ego_id", ""),

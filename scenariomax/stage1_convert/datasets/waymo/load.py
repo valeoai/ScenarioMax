@@ -29,7 +29,6 @@ def get_waymo_scenarios(data_path, start_index: int = 0, num_files: int | None =
 
     return all_result
 
-
 def preprocess_waymo_scenarios(files):
     """Convert the waymo files into scenario_pb2. This happens in each worker.
 

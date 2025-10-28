@@ -9,7 +9,7 @@ from scenariomax.tf_utils import get_tensorflow
 logger = logger_utils.get_logger(__name__)
 
 
-def merge_tfrecord_files(output_dir: str, merged_filename: str) -> None:
+def merge_tfrecord_files(tfrecord_files: list, merged_file_path: str) -> None:
     """
     Merge TFRecord files from multiple directories into a single file and clean up.
 
@@ -21,18 +21,10 @@ def merge_tfrecord_files(output_dir: str, merged_filename: str) -> None:
 
     # Get TensorFlow with optimized configuration
     tf = get_tensorflow()
-    tfrecord_files = []
-
-    for out_dir in os.listdir(output_dir):
-        dir_path = os.path.join(output_dir, out_dir)
-        if os.path.isdir(dir_path):
-            list_dir = os.listdir(dir_path)
-            tfrecord_files += [os.path.join(dir_path, f) for f in list_dir if f.endswith(".tfrecord")]
 
     logger.info(f"Found {len(tfrecord_files)} TFRecord files to merge")
 
     # Define the path for the merged TFRecord file
-    merged_file_path = os.path.join(output_dir, merged_filename)
     logger.info(f"Merging files into: {merged_file_path}")
 
     total_records = 0
