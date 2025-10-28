@@ -32,7 +32,6 @@ def process_single_scenario(
     process_func: Callable | None = None,
     format_func: Callable | None = None,
     output_path: str | None = None,
-    scenario_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Process a single scenario through the pipeline.
@@ -49,7 +48,6 @@ def process_single_scenario(
         process_func: Optional Stage 2 processor (unified → unified)
         format_func: Optional Stage 3 formatter (unified → target)
         output_path: Optional path to save result
-        scenario_id: Optional ID for naming output files
 
     Returns:
         Dict with keys: 'scenario' (result), 'success' (bool), 'error' (str if failed)
@@ -75,27 +73,24 @@ def process_single_scenario(
 
     # Save result if output_path specified
     if output_path:
-        _save_result(scenario, output_path, scenario_id, format_func)
+        _save_result(scenario, output_path, format_func)
 
     return {"scenario": scenario, "success": True, "error": None}
 
 
 
-def _save_result(scenario: Any, output_path: str, scenario_id: str | None, format_func: Callable | None) -> None:
+def _save_result(scenario: Any, output_path: str, format_func: Callable | None) -> None:
     """Save result based on format."""
     os.makedirs(output_path, exist_ok=True)
 
+    scenario_id = scenario["id"]
+
     # If no format function, save as pickle
     if format_func is None:
-        scenario_id = scenario_id or scenario.get("id", "scenario")
         pkl_file = os.path.join(output_path, f"{scenario_id}.pkl")
         with open(pkl_file, "wb") as f:
             pickle.dump(scenario, f)
         return
-
-    # If format function exists, determine output type
-    # TFExample goes to TFRecord, JSON/Puffer go to .json files
-    scenario_id = scenario_id or "scenario"
 
     # For TFExample, we need special handling (write to TFRecord)
     if isinstance(scenario, bytes):
@@ -196,9 +191,8 @@ def convert_raw_to_unified(
                 input_data=scenario,
                 convert_func=convert_func,
                 output_path=dataset_output,
-                scenario_id=f"scenario_{idx}",
             )
-            for idx, scenario in enumerate(tqdm_iterator)
+            for scenario in tqdm_iterator
         )
 
         # Count successes/failures
@@ -286,7 +280,6 @@ def process_unified_scenarios(
             input_data=pkl_file,
             process_func=process_all,
             output_path=output_path if save_output else None,
-            scenario_id=os.path.splitext(os.path.basename(pkl_file))[0],
         )
         for pkl_file in tqdm(pickle_files, desc="Processing", unit=" file")
     )
@@ -394,7 +387,6 @@ def format_unified_to_target(
             process_func=process_all if processors else None,
             format_func=format_func,
             output_path=output_path,
-            scenario_id=os.path.splitext(os.path.basename(pkl_file))[0],
         )
         for pkl_file in tqdm(pickle_files, desc="Formatting", unit=" file")
     )
@@ -681,9 +673,8 @@ def process_scenarios(
                 process_func=process_all,
                 format_func=format_func,
                 output_path=dataset_output,
-                scenario_id=f"scenario_{idx}",
             )
-            for idx, scenario in enumerate(tqdm_iterator)
+            for scenario in tqdm_iterator
         )
 
         # Count successes/failures
