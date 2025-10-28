@@ -54,35 +54,31 @@ def process_single_scenario(
     Returns:
         Dict with keys: 'scenario' (result), 'success' (bool), 'error' (str if failed)
     """
-    try:
-        # Load if input is a file path
-        if isinstance(input_data, str) and input_data.endswith(".pkl"):
-            with open(input_data, "rb") as f:
-                scenario = pickle.load(f)
-        else:
-            scenario = input_data
+    # Load if input is a file path
+    if isinstance(input_data, str) and input_data.endswith(".pkl"):
+        with open(input_data, "rb") as f:
+            scenario = pickle.load(f)
+    else:
+        scenario = input_data
 
-        # Stage 1: Convert raw → unified (optional)
-        if convert_func:
-            scenario = convert_func(scenario)
+    # Stage 1: Convert raw → unified (optional)
+    if convert_func:
+        scenario = convert_func(scenario)
 
-        # Stage 2: Process unified → unified (optional)
-        if process_func:
-            scenario = process_func(scenario)
+    # Stage 2: Process unified → unified (optional)
+    if process_func:
+        scenario = process_func(scenario)
 
-        # Stage 3: Format unified → target (optional)
-        if format_func:
-            scenario = format_func(scenario)
+    # Stage 3: Format unified → target (optional)
+    if format_func:
+        scenario = format_func(scenario)
 
-        # Save result if output_path specified
-        if output_path:
-            _save_result(scenario, output_path, scenario_id, format_func)
+    # Save result if output_path specified
+    if output_path:
+        _save_result(scenario, output_path, scenario_id, format_func)
 
-        return {"scenario": scenario, "success": True, "error": None}
+    return {"scenario": scenario, "success": True, "error": None}
 
-    except Exception as e:
-        logger.error(f"Error processing scenario {scenario_id}: {e}")
-        return {"scenario": None, "success": False, "error": str(e)}
 
 
 def _save_result(scenario: Any, output_path: str, scenario_id: str | None, format_func: Callable | None) -> None:
@@ -363,16 +359,17 @@ def format_unified_to_target(
                 scenario = processor_fn(scenario)
         return scenario
 
-    # Create format function based on target
+    # Create format function
     if format == FORMAT_TFEXAMPLE:
         from scenariomax.stage3_format.tfexample import convert_to_tfexample
 
         def format_func(s):
-            return convert_to_tfexample(s).SerializeToString()
+            return convert_to_tfexample.convert(s)
     elif format == FORMAT_JSON:
         from scenariomax.stage3_format.json import convert_to_json
 
-        format_func = convert_to_json
+        def format_func(s):
+            return convert_to_json.convert(s)
     elif format == FORMAT_PUFFER:
         from scenariomax.stage3_format.puffer import convert_to_puffer
 
@@ -660,11 +657,12 @@ def process_scenarios(
             from scenariomax.stage3_format.tfexample import convert_to_tfexample
 
             def format_func(s):
-                return convert_to_tfexample(s).SerializeToString()
+                return convert_to_tfexample.convert(s)
         elif format == FORMAT_JSON:
             from scenariomax.stage3_format.json import convert_to_json
 
-            format_func = convert_to_json
+            def format_func(s):
+                return convert_to_json.convert(s)
         elif format == FORMAT_PUFFER:
             from scenariomax.stage3_format.puffer import convert_to_puffer
 
