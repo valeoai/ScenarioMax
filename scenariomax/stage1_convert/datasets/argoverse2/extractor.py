@@ -52,7 +52,6 @@ def convert_av2_scenario(scenario, version):
     _scenario[description.METADATA][description.SDC_ID] = "AV"
     _scenario[description.METADATA]["dataset"] = "av2"
     _scenario[description.METADATA]["scenario_id"] = scenario.scenario_id
-    _scenario[description.METADATA]["source_file"] = scenario.scenario_id
     _scenario[description.METADATA]["track_length"] = track_length
 
     # === Waymo specific data. Storing them here ===

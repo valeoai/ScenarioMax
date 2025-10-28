@@ -46,13 +46,7 @@ def preprocess_waymo_scenarios(files):
         file_path = os.path.join(file)
         if ("tfrecord" not in file_path) or (not os.path.isfile(file_path)):
             continue
-        for data in tf.data.TFRecordDataset(file_path, compression_type="").as_numpy_iterator():
-            scenario = scenario_pb2.Scenario()
-            scenario.ParseFromString(data)
-            # a trick for loging file name
-            scenario.scenario_id = scenario.scenario_id + waymo_utils.SPLIT_KEY + file
-
-            yield scenario
+        yield from tf.data.TFRecordDataset(file_path, compression_type="").as_numpy_iterator()
 
 
 def count_waymo_scenarios(files):

@@ -63,7 +63,6 @@ class UnifiedScenario(dict):
             "dataset_name": str,          # Source dataset name
             "dataset_version": str,       # Dataset version
             "scenario_id": str,           # Original scenario identifier
-            "source_file": str,           # Original source file name
             "length": int,                # Number of timesteps
             "timesteps": np.ndarray,      # Timestamp array (length,)
             "ego_id": int,                # Self-driving car ID

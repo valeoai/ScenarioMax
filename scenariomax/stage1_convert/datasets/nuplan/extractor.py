@@ -60,7 +60,6 @@ def convert_nuplan_scenario(nuplan_scenario: NuPlanScenario, version: str) -> Un
         {
             # General metadata
             "scenario_id": scenario_id,
-            "source_file": nuplan_scenario.log_name,
             "length": nuplan_scenario.get_number_of_iterations(),
             "ego_id": EGO_ID,
             "timesteps": np.array(

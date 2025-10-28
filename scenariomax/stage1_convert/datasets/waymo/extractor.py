@@ -2,6 +2,7 @@ from typing import Any
 
 import numpy as np
 
+import scenariomax.stage1_convert.datasets.waymo.waymo_protos.scenario_pb2 as scenario_pb2
 from scenariomax.core import types
 from scenariomax.core.unified_scenario import UnifiedScenario
 from scenariomax.stage1_convert.datasets import utils as converter_utils
@@ -9,9 +10,12 @@ from scenariomax.stage1_convert.datasets.waymo import types as waymo_types
 from scenariomax.stage1_convert.datasets.waymo import utils as waymo_utils
 
 
-def convert_waymo_scenario(waymo_scenario: Any, version: str) -> UnifiedScenario:
+def convert_waymo_scenario(data: Any, version: str) -> UnifiedScenario:
     """Convert Waymo scenario to unified format."""
-    # Extract scenario ID from Waymo scenario
+    # Unserialize scenario from bytes
+    waymo_scenario = scenario_pb2.Scenario()
+    waymo_scenario.ParseFromString(data)
+
     scenario_id = waymo_scenario.scenario_id.split(waymo_utils.SPLIT_KEY)[0]
 
     # Create unified scenario
@@ -32,7 +36,6 @@ def convert_waymo_scenario(waymo_scenario: Any, version: str) -> UnifiedScenario
         {
             # General metadata
             "scenario_id": scenario_id,
-            "source_file": waymo_scenario.scenario_id.split(waymo_utils.SPLIT_KEY)[1],
             "length": len(waymo_scenario.timestamps_seconds),
             "ego_id": ego_id,
             "timesteps": np.array(waymo_scenario.timestamps_seconds, dtype=np.float32),

@@ -28,7 +28,6 @@ _REQUIRED_TOP_LEVEL_KEYS = {"id", "dynamic_agents", "static_map_elements", "dyna
 _REQUIRED_METADATA_KEYS = {"dataset_name", "dataset_version", "length", "timesteps", "ego_id"}
 _OPTIONAL_METADATA_KEYS = {
     "scenario_id",
-    "source_file",
     "current_frame_index",
     "sdc_track_index",
     "objects_of_interest",

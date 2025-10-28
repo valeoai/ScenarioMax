@@ -60,7 +60,6 @@ def convert(unified_scenario):
         sdc_index = [index for index, object in enumerate(objects) if object["is_sdc"]]
         metadata = {
             "sdc_track_index": sdc_index[0],
-            "log_name": metadata["source_file"],
             # "ts": metadata["timesteps"],
             "initial_lidar_timestamp": metadata["initial_lidar_timestamp"],
             "map_name": metadata["map_name"],
@@ -74,7 +73,6 @@ def convert(unified_scenario):
             "dataset_name": metadata.get("dataset_name", ""),
             "dataset_version": metadata.get("dataset_version", ""),
             "scenario_id": metadata.get("scenario_id", scenario_id),
-            "source_file": metadata.get("source_file", ""),
             "length": metadata.get("length", 0),
             "timesteps": metadata.get("timesteps", []),
             "ego_id": metadata.get("ego_id", ""),
