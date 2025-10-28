@@ -81,7 +81,7 @@ def _extract_obj(index, object_id, scenario_net_object):
     normalized_type = WAYMO_OBJECT_TYPE_MAPPING.get(type.upper(), str.lower(type))
 
     return {
-        "id": int(object_id) if object_id.isdigit() else index,
+        "id": object_id,
         "type": normalized_type,
         "position": position,
         "width": width,

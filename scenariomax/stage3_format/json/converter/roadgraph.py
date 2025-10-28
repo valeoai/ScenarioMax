@@ -65,7 +65,7 @@ def convert_map_features(scenario_net_map_features):
             "geometry": [],
             "type": _map_type_to_mapfeature(feature_type),
             "map_element_id": TYPE_MAPPING.get(feature_type, 0),
-            "id": int(map_feature_id) if map_feature_id.isdigit() else index,
+            "id": map_feature_id,
         }
         geometry_key = next((k for k in ["polyline", "polygon", "position"] if k in feature), None)
 

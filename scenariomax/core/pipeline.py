@@ -435,64 +435,38 @@ def _postprocess_tfexample(output_path: str, format_options: dict) -> None:
     # Merge all .tfrecord files into one
     tfrecord_name = format_options.get("tfrecord_name", "training")
 
-    # Check if we have dataset subdirectories (multi-dataset scenario)
+    # # Collect all subdirectories
     subdirs = [d for d in os.listdir(output_path) if os.path.isdir(os.path.join(output_path, d))]
 
-    if subdirs:
-        # Multi-dataset scenario: merge files from subdirectories
-        logger.info(f"Found {len(subdirs)} dataset subdirectories: {subdirs}")
+    logger.info(f"Found {len(subdirs)} dataset subdirectories: {subdirs}")
 
-        # Collect all TFRecord files from subdirectories
-        all_tfrecord_files = []
-        for subdir in subdirs:
-            subdir_path = os.path.join(output_path, subdir)
-            tfrecord_files = [os.path.join(subdir_path, f) for f in os.listdir(subdir_path) if f.endswith(".tfrecord")]
-            all_tfrecord_files.extend(tfrecord_files)
-            logger.info(f"  {subdir}: {len(tfrecord_files)} TFRecord files")
+    # Collect all TFRecord files from subdirectories
+    all_tfrecord_files = []
+    for subdir in subdirs:
+        subdir_path = os.path.join(output_path, subdir)
+        tfrecord_files = [os.path.join(subdir_path, f) for f in os.listdir(subdir_path) if f.endswith(".tfrecord")]
+        all_tfrecord_files.extend(tfrecord_files)
+        logger.info(f"  {subdir}: {len(tfrecord_files)} TFRecord files")
 
-        if all_tfrecord_files:
-            # Merge all files from all datasets
-            merged_file = os.path.join(output_path, f"{tfrecord_name}.tfrecord")
-            logger.info(f"Merging {len(all_tfrecord_files)} files into {merged_file}")
-            postprocess.merge_tfrecord_files(output_path, merged_file)
-            postprocess.shuffle_tfrecord_file(merged_file)
+    if all_tfrecord_files:
+        # Merge all files from all datasets
+        merged_file = os.path.join(output_path, f"{tfrecord_name}.tfrecord")
+        logger.info(f"Merging {len(all_tfrecord_files)} files into {merged_file}")
+        postprocess.merge_tfrecord_files(all_tfrecord_files, merged_file)
+        postprocess.shuffle_tfrecord_file(merged_file)
 
-            # Shard if requested
-            num_shards = format_options.get("shard", 1)
-            if num_shards > 1:
-                from scenariomax.stage3_format.tfexample import shard
+        # Shard if requested
+        num_shards = format_options.get("shard", 1)
+        if num_shards > 1:
+            from scenariomax.stage3_format.tfexample import shard
 
-                logger.info(f"Sharding into {num_shards} shards")
-                shard.shard_tfrecord(
-                    src=output_path,
-                    filename=tfrecord_name,
-                    num_threads=format_options.get("num_workers", 8),
-                    num_shards=num_shards,
-                )
-    else:
-        # Single dataset scenario: files directly in output_path
-        tfrecord_files = [f for f in os.listdir(output_path) if f.endswith(".tfrecord")]
-
-        if len(tfrecord_files) > 1:
-            # Merge multiple files
-            merged_file = os.path.join(output_path, f"{tfrecord_name}.tfrecord")
-            postprocess.merge_tfrecord_files(output_path, merged_file)
-
-            # Shuffle the merged file
-            postprocess.shuffle_tfrecord_file(merged_file)
-
-            # Shard if requested
-            num_shards = format_options.get("shard", 1)
-            if num_shards > 1:
-                from scenariomax.stage3_format.tfexample import shard
-
-                logger.info(f"Sharding into {num_shards} shards")
-                shard.shard_tfrecord(
-                    src=output_path,
-                    filename=tfrecord_name,
-                    num_threads=format_options.get("num_workers", 8),
-                    num_shards=num_shards,
-                )
+            logger.info(f"Sharding into {num_shards} shards")
+            shard.shard_tfrecord(
+                src=output_path,
+                filename=tfrecord_name,
+                num_threads=format_options.get("num_workers", 8),
+                num_shards=num_shards,
+            )
 
 
 def _postprocess_json(output_path: str) -> None:
