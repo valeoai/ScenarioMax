@@ -121,6 +121,10 @@ pipeline:
 execution:
   num_workers: 8                         # Number of parallel workers (joblib.Parallel)
                                          # Each worker processes files independently using process_single_scenario()
+  batch_size: 10                         # Number of files per worker batch
+                                         # Higher values = better DB connection reuse for nuPlan
+                                         # Lower values = better load balancing
+                                         # Recommended: 5-10 for Waymo, 20-50 for nuPlan
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Logging Configuration

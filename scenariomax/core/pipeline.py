@@ -23,64 +23,148 @@ logger = logger_utils.get_logger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Core Processing Function - Handles One Scenario/File
+# Core Processing Function - Handles File Batches
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def process_single_scenario(
-    input_data: Any,
+def worker_scenario_func(
+    input_data: list[Any],
     convert_func: Callable | None = None,
     process_func: Callable | None = None,
     format_func: Callable | None = None,
     output_path: str | None = None,
     target_format: str | None = None,
+    dataset_config: Any = None,
 ) -> dict[str, Any]:
     """
-    Process a single scenario through the pipeline.
+    Process batch of scenarios through the pipeline.
 
-    This is the core function that handles one scenario at a time.
-    It can execute any combination of the 3 stages:
-    - Stage 1 (convert): raw → unified
-    - Stage 2 (process): unified → unified
-    - Stage 3 (format): unified → target format
+    Unified batch processing for all stages:
+    - Stage 1 alone: List of file paths/metadata (with dataset_config, no process/format funcs)
+    - Stage 2 alone: List of pickle paths (no dataset_config)
+    - Stage 3 alone: List of pickle paths (no dataset_config)
+    - Full pipeline: List of file paths/metadata (with dataset_config + process/format funcs)
+
+    With dataset_config (Stage 1 and Full Pipeline):
+    - Handles dataset-specific loading (Waymo TFRecords, nuPlan metadata)
+    - Reuses DB connections for nuPlan/OpenScenes across batch
+    - Applies dataset_config.convert_func automatically
+    - Also applies process_func and format_func if provided (full pipeline)
+
+    Without dataset_config (Stages 2/3):
+    - Loads from pickle paths or uses raw scenario objects
+    - Applies convert/process/format functions as specified
 
     Args:
-        input_data: Raw scenario object OR path to pickle file
-        convert_func: Optional Stage 1 converter (raw → unified)
-        process_func: Optional Stage 2 processor (unified → unified)
-        format_func: Optional Stage 3 formatter (unified → target)
-        output_path: Optional path to save result
+        input_data: List of inputs (file paths, pickle paths, metadata dicts, or scenario objects)
+        convert_func: Optional converter (raw → unified) - NOT used with dataset_config
+        process_func: Optional processor (unified → unified)
+        format_func: Optional formatter (unified → target)
+        output_path: Optional path to save results
         target_format: Optional target format string (tfexample, json, puffer)
+        dataset_config: Dataset configuration (enables dataset-specific optimizations)
 
     Returns:
-        Dict with keys: 'scenario' (result), 'success' (bool), 'error' (str if failed)
+        Dict with keys: 'successes', 'failures'
     """
-    # Load if input is a file path
-    if isinstance(input_data, str) and input_data.endswith(".pkl"):
-        with open(input_data, "rb") as f:
-            scenario = pickle.load(f)
+    successes = 0
+    failures = 0
+
+    # Stage 1 mode: dataset_config provided, handle dataset-specific loading
+    if dataset_config:
+        # For nuPlan: Create shared DB connection once per batch
+        maps_db = None
+        if dataset_config.name in ["nuplan", "openscenes"]:
+            from nuplan.database.maps_db.gpkg_mapsdb import GPKGMapsDB
+
+            maps_db = GPKGMapsDB(
+                map_version="nuplan-maps-v1.0",
+                map_root=os.environ.get("NUPLAN_MAPS_ROOT"),
+            )
+
+        # Process each file in batch
+        for file_item in input_data:
+            try:
+                # Load scenarios from file (dataset-specific)
+                if dataset_config.name == "waymo":
+                    # file_item is a file path, preprocess opens the TFRecord
+                    if dataset_config.preprocess_func:
+                        scenarios = list(dataset_config.preprocess_func([file_item]))
+                    else:
+                        scenarios = [file_item]
+                elif dataset_config.name in ["nuplan", "openscenes"]:
+                    # file_item is metadata dict, construct NuPlanScenario
+                    from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario import NuPlanScenario
+
+                    scenario = NuPlanScenario(**file_item, maps_db=maps_db)
+                    scenarios = [scenario]
+                else:
+                    scenarios = [file_item]
+
+                # Convert and process each scenario through all stages
+                for raw_scenario in scenarios:
+                    try:
+                        # Stage 1: Convert raw → unified
+                        unified_scenario = dataset_config.convert_func(raw_scenario, dataset_config.version)
+
+                        # Stage 2: Process unified → unified (optional)
+                        if process_func:
+                            unified_scenario = process_func(unified_scenario)
+
+                        scenario_id = unified_scenario["id"]
+
+                        # Stage 3: Format unified → target (optional)
+                        formatted_scenario = format_func(unified_scenario) if format_func else unified_scenario
+
+                        # Save result
+                        if output_path:
+                            _save_result(formatted_scenario, scenario_id, output_path, format_func, target_format)
+
+                        successes += 1
+                    except Exception as e:
+                        logger.error(f"Failed to process scenario: {e}")
+                        failures += 1
+
+            except Exception as e:
+                logger.error(f"Failed to process file {file_item}: {e}")
+                failures += 1
+
+    # Stages 2/3/Pipeline mode: no dataset_config, generic processing
     else:
-        scenario = input_data
+        for item in input_data:
+            try:
+                # Load scenario from pickle path or use raw object
+                if isinstance(item, str) and item.endswith(".pkl"):
+                    with open(item, "rb") as f:
+                        scenario = pickle.load(f)
+                else:
+                    scenario = item
 
-    # Stage 1: Convert raw → unified (optional)
-    if convert_func:
-        scenario = convert_func(scenario)
+                # Stage 1: Convert raw → unified (optional)
+                if convert_func:
+                    scenario = convert_func(scenario)
 
-    # Stage 2: Process unified → unified (optional)
-    if process_func:
-        scenario = process_func(scenario)
+                # Stage 2: Process unified → unified (optional)
+                if process_func:
+                    scenario = process_func(scenario)
 
-    scenario_id = scenario["id"]
+                scenario_id = scenario["id"]
 
-    # Stage 3: Format unified → target (optional)
-    if format_func:
-        scenario = format_func(scenario)
+                # Stage 3: Format unified → target (optional)
+                if format_func:
+                    scenario = format_func(scenario)
 
-    # Save result if output_path specified
-    if output_path:
-        _save_result(scenario, scenario_id, output_path, format_func, target_format)
+                # Save result if output_path specified
+                if output_path:
+                    _save_result(scenario, scenario_id, output_path, format_func, target_format)
 
-    return {"scenario": scenario, "success": True, "error": None}
+                successes += 1
+
+            except Exception as e:
+                logger.error(f"Failed to process item {item}: {e}")
+                failures += 1
+
+    return {"successes": successes, "failures": failures}
 
 
 def _save_result(
@@ -134,6 +218,7 @@ def convert_raw_to_unified(
     datasets: dict[str, str] | str,
     output_path: str,
     num_workers: int = 8,
+    batch_size: int = 10,
     **kwargs,
 ) -> dict[str, Any]:
     """
@@ -143,6 +228,7 @@ def convert_raw_to_unified(
         datasets: Dict mapping dataset names to paths OR single path string
         output_path: Output directory for unified pickles
         num_workers: Number of parallel workers
+        batch_size: Number of files per worker batch
         **kwargs: Dataset-specific arguments
 
     Returns:
@@ -155,7 +241,7 @@ def convert_raw_to_unified(
         datasets = {"auto": datasets}
 
     logger.info(f"🚀 Stage 1: Converting {len(datasets)} dataset(s) → Unified")
-    logger.info(f"   • Workers: {num_workers}")
+    logger.info(f"   • Workers: {num_workers}, Batch size: {batch_size}")
 
     os.makedirs(output_path, exist_ok=True)
 
@@ -169,45 +255,38 @@ def convert_raw_to_unified(
         # Get dataset config
         config = dataset_registry.get_dataset_config(dataset_name)
 
-        # Load raw scenarios
-        raw_scenarios = config.load_func(data_path=dataset_path, **kwargs)
+        # Load file paths/metadata
+        file_list = config.load_func(data_path=dataset_path, **kwargs)
 
-        # Get count (special handling for Waymo)
+        # Get count
         if dataset_name == "waymo":
             from scenariomax.stage1_convert.datasets.waymo.load import count_waymo_scenarios
-
-            scenario_count = count_waymo_scenarios(raw_scenarios)
+            total_count = count_waymo_scenarios(file_list)
+            logger.info(f"   • Found {len(file_list)} files (~{total_count} scenarios)")
         else:
-            scenario_count = len(raw_scenarios)
+            logger.info(f"   • Found {len(file_list)} scenarios")
 
-        logger.info(f"   • Found {scenario_count} scenarios")
-
-        if config.preprocess_func:
-            raw_scenarios = config.preprocess_func(raw_scenarios)
-
-        tqdm_iterator = tqdm(raw_scenarios, desc="Worker pool", unit=" scenario", total=scenario_count)
-
-        # Create convert function
-        def convert_func(s):
-            return config.convert_func(s, config.version)
+        # Create batches
+        file_batches = [file_list[i:i+batch_size] for i in range(0, len(file_list), batch_size)]
+        logger.info(f"   • Created {len(file_batches)} batches")
 
         # Setup output path for this dataset
         dataset_output = os.path.join(output_path, dataset_name)
         os.makedirs(dataset_output, exist_ok=True)
 
-        # Process in parallel using joblib
+        # Process batches in parallel
         results = Parallel(n_jobs=num_workers)(
-            delayed(process_single_scenario)(
-                input_data=scenario,
-                convert_func=convert_func,
+            delayed(worker_scenario_func)(
+                input_data=batch,
                 output_path=dataset_output,
+                dataset_config=config,
             )
-            for scenario in tqdm_iterator
+            for batch in tqdm(file_batches, desc="Processing batches", unit=" batch")
         )
 
-        # Count successes/failures
-        successes = sum(1 for r in results if r["success"])
-        failures = sum(1 for r in results if not r["success"])
+        # Aggregate statistics
+        successes = sum(r["successes"] for r in results)
+        failures = sum(r["failures"] for r in results)
 
         total_scenarios += successes
         total_errors += failures
@@ -219,7 +298,8 @@ def convert_raw_to_unified(
 
     return {
         "stage": "raw_to_unified",
-        "scenarios_processed": total_scenarios,
+        "datasets_processed": len(datasets),
+        "total_scenarios": total_scenarios,
         "errors": total_errors,
         "elapsed_time": elapsed_time,
     }
@@ -236,6 +316,7 @@ def process_unified_scenarios(
     processors: list[Callable] | list[str] | None = None,
     processor_configs: dict[str, dict] | None = None,
     num_workers: int = 8,
+    batch_size: int = 1,
     save_output: bool = True,
 ) -> dict[str, Any]:
     """
@@ -247,6 +328,7 @@ def process_unified_scenarios(
         processors: List of processor functions or names
         processor_configs: Processor configurations
         num_workers: Number of parallel workers
+        batch_size: Number of files per worker batch (default: 1)
         save_output: Whether to save processed scenarios
 
     Returns:
@@ -256,7 +338,7 @@ def process_unified_scenarios(
 
     logger.info("🚀 Stage 2: Processing Unified Scenarios")
     logger.info(f"   • Processors: {len(processors) if processors else 0}")
-    logger.info(f"   • Workers: {num_workers}")
+    logger.info(f"   • Workers: {num_workers}, Batch size: {batch_size}")
     logger.info(f"   • Save output: {save_output}")
 
     # Resolve processor names to functions
@@ -284,19 +366,23 @@ def process_unified_scenarios(
     if save_output:
         os.makedirs(output_path, exist_ok=True)
 
+    # Create batches
+    file_batches = [pickle_files[i:i+batch_size] for i in range(0, len(pickle_files), batch_size)]
+    logger.info(f"   • Created {len(file_batches)} batches")
+
     # Process in parallel
     results = Parallel(n_jobs=num_workers)(
-        delayed(process_single_scenario)(
-            input_data=pkl_file,
+        delayed(worker_scenario_func)(
+            input_data=batch,
             process_func=process_all,
             output_path=output_path if save_output else None,
         )
-        for pkl_file in tqdm(pickle_files, desc="Processing", unit=" file")
+        for batch in tqdm(file_batches, desc="Processing batches", unit=" batch")
     )
 
-    # Count successes/failures
-    successes = sum(1 for r in results if r["success"])
-    failures = sum(1 for r in results if not r["success"])
+    # Aggregate statistics
+    successes = sum(r["successes"] for r in results)
+    failures = sum(r["failures"] for r in results)
 
     elapsed_time = time.time() - start_time
     logger.info(f"✅ Stage 2 completed in {elapsed_time:.2f}s")
@@ -320,6 +406,7 @@ def format_unified_to_target(
     output_path: str,
     format: str,
     num_workers: int = 8,
+    batch_size: int = 1,
     processors: list[Callable] | list[str] | None = None,
     processor_configs: dict[str, dict] | None = None,
     **format_options,
@@ -332,6 +419,7 @@ def format_unified_to_target(
         output_path: Output directory
         format: Target format (tfexample, json, puffer)
         num_workers: Number of parallel workers
+        batch_size: Number of files per worker batch (default: 1)
         processors: Optional processors to apply before formatting
         processor_configs: Processor configurations
         **format_options: Format-specific options
@@ -347,7 +435,7 @@ def format_unified_to_target(
 
     logger.info(f"🚀 Stage 3: Formatting Unified → {format.upper()}")
     logger.info(f"   • Processors: {len(processors) if processors else 0}")
-    logger.info(f"   • Workers: {num_workers}")
+    logger.info(f"   • Workers: {num_workers}, Batch size: {batch_size}")
 
     # Resolve processor names
     if processors and isinstance(processors[0], str):
@@ -390,21 +478,25 @@ def format_unified_to_target(
 
     os.makedirs(output_path, exist_ok=True)
 
+    # Create batches
+    file_batches = [pickle_files[i:i+batch_size] for i in range(0, len(pickle_files), batch_size)]
+    logger.info(f"   • Created {len(file_batches)} batches")
+
     # Process in parallel
     results = Parallel(n_jobs=num_workers)(
-        delayed(process_single_scenario)(
-            input_data=pkl_file,
+        delayed(worker_scenario_func)(
+            input_data=batch,
             process_func=process_all if processors else None,
             format_func=format_func,
             output_path=output_path,
             target_format=format,
         )
-        for pkl_file in tqdm(pickle_files, desc="Formatting", unit=" file")
+        for batch in tqdm(file_batches, desc="Formatting batches", unit=" batch")
     )
 
-    # Count successes/failures
-    successes = sum(1 for r in results if r["success"])
-    failures = sum(1 for r in results if not r["success"])
+    # Aggregate statistics
+    successes = sum(r["successes"] for r in results)
+    failures = sum(r["failures"] for r in results)
 
     # Postprocess if needed (merge workers, shuffle, shard)
     if format == FORMAT_TFEXAMPLE:
@@ -492,6 +584,7 @@ def process_scenarios(
     processors: list[Callable] | list[str] | None = None,
     processor_configs: dict[str, dict] | None = None,
     num_workers: int = 8,
+    batch_size: int = 10,
     save_intermediate: bool = False,
     **kwargs,
 ) -> dict[str, Any]:
@@ -507,6 +600,7 @@ def process_scenarios(
         processors: Optional processors to apply (e.g., validation, traffic_lights)
         processor_configs: Processor configurations
         num_workers: Number of parallel workers
+        batch_size: Number of files per worker batch
         save_intermediate: If True, save intermediate unified pickles
         **kwargs: Dataset-specific arguments
 
@@ -529,7 +623,7 @@ def process_scenarios(
 
         # Stage 1: Convert
         unified_path = os.path.join(output_path, "_unified")
-        stats1 = convert_raw_to_unified(datasets, unified_path, num_workers, **kwargs)
+        stats1 = convert_raw_to_unified(datasets, unified_path, num_workers, batch_size, **kwargs)
 
         # Stage 2: Process (optional)
         if processors:
@@ -540,6 +634,7 @@ def process_scenarios(
                 processors,
                 processor_configs,
                 num_workers,
+                batch_size,
                 save_output=True,
             )
             input_for_stage3 = processed_path
@@ -553,6 +648,7 @@ def process_scenarios(
             output_path,
             format,
             num_workers,
+            batch_size,
             processors=None,
             **kwargs,
         )
@@ -604,27 +700,22 @@ def process_scenarios(
         # Get dataset config
         config = dataset_registry.get_dataset_config(dataset_name)
 
-        # Load raw scenarios
-        raw_scenarios = config.load_func(data_path=dataset_path, **kwargs)
+        # Load raw file paths/metadata (don't preprocess yet - let worker do it)
+        file_list = config.load_func(data_path=dataset_path, **kwargs)
 
         # Get count
         if dataset_name == "waymo":
             from scenariomax.stage1_convert.datasets.waymo.load import count_waymo_scenarios
 
-            scenario_count = count_waymo_scenarios(raw_scenarios)
+            scenario_count = count_waymo_scenarios(file_list)
+            logger.info(f"   • Found {len(file_list)} files (~{scenario_count} scenarios)")
         else:
-            scenario_count = len(raw_scenarios)
+            scenario_count = len(file_list)
+            logger.info(f"   • Found {scenario_count} scenarios")
 
-        logger.info(f"   • Found {scenario_count} scenarios")
-
-        if config.preprocess_func:
-            raw_scenarios = config.preprocess_func(raw_scenarios)
-
-        tqdm_iterator = tqdm(raw_scenarios, desc="Worker pool", unit=" scenario", total=scenario_count)
-
-        # Create convert function
-        def convert_func(s):
-            return config.convert_func(s, config.version)
+        # Create batches of file paths/metadata
+        file_batches = [file_list[i:i+batch_size] for i in range(0, len(file_list), batch_size)]
+        logger.info(f"   • Created {len(file_batches)} batches")
 
         # Create format function
         if format == FORMAT_TFEXAMPLE:
@@ -647,22 +738,23 @@ def process_scenarios(
         dataset_output = os.path.join(output_path, dataset_name)
         os.makedirs(dataset_output, exist_ok=True)
 
-        # Process all 3 stages in parallel
+        # Process all 3 stages in parallel using dataset_config
+        # This enables dataset-specific optimizations (e.g., DB connection reuse)
         results = Parallel(n_jobs=num_workers)(
-            delayed(process_single_scenario)(
-                input_data=scenario,
-                convert_func=convert_func,
+            delayed(worker_scenario_func)(
+                input_data=batch,
                 process_func=process_all,
                 format_func=format_func,
                 output_path=dataset_output,
                 target_format=format,
+                dataset_config=config,
             )
-            for scenario in tqdm_iterator
+            for batch in tqdm(file_batches, desc="Processing batches", unit=" batch")
         )
 
-        # Count successes/failures
-        successes = sum(1 for r in results if r["success"])
-        failures = sum(1 for r in results if not r["success"])
+        # Aggregate statistics
+        successes = sum(r["successes"] for r in results)
+        failures = sum(r["failures"] for r in results)
 
         total_scenarios += successes
         total_errors += failures
