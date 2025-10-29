@@ -69,7 +69,7 @@ def setup_logger(log_level: int | None = None, log_file: str | None = None):
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
 
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", "%d-%m %H:%M:%S")
 
     # Console handler
     console_handler = logging.StreamHandler()
