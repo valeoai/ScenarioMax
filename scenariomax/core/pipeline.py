@@ -74,7 +74,7 @@ def worker_scenario_func(
 
     list_scenarios = preprocess_func(input_data) if preprocess_func else input_data
 
-    for scenario in tqdm(list_scenarios, desc="  Processing scenarios", unit=" scenario", leave=False):
+    for scenario in tqdm(list_scenarios, desc="  Processing scenarios", unit=" scenario", leave=False, position=1):
         try:
             if convert_func:
                 scenario = convert_func(scenario, dataset_version)
@@ -573,7 +573,6 @@ def run_all_pipeline(
         os.makedirs(dataset_output, exist_ok=True)
 
         # Process all 3 stages in parallel using dataset_config
-        # This enables dataset-specific optimizations (e.g., DB connection reuse)
         results = Parallel(n_jobs=num_workers)(
             delayed(worker_scenario_func)(
                 input_data=batch,
