@@ -233,7 +233,7 @@ def handle_pipeline_command(cfg: DictConfig):
     processors = cfg.processing.processors if cfg.processing.processors else None
     processor_configs = OmegaConf.to_container(cfg.processing.processor_configs, resolve=True)
 
-    stats = pipeline.process_scenarios(
+    stats = pipeline.run_all_pipeline(
         datasets=datasets,
         output_path=cfg.output.dst,
         format=cfg.output.format,
@@ -241,7 +241,6 @@ def handle_pipeline_command(cfg: DictConfig):
         processor_configs=processor_configs,
         num_workers=cfg.execution.num_workers,
         batch_size=cfg.execution.batch_size,
-        save_intermediate=cfg.pipeline.save_intermediate,
         num_files=cfg.dataset_options.num_files,
         split=cfg.dataset_options.split,
         shard=cfg.format_options.shard,

@@ -1,4 +1,5 @@
 import json
+import pickle
 
 import numpy as np
 
@@ -28,3 +29,18 @@ class NumpyEncoder(json.JSONEncoder):
         elif isinstance(obj, np.bool_):
             return bool(obj)
         return super().default(obj)
+
+
+def load_pickle(file_path):
+    """Load a pickle file from the specified path."""
+
+
+    with open(file_path, "rb") as f:
+        data = pickle.load(f)
+    return data
+
+def save_pickle(data, file_path):
+    """Save data to a pickle file at the specified path."""
+
+    with open(file_path, "wb") as f:
+        pickle.dump(data, f)

@@ -21,8 +21,7 @@
 #
 #   # Full pipeline (all 3 stages)
 #   scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
-#               output.format=tfexample processing.processors=[validation] \
-#               pipeline.save_intermediate=false
+#               output.format=tfexample processing.processors=[validation] 
 #
 # ═══════════════════════════════════════════════════════════════════════════
 defaults:
@@ -107,13 +106,6 @@ visualization:
   show_trajectory: true                  # Show trajectory history
   scatter_map: false                     # Render road map as scattered points
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Pipeline Configuration (Full Pipeline: All 3 Stages)
-# ═══════════════════════════════════════════════════════════════════════════
-pipeline:
-  # Pipeline mode options
-  save_intermediate: false               # If true: Save intermediate unified & processed pickles (for debugging)
-                                         # If false: In-memory streaming (faster, no intermediate files)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Execution Configuration

@@ -6,7 +6,6 @@ any combination of stages (convert, process, format). Parallelization handled by
 """
 
 import os
-import pickle
 import time
 from collections.abc import Callable
 from typing import Any
@@ -16,7 +15,7 @@ from tqdm import tqdm
 
 from scenariomax import dataset_registry, logger_utils
 from scenariomax.core.types import FORMAT_JSON, FORMAT_PUFFER, FORMAT_TFEXAMPLE, SUPPORTED_FORMATS
-from scenariomax.core.utils import NumpyEncoder
+from scenariomax.core.utils import NumpyEncoder, load_pickle, save_pickle
 
 
 logger = logger_utils.get_logger(__name__)
@@ -111,9 +110,7 @@ def _save_result(
 
     # If no format function, save as pickle
     if format_func is None:
-        pkl_file = os.path.join(output_path, f"{scenario_id}.pkl")
-        with open(pkl_file, "wb") as f:
-            pickle.dump(scenario, f)
+        save_pickle(scenario, os.path.join(output_path, f"{scenario_id}.pkl"))
         return
 
     # For TFExample, we need special handling (write to TFRecord)
@@ -136,9 +133,7 @@ def _save_result(
             json.dump(scenario, f, indent=2, cls=NumpyEncoder)
     else:
         # Fallback to pickle
-        pkl_file = os.path.join(output_path, f"{scenario_id}.pkl")
-        with open(pkl_file, "wb") as f:
-            pickle.dump(scenario, f)
+        save_pickle(scenario, os.path.join(output_path, f"{scenario_id}.pkl"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -211,6 +206,7 @@ def convert_raw_to_unified(
         results = Parallel(n_jobs=num_workers)(
             delayed(worker_scenario_func)(
                 input_data=batch,
+                convert_func=config.convert_func,
                 output_path=dataset_output,
                 dataset_config=config,
             )
@@ -307,6 +303,7 @@ def process_unified_scenarios(
     results = Parallel(n_jobs=num_workers)(
         delayed(worker_scenario_func)(
             input_data=batch,
+            convert_func=load_pickle,
             process_func=process_all,
             output_path=output_path if save_output else None,
         )
@@ -387,17 +384,17 @@ def format_unified_to_target(
     if format == FORMAT_TFEXAMPLE:
         from scenariomax.stage3_format.tfexample import convert_to_tfexample
 
-        def format_func(s):
+        def _format_func(s):
             return convert_to_tfexample.convert(s)
     elif format == FORMAT_JSON:
         from scenariomax.stage3_format.json import convert_to_json
 
-        def format_func(s):
+        def _format_func(s):
             return convert_to_json.convert(s)
     elif format == FORMAT_PUFFER:
         from scenariomax.stage3_format.puffer import convert_to_puffer
 
-        def format_func(s):
+        def _format_func(s):
             return convert_to_puffer.convert(s)
 
     # Get all pickle files
@@ -419,8 +416,9 @@ def format_unified_to_target(
     results = Parallel(n_jobs=num_workers)(
         delayed(worker_scenario_func)(
             input_data=batch,
+            convert_func=load_pickle,
             process_func=process_all if processors else None,
-            format_func=format_func,
+            format_func=_format_func,
             output_path=output_path,
             target_format=format,
         )
@@ -510,7 +508,7 @@ def _postprocess_puffer(output_path: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def process_scenarios(
+def run_all_pipeline(
     datasets: dict[str, str] | str,
     output_path: str,
     format: str,
@@ -518,7 +516,6 @@ def process_scenarios(
     processor_configs: dict[str, dict] | None = None,
     num_workers: int = 8,
     batch_size: int = 10,
-    save_intermediate: bool = False,
     **kwargs,
 ) -> dict[str, Any]:
     """
@@ -534,7 +531,6 @@ def process_scenarios(
         processor_configs: Processor configurations
         num_workers: Number of parallel workers
         batch_size: Number of files per worker batch
-        save_intermediate: If True, save intermediate unified pickles
         **kwargs: Dataset-specific arguments
 
     Returns:
@@ -549,55 +545,6 @@ def process_scenarios(
     # Normalize datasets to dict
     if isinstance(datasets, str):
         datasets = {"auto": datasets}
-
-    # If save_intermediate, run 3 separate stages
-    if save_intermediate:
-        logger.info("Mode: Save intermediate pickles")
-
-        # Stage 1: Convert
-        unified_path = os.path.join(output_path, "_unified")
-        stats1 = convert_raw_to_unified(datasets, unified_path, num_workers, batch_size, **kwargs)
-
-        # Stage 2: Process (optional)
-        if processors:
-            processed_path = os.path.join(output_path, "_processed")
-            stats2 = process_unified_scenarios(
-                unified_path,
-                processed_path,
-                processors,
-                processor_configs,
-                num_workers,
-                batch_size,
-                save_output=True,
-            )
-            input_for_stage3 = processed_path
-        else:
-            stats2 = {"scenarios_processed": 0}
-            input_for_stage3 = unified_path
-
-        # Stage 3: Format
-        stats3 = format_unified_to_target(
-            input_for_stage3,
-            output_path,
-            format,
-            num_workers,
-            batch_size,
-            processors=None,
-            **kwargs,
-        )
-
-        total_time = time.time() - start_time
-        logger.info("=" * 80)
-        logger.info(f"✅ PIPELINE COMPLETED in {total_time:.2f}s")
-        logger.info("=" * 80)
-
-        return {
-            "mode": "save_intermediate",
-            "stage1": stats1,
-            "stage2": stats2,
-            "stage3": stats3,
-            "total_time": total_time,
-        }
 
     # Otherwise, run all 3 stages in memory (one pass)
     logger.info("Mode: In-memory streaming (no intermediate files)")
