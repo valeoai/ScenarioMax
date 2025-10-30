@@ -20,9 +20,6 @@ Usage:
         scenario = processor(scenario)
 """
 
-from collections.abc import Callable
-from typing import Any
-
 from scenariomax import logger_utils
 
 

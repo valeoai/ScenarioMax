@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 
 from scenariomax import logger_utils
+from scenariomax.core.types import FORMAT_JSON, FORMAT_PUFFER, FORMAT_TFEXAMPLE
 
 
 logger = logger_utils.get_logger(__name__)
@@ -31,13 +32,29 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+def get_format_function(format: str):
+    # Create format function
+    if format == FORMAT_TFEXAMPLE:
+        from scenariomax.stage3_format.tfexample import convert_to_tfexample
+
+        return convert_to_tfexample.convert
+    elif format == FORMAT_JSON:
+        from scenariomax.stage3_format.json import convert_to_json
+
+        return convert_to_json.convert
+    elif format == FORMAT_PUFFER:
+        from scenariomax.stage3_format.puffer import convert_to_puffer
+
+        return convert_to_puffer.convert
+
+
 def load_pickle(file_path):
     """Load a pickle file from the specified path."""
-
 
     with open(file_path, "rb") as f:
         data = pickle.load(f)
     return data
+
 
 def save_pickle(data, file_path):
     """Save data to a pickle file at the specified path."""

@@ -3,7 +3,7 @@ from typing import Any
 
 import numpy as np
 
-from scenariomax.stage2_process.traffic_lights.utils import TLS, Direction, UnionFind, ApproachingLane
+from scenariomax.stage2_process.traffic_lights.utils import TLS, ApproachingLane, Direction, UnionFind
 
 
 class TLSGenerator:

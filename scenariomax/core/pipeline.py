@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from scenariomax import dataset_registry, logger_utils
 from scenariomax.core.types import FORMAT_JSON, FORMAT_PUFFER, FORMAT_TFEXAMPLE, SUPPORTED_FORMATS
-from scenariomax.core.utils import NumpyEncoder, load_pickle, save_pickle
+from scenariomax.core.utils import NumpyEncoder, get_format_function, load_pickle, save_pickle
 
 
 logger = logger_utils.get_logger(__name__)
@@ -184,15 +184,7 @@ def convert_raw_to_unified(
 
         # Load file paths/metadata
         file_list = config.load_func(data_path=dataset_path, **kwargs)
-
-        # Get count
-        if dataset_name == "waymo":
-            from scenariomax.stage1_convert.datasets.waymo.load import count_waymo_scenarios
-
-            total_count = count_waymo_scenarios(file_list)
-            logger.info(f"   • Found {len(file_list)} files (~{total_count} scenarios)")
-        else:
-            logger.info(f"   • Found {len(file_list)} scenarios")
+        logger.info(f"   • Found {len(file_list)} files")
 
         # Create batches
         file_batches = [file_list[i : i + batch_size] for i in range(0, len(file_list), batch_size)]
@@ -381,21 +373,7 @@ def format_unified_to_target(
         return scenario
 
     # Create format function
-    if format == FORMAT_TFEXAMPLE:
-        from scenariomax.stage3_format.tfexample import convert_to_tfexample
-
-        def _format_func(s):
-            return convert_to_tfexample.convert(s)
-    elif format == FORMAT_JSON:
-        from scenariomax.stage3_format.json import convert_to_json
-
-        def _format_func(s):
-            return convert_to_json.convert(s)
-    elif format == FORMAT_PUFFER:
-        from scenariomax.stage3_format.puffer import convert_to_puffer
-
-        def _format_func(s):
-            return convert_to_puffer.convert(s)
+    _format_func = get_format_function(format)
 
     # Get all pickle files
     pickle_files = []
@@ -573,6 +551,8 @@ def run_all_pipeline(
                 scenario = processor_fn(scenario)
             return scenario
 
+    _format_func = get_format_function(format)
+
     # Process each dataset
     for dataset_name, dataset_path in datasets.items():
         logger.info(f"Processing dataset: {dataset_name}")
@@ -582,37 +562,11 @@ def run_all_pipeline(
 
         # Load raw file paths/metadata (don't preprocess yet - let worker do it)
         file_list = config.load_func(data_path=dataset_path, **kwargs)
-
-        # Get count
-        if dataset_name == "waymo":
-            from scenariomax.stage1_convert.datasets.waymo.load import count_waymo_scenarios
-
-            scenario_count = count_waymo_scenarios(file_list)
-            logger.info(f"   • Found {len(file_list)} files (~{scenario_count} scenarios)")
-        else:
-            scenario_count = len(file_list)
-            logger.info(f"   • Found {scenario_count} scenarios")
+        logger.info(f"   • Found {len(file_list)} files")
 
         # Create batches of file paths/metadata
         file_batches = [file_list[i : i + batch_size] for i in range(0, len(file_list), batch_size)]
         logger.info(f"   • Created {len(file_batches)} batches")
-
-        # Create format function
-        if format == FORMAT_TFEXAMPLE:
-            from scenariomax.stage3_format.tfexample import convert_to_tfexample
-
-            def _format_func(s):
-                return convert_to_tfexample.convert(s)
-        elif format == FORMAT_JSON:
-            from scenariomax.stage3_format.json import convert_to_json
-
-            def _format_func(s):
-                return convert_to_json.convert(s)
-        elif format == FORMAT_PUFFER:
-            from scenariomax.stage3_format.puffer import convert_to_puffer
-
-            def _format_func(s):
-                return convert_to_puffer.convert(s)
 
         # Setup output path for this dataset
         dataset_output = os.path.join(output_path, dataset_name)

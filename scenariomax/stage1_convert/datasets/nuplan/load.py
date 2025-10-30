@@ -21,13 +21,14 @@ NUPLAN_PACKAGE_PATH = os.path.dirname(nuplan.__file__)
 
 MAPS_PATH = os.path.join(NUPLAN_PACKAGE_PATH, "maps")
 
+
 def get_nuplan_scenarios(
     data_path,
     num_files: int | None = None,
     logs: list | None = None,
     builder="nuplan_mini",
     **kwargs,
-    ) -> list[NuPlanScenario]:
+) -> list[NuPlanScenario]:
     """Gets NuPlan scenarios based on provided parameters.
 
     Retrieves scenarios from the NuPlan dataset using the specified parameters.
