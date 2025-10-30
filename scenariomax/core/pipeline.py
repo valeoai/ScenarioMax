@@ -70,99 +70,31 @@ def worker_scenario_func(
     successes = 0
     failures = 0
 
-    # Stage 1 mode: dataset_config provided, handle dataset-specific loading
-    if dataset_config:
-        # For nuPlan: Create shared DB connection once per batch
-        maps_db = None
-        if dataset_config.name in ["nuplan", "openscenes"]:
-            from nuplan.database.maps_db.gpkg_mapsdb import GPKGMapsDB
+    preprocess_func = getattr(dataset_config, "preprocess_func", None) if dataset_config else None
+    dataset_version = getattr(dataset_config, "version", None) if dataset_config else None
 
-            maps_db = GPKGMapsDB(
-                map_version="nuplan-maps-v1.0",
-                map_root=os.environ.get("NUPLAN_MAPS_ROOT"),
-            )
+    list_scenarios = preprocess_func(input_data) if preprocess_func else input_data
 
-        # Process each file in batch
-        for file_item in input_data:
-            try:
-                # Load scenarios from file (dataset-specific)
-                if dataset_config.name == "waymo":
-                    # file_item is a file path, preprocess opens the TFRecord
-                    if dataset_config.preprocess_func:
-                        scenarios = list(dataset_config.preprocess_func([file_item]))
-                    else:
-                        scenarios = [file_item]
-                elif dataset_config.name in ["nuplan", "openscenes"]:
-                    # file_item is metadata dict, construct NuPlanScenario
-                    from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario import NuPlanScenario
+    for scenario in tqdm(list_scenarios, desc="  Processing scenarios", unit=" scenario", leave=False):
+        try:
+            if convert_func:
+                scenario = convert_func(scenario, dataset_version)
 
-                    scenario = NuPlanScenario(**file_item, maps_db=maps_db)
-                    scenarios = [scenario]
-                else:
-                    scenarios = [file_item]
+            if process_func:
+                scenario = process_func(scenario)
 
-                # Convert and process each scenario through all stages
-                for raw_scenario in scenarios:
-                    try:
-                        # Stage 1: Convert raw → unified
-                        unified_scenario = dataset_config.convert_func(raw_scenario, dataset_config.version)
+            scenario_id = scenario["id"]
 
-                        # Stage 2: Process unified → unified (optional)
-                        if process_func:
-                            unified_scenario = process_func(unified_scenario)
+            if format_func:
+                scenario = format_func(scenario)
 
-                        scenario_id = unified_scenario["id"]
+            if output_path:
+                _save_result(scenario, scenario_id, output_path, format_func, target_format)
 
-                        # Stage 3: Format unified → target (optional)
-                        formatted_scenario = format_func(unified_scenario) if format_func else unified_scenario
-
-                        # Save result
-                        if output_path:
-                            _save_result(formatted_scenario, scenario_id, output_path, format_func, target_format)
-
-                        successes += 1
-                    except Exception as e:
-                        logger.error(f"Failed to process scenario: {e}")
-                        failures += 1
-
-            except Exception as e:
-                logger.error(f"Failed to process file {file_item}: {e}")
-                failures += 1
-
-    # Stages 2/3/Pipeline mode: no dataset_config, generic processing
-    else:
-        for item in input_data:
-            try:
-                # Load scenario from pickle path or use raw object
-                if isinstance(item, str) and item.endswith(".pkl"):
-                    with open(item, "rb") as f:
-                        scenario = pickle.load(f)
-                else:
-                    scenario = item
-
-                # Stage 1: Convert raw → unified (optional)
-                if convert_func:
-                    scenario = convert_func(scenario)
-
-                # Stage 2: Process unified → unified (optional)
-                if process_func:
-                    scenario = process_func(scenario)
-
-                scenario_id = scenario["id"]
-
-                # Stage 3: Format unified → target (optional)
-                if format_func:
-                    scenario = format_func(scenario)
-
-                # Save result if output_path specified
-                if output_path:
-                    _save_result(scenario, scenario_id, output_path, format_func, target_format)
-
-                successes += 1
-
-            except Exception as e:
-                logger.error(f"Failed to process item {item}: {e}")
-                failures += 1
+            successes += 1
+        except Exception:
+            logger.exception("Failed to process scenario from %s", scenario)
+            failures += 1
 
     return {"successes": successes, "failures": failures}
 
@@ -261,13 +193,14 @@ def convert_raw_to_unified(
         # Get count
         if dataset_name == "waymo":
             from scenariomax.stage1_convert.datasets.waymo.load import count_waymo_scenarios
+
             total_count = count_waymo_scenarios(file_list)
             logger.info(f"   • Found {len(file_list)} files (~{total_count} scenarios)")
         else:
             logger.info(f"   • Found {len(file_list)} scenarios")
 
         # Create batches
-        file_batches = [file_list[i:i+batch_size] for i in range(0, len(file_list), batch_size)]
+        file_batches = [file_list[i : i + batch_size] for i in range(0, len(file_list), batch_size)]
         logger.info(f"   • Created {len(file_batches)} batches")
 
         # Setup output path for this dataset
@@ -367,7 +300,7 @@ def process_unified_scenarios(
         os.makedirs(output_path, exist_ok=True)
 
     # Create batches
-    file_batches = [pickle_files[i:i+batch_size] for i in range(0, len(pickle_files), batch_size)]
+    file_batches = [pickle_files[i : i + batch_size] for i in range(0, len(pickle_files), batch_size)]
     logger.info(f"   • Created {len(file_batches)} batches")
 
     # Process in parallel
@@ -479,7 +412,7 @@ def format_unified_to_target(
     os.makedirs(output_path, exist_ok=True)
 
     # Create batches
-    file_batches = [pickle_files[i:i+batch_size] for i in range(0, len(pickle_files), batch_size)]
+    file_batches = [pickle_files[i : i + batch_size] for i in range(0, len(pickle_files), batch_size)]
     logger.info(f"   • Created {len(file_batches)} batches")
 
     # Process in parallel
@@ -714,24 +647,24 @@ def process_scenarios(
             logger.info(f"   • Found {scenario_count} scenarios")
 
         # Create batches of file paths/metadata
-        file_batches = [file_list[i:i+batch_size] for i in range(0, len(file_list), batch_size)]
+        file_batches = [file_list[i : i + batch_size] for i in range(0, len(file_list), batch_size)]
         logger.info(f"   • Created {len(file_batches)} batches")
 
         # Create format function
         if format == FORMAT_TFEXAMPLE:
             from scenariomax.stage3_format.tfexample import convert_to_tfexample
 
-            def format_func(s):
+            def _format_func(s):
                 return convert_to_tfexample.convert(s)
         elif format == FORMAT_JSON:
             from scenariomax.stage3_format.json import convert_to_json
 
-            def format_func(s):
+            def _format_func(s):
                 return convert_to_json.convert(s)
         elif format == FORMAT_PUFFER:
             from scenariomax.stage3_format.puffer import convert_to_puffer
 
-            def format_func(s):
+            def _format_func(s):
                 return convert_to_puffer.convert(s)
 
         # Setup output path for this dataset
@@ -743,8 +676,9 @@ def process_scenarios(
         results = Parallel(n_jobs=num_workers)(
             delayed(worker_scenario_func)(
                 input_data=batch,
+                convert_func=config.convert_func,
                 process_func=process_all,
-                format_func=format_func,
+                format_func=_format_func,
                 output_path=dataset_output,
                 target_format=format,
                 dataset_config=config,
