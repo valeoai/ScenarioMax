@@ -249,7 +249,7 @@ def process_unified_scenarios(
     processors: list[Callable] | list[str] | None = None,
     processor_configs: dict[str, dict] | None = None,
     num_workers: int = 8,
-    batch_size: int = 1,
+    batch_size: int = 10,
     save_output: bool = True,
 ) -> dict[str, Any]:
     """
@@ -261,7 +261,7 @@ def process_unified_scenarios(
         processors: List of processor functions or names
         processor_configs: Processor configurations
         num_workers: Number of parallel workers
-        batch_size: Number of files per worker batch (default: 1)
+        batch_size: Number of files per worker batch (default: 10)
         save_output: Whether to save processed scenarios
 
     Returns:
@@ -339,7 +339,7 @@ def format_unified_to_target(
     output_path: str,
     format: str,
     num_workers: int = 8,
-    batch_size: int = 1,
+    batch_size: int = 10,
     processors: list[Callable] | list[str] | None = None,
     processor_configs: dict[str, dict] | None = None,
     **format_options,
@@ -352,7 +352,7 @@ def format_unified_to_target(
         output_path: Output directory
         format: Target format (tfexample, json, puffer)
         num_workers: Number of parallel workers
-        batch_size: Number of files per worker batch (default: 1)
+        batch_size: Number of files per worker batch (default: 10)
         processors: Optional processors to apply before formatting
         processor_configs: Processor configurations
         **format_options: Format-specific options
