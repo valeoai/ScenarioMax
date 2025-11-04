@@ -98,7 +98,7 @@ def convert(unified_scenario, polyline_reduction_threshold: float = 0.1) -> dict
             else:
                 logger.warning(
                     f"Unexpected tracks_to_predict format: {type(tracks_to_predict[0]).__name__}. "
-                    "Expected dict or int. Setting to empty list."
+                    "Expected dict or int. Setting to empty list.",
                 )
                 puffer_metadata["tracks_to_predict"] = []
         else:

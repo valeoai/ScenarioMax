@@ -217,6 +217,8 @@ def handle_viz_command(cfg: DictConfig):
         output_format=cfg.visualization.output_format,
         fps=cfg.visualization.fps,
         scatter_map=cfg.visualization.scatter_map,
+        follow_ego=cfg.visualization.get("follow_ego", False),
+        field_radius=cfg.visualization.get("field_radius", None),
     )
 
     logger.info(f"✅ Visualization completed: {stats}")

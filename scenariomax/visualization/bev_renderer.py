@@ -53,6 +53,8 @@ def render_scenario_bev(
     figsize: tuple = (24, 24),
     dpi: int = 300,
     scatter_map: bool = False,
+    follow_ego: bool = False,
+    field_radius: float | None = None,
 ) -> None:
     """
     Render a unified scenario in Bird's Eye View (BEV) and save as PNG.
@@ -64,6 +66,8 @@ def render_scenario_bev(
         figsize: Figure size in inches (default: (24, 24))
         dpi: Image resolution (default: 300)
         scatter_map: Render road map as scattered points instead of lines (default: False)
+        follow_ego: Center view on ego vehicle (default: False)
+        field_radius: Viewport radius in meters around center (default: None = auto-scale)
     """
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     ax.set_aspect("equal")
@@ -93,9 +97,22 @@ def render_scenario_bev(
     # 4. Add legend
     _add_legend(ax, scenario)
 
-    # 5. Auto-scale view to fit all elements
-    ax.autoscale()
-    ax.margins(0.1)
+    # 5. Set view bounds (zoom or auto-scale)
+    zoom_center = None
+    if follow_ego:
+        ego_pos = _get_ego_position(scenario, timestep=0)
+        if ego_pos is not None:
+            zoom_center = ego_pos
+            if field_radius is None:
+                field_radius = 50.0  # Default 50m radius
+
+    if zoom_center is not None and field_radius is not None:
+        x_c, y_c = zoom_center
+        ax.set_xlim(x_c - field_radius, x_c + field_radius)
+        ax.set_ylim(y_c - field_radius, y_c + field_radius)
+    else:
+        ax.autoscale()
+        ax.margins(0.1)
 
     # Save figure
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -262,13 +279,13 @@ def _render_dynamic_agents(
         length = lengths[timestep]
         width = widths[timestep]
 
-        if agent_type == types.VEHICLE or agent_type == types.CYCLIST:  # Vehicle or Cyclist
+        if agent_type == types.VEHICLE or agent_type == types.CYCLIST or agent_type == "BIKE" or agent_type == "TRUCK":
             _draw_oriented_box(ax, x, y, heading, length, width, color, is_ego)
         elif agent_type == types.PEDESTRIAN:  # Pedestrian (circle)
             circle = plt.Circle((x, y), radius=0.5, color=color, alpha=0.8, zorder=10)
             ax.add_patch(circle)
         else:
-            logger.warning(f"Unknown agent type: {agent_type}")
+            logger.warning(f"Unknown agent type: {agent_type} - position at ({x}, {y})")
 
         # Draw trajectory
         if show_trajectory:
@@ -402,6 +419,8 @@ def render_scenario_video(
     dpi: int = 150,
     fps: int = 10,
     scatter_map: bool = False,
+    follow_ego: bool = False,
+    field_radius: float | None = None,
 ) -> None:
     """
     Render a unified scenario as an animated video showing all timesteps.
@@ -414,6 +433,8 @@ def render_scenario_video(
         dpi: Image resolution (default: 150, lower for faster rendering)
         fps: Frames per second (default: 10)
         scatter_map: Render road map as scattered points instead of lines (default: False)
+        follow_ego: Center view on ego vehicle at each timestep (default: False)
+        field_radius: Viewport radius in meters around center (default: None = auto-scale or 50m if follow_ego)
     """
     import matplotlib.animation as animation
 
@@ -435,13 +456,14 @@ def render_scenario_video(
     # Render static map once (doesn't change)
     _render_static_map(ax, scenario, scatter_map=scatter_map)
 
-    # Calculate bounds for consistent view
-    bounds = _calculate_scenario_bounds(scenario)
-    if bounds:
-        x_min, x_max, y_min, y_max = bounds
-        margin = max(x_max - x_min, y_max - y_min) * 0.1
-        ax.set_xlim(x_min - margin, x_max + margin)
-        ax.set_ylim(y_min - margin, y_max + margin)
+    # Calculate bounds for consistent view (only if not following ego)
+    if not follow_ego:
+        bounds = _calculate_scenario_bounds(scenario)
+        if bounds:
+            x_min, x_max, y_min, y_max = bounds
+            margin = max(x_max - x_min, y_max - y_min) * 0.1
+            ax.set_xlim(x_min - margin, x_max + margin)
+            ax.set_ylim(y_min - margin, y_max + margin)
 
     def update_frame(timestep):
         """Update function for animation."""
@@ -465,6 +487,15 @@ def render_scenario_video(
 
         # Render dynamic agents at this timestep
         _render_dynamic_agents(ax, scenario, timestep, show_trajectory)
+
+        # Update view bounds if following ego
+        if follow_ego:
+            ego_pos = _get_ego_position(scenario, timestep)
+            if ego_pos is not None:
+                current_radius = field_radius if field_radius is not None else 50.0
+                x_c, y_c = ego_pos
+                ax.set_xlim(x_c - current_radius, x_c + current_radius)
+                ax.set_ylim(y_c - current_radius, y_c + current_radius)
 
         return ax.patches + ax.lines
 
@@ -526,6 +557,37 @@ def _calculate_scenario_bounds(scenario: dict[str, Any]) -> tuple[float, float, 
     return min(x_coords), max(x_coords), min(y_coords), max(y_coords)
 
 
+def _get_ego_position(scenario: dict[str, Any], timestep: int) -> tuple | None:
+    """
+    Get ego vehicle position at a specific timestep.
+
+    Args:
+        scenario: UnifiedScenario dict
+        timestep: Timestep index
+
+    Returns:
+        (x, y) position tuple, or None if ego not found
+    """
+    metadata = scenario.get("metadata", {})
+    ego_id = metadata.get("ego_id")
+
+    if ego_id is None:
+        return None
+
+    dynamic_agents = scenario.get("dynamic_agents", {})
+
+    if ego_id in dynamic_agents:
+        agent = dynamic_agents[ego_id]
+        states = agent.get("states", {})
+        positions = np.array(states.get("position", []))
+        valid = np.array(states.get("valid", []))
+
+        if timestep < len(positions) and valid[timestep]:
+            return (positions[timestep][0], positions[timestep][1])
+
+    return None
+
+
 def visualize_scenarios(
     input_path: str,
     output_path: str,
@@ -534,6 +596,8 @@ def visualize_scenarios(
     output_format: str = "png",
     fps: int = 10,
     scatter_map: bool = False,
+    follow_ego: bool = True,
+    field_radius: float | None = None,
 ) -> dict[str, Any]:
     """
     Visualize multiple scenarios from a directory of pickle files.
@@ -547,6 +611,8 @@ def visualize_scenarios(
         output_format: Output format - "png" or "video" (default: "png")
         fps: Frames per second for video output (default: 10)
         scatter_map: Render road map as scattered points instead of lines (default: False)
+        follow_ego: Center view on ego vehicle (default: False)
+        field_radius: Viewport radius in meters around center (default: None = auto-scale or 50m if follow_ego)
 
     Returns:
         Dict with visualization statistics
@@ -578,55 +644,39 @@ def visualize_scenarios(
     error_count = 0
 
     for pickle_file in tqdm(pickle_files, desc="Visualizing"):
-        try:
-            # Load scenario
-            with open(pickle_file, "rb") as f:
-                scenario = pickle.load(f)
+        # Load scenario
+        with open(pickle_file, "rb") as f:
+            scenario = pickle.load(f)
 
-            # Generate output filename
-            scenario_id = scenario.get("metadata", {}).get("scenario_id", os.path.basename(pickle_file))
-            # Clean scenario_id for filename
-            scenario_id = scenario_id.replace("/", "_").replace("\\", "_")
+        # Generate output filename
+        scenario_id = scenario.get("metadata", {}).get("scenario_id", os.path.basename(pickle_file))
+        # Clean scenario_id for filename
+        scenario_id = scenario_id.replace("/", "_").replace("\\", "_")
 
-            if output_format == "png":
-                # Use first timestep (timestep 0)
-                output_file = os.path.join(output_path, f"{scenario_id}.png")
-                # Render PNG
-                render_scenario_bev(
-                    scenario=scenario,
-                    output_path=output_file,
-                    show_trajectory=show_trajectory,
-                    scatter_map=scatter_map,
-                )
-            elif output_format == "video":
-                output_file = os.path.join(output_path, f"{scenario_id}.mp4")
-                # Render video
-                render_scenario_video(
-                    scenario=scenario,
-                    output_path=output_file,
-                    show_trajectory=show_trajectory,
-                    fps=fps,
-                    scatter_map=scatter_map,
-                )
-            else:
-                raise ValueError(f"Unknown output format: {output_format}")
+        if output_format == "png":
+            # Use first timestep (timestep 0)
+            output_file = os.path.join(output_path, f"{scenario_id}.png")
+            # Render PNG
+            render_scenario_bev(
+                scenario=scenario,
+                output_path=output_file,
+                show_trajectory=show_trajectory,
+                scatter_map=scatter_map,
+            )
+        elif output_format == "video":
+            output_file = os.path.join(output_path, f"{scenario_id}.mp4")
+            # Render video
+            render_scenario_video(
+                scenario=scenario,
+                output_path=output_file,
+                show_trajectory=show_trajectory,
+                fps=fps,
+                scatter_map=scatter_map,
+            )
+        else:
+            raise ValueError(f"Unknown output format: {output_format}")
 
-            success_count += 1
-
-        except Exception as e:
-            logger.error(f"Failed to visualize {pickle_file}: {e}")
-            error_count += 1
-            continue
-
-    stats = {
-        "total_scenarios": len(pickle_files),
-        "success": success_count,
-        "errors": error_count,
-    }
 
     logger.info("✅ Visualization complete")
-    logger.info(f"   • Success: {success_count}")
-    if error_count > 0:
-        logger.warning(f"   • Errors: {error_count}")
 
-    return stats
+    return {}

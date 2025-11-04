@@ -105,6 +105,8 @@ visualization:
   max_scenarios: null                    # Maximum number of scenarios to visualize
   show_trajectory: true                  # Show trajectory history
   scatter_map: false                     # Render road map as scattered points
+  follow_ego: false                      # Center view on ego vehicle (video: dynamic tracking)
+  field_radius: null                     # Viewport radius in meters (default: 50m if follow_ego=true)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

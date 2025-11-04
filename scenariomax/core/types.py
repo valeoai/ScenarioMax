@@ -106,9 +106,9 @@ ALL_TYPES = (
 )
 
 # ===== Output Formats =====
-FORMAT_TFEXAMPLE = "tfexample"
-FORMAT_JSON = "json"
-FORMAT_PUFFER = "puffer"
+FORMAT_TFEXAMPLE = "tfexample"  # TFRecord format (Waymax/V-Max simulators)
+FORMAT_JSON = "json"  # JSON format (GPUDrive simulator)
+FORMAT_PUFFER = "puffer"  # Binary format (PufferDrive simulator)
 
 SUPPORTED_FORMATS = {FORMAT_TFEXAMPLE, FORMAT_JSON, FORMAT_PUFFER}
 

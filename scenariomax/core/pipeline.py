@@ -130,13 +130,21 @@ def _save_result(
 
         with tf.io.TFRecordWriter(tfrecord_file) as writer:
             writer.write(scenario.SerializeToString())
-    elif target_format in [FORMAT_JSON, FORMAT_PUFFER]:
-        # This is JSON or Puffer format
+    elif target_format == FORMAT_JSON:
+        # This is JSON format
         import json
 
         json_file = os.path.join(output_path, f"{scenario_id}.json")
         with open(json_file, "w") as f:
             json.dump(scenario, f, indent=2, cls=NumpyEncoder)
+    elif target_format == FORMAT_PUFFER:
+        # Convert puffer dict to binary format
+        from scenariomax.stage3_format.puffer.binary_converter import puffer_dict_to_binary
+
+        binary_data = puffer_dict_to_binary(scenario)
+        binary_file = os.path.join(output_path, f"{scenario_id}.bin")
+        with open(binary_file, "wb") as f:
+            f.write(binary_data)
     else:
         # Fallback to pickle
         save_pickle(scenario, os.path.join(output_path, f"{scenario_id}.pkl"))
@@ -478,13 +486,55 @@ def _postprocess_tfexample(output_path: str, format_options: dict) -> None:
 
 
 def _postprocess_json(output_path: str) -> None:
-    """Merge JSON files if needed."""
+    """Postprocess JSON files for GPUDrive simulator."""
     logger.info("✅ JSON files ready")
 
 
 def _postprocess_puffer(output_path: str) -> None:
-    """Merge Puffer files if needed."""
-    logger.info("✅ Puffer files ready")
+    """Merge Puffer binary files from subdirectories and rename sequentially."""
+    import shutil
+
+    logger.info("🔄 Merging Puffer binary files")
+
+    # Collect all subdirectories
+    subdirs = [d for d in os.listdir(output_path) if os.path.isdir(os.path.join(output_path, d))]
+
+    if not subdirs:
+        logger.info("✅ No subdirectories found, binaries already in output root")
+        return
+
+    logger.info(f"Found {len(subdirs)} dataset subdirectories: {subdirs}")
+
+    # Collect all binary files from subdirectories
+    all_binary_files = []
+    for subdir in subdirs:
+        subdir_path = os.path.join(output_path, subdir)
+        binary_files = [os.path.join(subdir_path, f) for f in os.listdir(subdir_path) if f.endswith(".bin")]
+        all_binary_files.extend(binary_files)
+        logger.info(f"  {subdir}: {len(binary_files)} binary files")
+
+    if not all_binary_files:
+        logger.info("⚠️  No binary files found")
+        return
+
+    # Sort files to ensure consistent ordering
+    all_binary_files.sort()
+
+    logger.info(f"Renaming and moving {len(all_binary_files)} files to output root")
+
+    # Rename and move files to output root
+    for idx, src_file in enumerate(all_binary_files):
+        dst_file = os.path.join(output_path, f"map_{idx:03d}.bin")
+        shutil.move(src_file, dst_file)
+
+    # Clean up empty subdirectories
+    for subdir in subdirs:
+        subdir_path = os.path.join(output_path, subdir)
+        if os.path.exists(subdir_path) and not os.listdir(subdir_path):
+            os.rmdir(subdir_path)
+            logger.info(f"  Removed empty directory: {subdir}")
+
+    logger.info(f"✅ Puffer binaries ready: map_000.bin to map_{len(all_binary_files)-1:03d}.bin")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -604,6 +654,10 @@ def run_all_pipeline(
     # Postprocess based on format
     if format == FORMAT_TFEXAMPLE:
         _postprocess_tfexample(output_path, kwargs)
+    elif format == FORMAT_JSON:
+        _postprocess_json(output_path)
+    elif format == FORMAT_PUFFER:
+        _postprocess_puffer(output_path)
 
     total_time = time.time() - start_time
     logger.info("=" * 80)
