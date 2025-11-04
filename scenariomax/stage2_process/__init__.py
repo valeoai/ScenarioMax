@@ -4,6 +4,7 @@ Stage 2 Processing Module - Simple processor registry.
 Available processors:
 - 'validation': Validate scenario structure and physics
 - 'traffic_lights': Add/interpolate traffic light states
+- 'polyline_interpolation': Interpolate polylines to ensure dense representation
 
 Usage:
     from scenariomax.stage2_process import get_processors
@@ -72,7 +73,9 @@ def get_processors(
             processors.append(traffic_lights_processor)
 
         else:
-            raise ValueError(f"Unknown processor: {name}. Available: validation, traffic_lights")
+            raise ValueError(
+                f"Unknown processor: {name}. Available: validation, traffic_lights, polyline_interpolation"
+            )
 
     logger.debug(f"Loaded {len(processors)} processors: {processor_names}")
     return processors

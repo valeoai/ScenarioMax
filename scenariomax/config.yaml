@@ -64,7 +64,7 @@ output:
 # ═══════════════════════════════════════════════════════════════════════════
 processing:
   # Processor selection (use processor names as strings)
-  # Available processors: validation, traffic_lights
+  # Available processors: validation, traffic_lights, polyline_interpolation
   processors: []                         # List of processor names (e.g., [validation, traffic_lights])
 
   # Processor-specific configurations
@@ -79,6 +79,9 @@ processing:
       heading_tolerance_deg: 30.0        # Tolerance for heading-velocity alignment (degrees)
 
     traffic_lights: {}                   # Traffic lights processor config (no options currently)
+
+    polyline_interpolation:
+      max_segment_length: 2.0            # Maximum distance between consecutive polyline points (meters)
 
   # Processing behavior
   save_output: true                      # Save processed scenarios (false for validation-only)

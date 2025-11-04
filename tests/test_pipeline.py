@@ -14,12 +14,24 @@ Uses real test data from:
 """
 
 import os
+import pickle
 import shutil
 from pathlib import Path
 
 import pytest
 
-from scenariomax.core import pipeline, processor
+from scenariomax.core import pipeline
+
+
+def load_pickle_files(directory):
+    """Load all pickle files from a directory."""
+    scenarios = []
+    for root, _, files in os.walk(directory):
+        for file in sorted(files):
+            if file.endswith(".pkl"):
+                with open(os.path.join(root, file), "rb") as f:
+                    scenarios.append(pickle.load(f))
+    return scenarios
 
 
 # Test data paths
@@ -94,7 +106,7 @@ class TestStage1RawToUnified:
         assert len(pickle_files) > 0, "No pickle files created"
 
         # Load and verify one scenario
-        scenarios = processor.load_pickle_files(str(waymo_output))
+        scenarios = load_pickle_files(str(waymo_output))
         assert len(scenarios) > 0
 
         # Verify scenario structure
@@ -156,7 +168,7 @@ class TestStage1RawToUnified:
         assert len(pickle_files) > 0, "No pickle files created"
 
         # Load and verify one scenario
-        scenarios = processor.load_pickle_files(str(nuplan_output))
+        scenarios = load_pickle_files(str(nuplan_output))
         assert len(scenarios) > 0
 
         # Verify scenario structure
@@ -211,7 +223,7 @@ class TestStage2ProcessUnified:
         assert len(pickle_files) > 0
 
         # Load and verify scenarios were processed
-        scenarios = processor.load_pickle_files(str(processed_dir))
+        scenarios = load_pickle_files(str(processed_dir))
         assert len(scenarios) > 0
 
     def test_process_unified_custom_processor(self, output_dir):
@@ -246,7 +258,7 @@ class TestStage2ProcessUnified:
         )
 
         # Verify custom field was added
-        scenarios = processor.load_pickle_files(str(processed_dir))
+        scenarios = load_pickle_files(str(processed_dir))
         assert len(scenarios) > 0
         assert scenarios[0]["metadata"]["test_processed"] is True
 
@@ -386,13 +398,12 @@ class TestFullPipeline:
             pytest.skip("Waymo test data not found")
 
         # Full pipeline: Raw → Unified → Processed → TFExample
-        stats = pipeline.process_scenarios(
+        stats = pipeline.run_all_pipeline(
             datasets={"waymo": str(WAYMO_DATA_DIR)},
             output_path=str(output_dir),
             format="tfexample",
             processors=None,  # No processing
             num_workers=2,
-            save_intermediate=False,  # In-memory mode
             validate=False,
             num_files=1,
             tfrecord_name="training",
@@ -416,13 +427,12 @@ class TestFullPipeline:
             pytest.skip("Waymo test data not found")
 
         # Full pipeline with validation
-        stats = pipeline.process_scenarios(
+        stats = pipeline.run_all_pipeline(
             datasets={"waymo": str(WAYMO_DATA_DIR)},
             output_path=str(output_dir),
             format="tfexample",
             processors=None,
             num_workers=2,
-            save_intermediate=False,
             validate=True,  # Enable validation
             num_files=1,
             tfrecord_name="training",
@@ -444,13 +454,12 @@ class TestFullPipeline:
         from scenariomax.stage2_process import enhance_scenarios
 
         # Full pipeline with processing
-        stats = pipeline.process_scenarios(
+        stats = pipeline.run_all_pipeline(
             datasets={"waymo": str(WAYMO_DATA_DIR)},
             output_path=str(output_dir),
             format="tfexample",
             processors=[enhance_scenarios],  # Add traffic lights
             num_workers=2,
-            save_intermediate=False,
             validate=False,
             num_files=1,
             tfrecord_name="training",
@@ -466,13 +475,12 @@ class TestFullPipeline:
             pytest.skip("Waymo test data not found")
 
         # Full pipeline with intermediate saves
-        stats = pipeline.process_scenarios(
+        stats = pipeline.run_all_pipeline(
             datasets={"waymo": str(WAYMO_DATA_DIR)},
             output_path=str(output_dir),
             format="json",
             processors=None,
             num_workers=2,
-            save_intermediate=True,  # Save intermediate pickles
             validate=False,
             num_files=1,
         )
@@ -492,13 +500,12 @@ class TestFullPipeline:
             pytest.skip("nuPlan test data not found")
 
         # Full pipeline with nuPlan
-        stats = pipeline.process_scenarios(
+        stats = pipeline.run_all_pipeline(
             datasets={"nuplan": str(NUPLAN_DATA_DIR)},
             output_path=str(output_dir),
             format="json",
             processors=None,
             num_workers=2,
-            save_intermediate=False,
             validate=False,
             num_files=1,
         )
@@ -525,7 +532,7 @@ class TestMultiDataset:
             pytest.skip("Test data not found")
 
         # Process both datasets together
-        stats = pipeline.process_scenarios(
+        stats = pipeline.run_all_pipeline(
             datasets={
                 "waymo": str(WAYMO_DATA_DIR),
                 "nuplan": str(NUPLAN_DATA_DIR),
@@ -534,7 +541,6 @@ class TestMultiDataset:
             format="tfexample",
             processors=None,
             num_workers=2,
-            save_intermediate=False,
             validate=False,
             num_files=1,  # 1 file from each dataset
             tfrecord_name="multi",
@@ -576,7 +582,7 @@ class TestValidation:
         # Load scenarios and validate manually
         from scenariomax.stage2_process.validation import soft_validate
 
-        scenarios = processor.load_pickle_files(str(unified_dir))
+        scenarios = load_pickle_files(str(unified_dir))
         assert len(scenarios) > 0
 
         # Run soft validation on each scenario
@@ -608,7 +614,7 @@ class TestValidation:
         # Load scenarios and validate with strict validation
         from scenariomax.stage2_process.validation import strict_validate
 
-        scenarios = processor.load_pickle_files(str(unified_dir))
+        scenarios = load_pickle_files(str(unified_dir))
         assert len(scenarios) > 0
 
         # Run strict validation on first few scenarios
