@@ -48,7 +48,7 @@ def get_format_function(format: str):
         return convert_to_puffer.convert
 
 
-def load_pickle(file_path):
+def load_pickle(file_path, _dataset_version=None):
     """Load a pickle file from the specified path."""
 
     with open(file_path, "rb") as f:

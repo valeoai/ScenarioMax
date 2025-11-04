@@ -11,12 +11,78 @@ from scenariomax.core import types
 logger = logger_utils.get_logger(__name__)
 
 
-def convert_road_map_elements(static_map_elements: dict) -> list[dict]:
+def calculate_area(p1: dict, p2: dict, p3: dict) -> float:
+    """
+    Calculate the area of the triangle using the determinant method.
+
+    Args:
+        p1: First point dict with 'x' and 'y' keys
+        p2: Second point dict with 'x' and 'y' keys
+        p3: Third point dict with 'x' and 'y' keys
+
+    Returns:
+        Triangle area
+    """
+    return 0.5 * abs((p1["x"] - p3["x"]) * (p2["y"] - p1["y"]) - (p1["x"] - p2["x"]) * (p3["y"] - p1["y"]))
+
+
+def simplify_polyline(geometry: list[dict], polyline_reduction_threshold: float) -> list[dict]:
+    """
+    Simplify the given polyline using a method inspired by Visvalingham-Whyatt, optimized for Python.
+
+    Args:
+        geometry: List of point dicts with 'x' and 'y' keys
+        polyline_reduction_threshold: Minimum triangle area threshold for point removal
+
+    Returns:
+        Simplified polyline (list of point dicts)
+    """
+    num_points = len(geometry)
+    if num_points < 3:
+        return geometry  # Not enough points to simplify
+
+    skip = [False] * num_points
+    skip_changed = True
+
+    while skip_changed:
+        skip_changed = False
+        k = 0
+        while k < num_points - 1:
+            k_1 = k + 1
+            while k_1 < num_points - 1 and skip[k_1]:
+                k_1 += 1
+            if k_1 >= num_points - 1:
+                break
+
+            k_2 = k_1 + 1
+            while k_2 < num_points and skip[k_2]:
+                k_2 += 1
+            if k_2 >= num_points:
+                break
+
+            point1 = geometry[k]
+            point2 = geometry[k_1]
+            point3 = geometry[k_2]
+            area = calculate_area(point1, point2, point3)
+
+            if area < polyline_reduction_threshold:
+                skip[k_1] = True
+                skip_changed = True
+                k = k_2
+            else:
+                k = k_1
+
+    return [geometry[i] for i in range(num_points) if not skip[i]]
+
+
+def convert_road_map_elements(static_map_elements: dict, polyline_reduction_threshold: float = 0.1) -> list[dict]:
     """
     Convert static map elements from unified format to Puffer road_map_elements.
 
     Args:
         static_map_elements: Dict of static map elements from unified scenario
+        polyline_reduction_threshold: Minimum triangle area threshold for polyline simplification.
+                                       If 0.0 (default), no simplification is applied.
 
     Returns:
         List of road map element dictionaries in Puffer format
@@ -25,6 +91,10 @@ def convert_road_map_elements(static_map_elements: dict) -> list[dict]:
 
     for element_id, element_data in static_map_elements.items():
         element_type = element_data.get("type")
+
+        if element_type in ["DRIVEWAY", "SPEED_BUMP", "STOP_SIGN", "CROSSWALK"]:
+            # Skip driveways as they are not supported in Puffer format
+            continue
 
         if not element_type:
             logger.warning(f"Skipping map element with unset type: {element_id}")
@@ -36,6 +106,14 @@ def convert_road_map_elements(static_map_elements: dict) -> list[dict]:
         if polyline.shape[1] == 2:
             polyline = np.column_stack([polyline, np.zeros(len(polyline))])
 
+        # Apply polyline reduction if threshold is set
+        if polyline_reduction_threshold > 0.0 and len(polyline) >= 3:
+            # Convert numpy array to list of dicts for simplification algorithm
+            geometry = [{"x": float(p[0]), "y": float(p[1]), "z": float(p[2])} for p in polyline]
+            simplified_geometry = simplify_polyline(geometry, polyline_reduction_threshold)
+            # Convert back to numpy array
+            polyline = np.array([[p["x"], p["y"], p["z"]] for p in simplified_geometry])
+
         # Calculate direction vectors
         dir_xyz = _calculate_direction_vectors(polyline)
 
@@ -43,7 +121,7 @@ def convert_road_map_elements(static_map_elements: dict) -> list[dict]:
         element_type_int = _convert_map_element_type_to_int(element_type)
 
         puffer_element = {
-            "id": element_id,  # Use int ID directly
+            "id": element_id,
             "type": element_type_int,
             "xyz": polyline,
             "dir_xyz": dir_xyz,
@@ -51,8 +129,9 @@ def convert_road_map_elements(static_map_elements: dict) -> list[dict]:
 
         # Add lane-specific attributes if this is a lane
         if types.is_lane(element_type):
-            puffer_element["speed_limit_mph"] = float(element_data.get("speed_limit_mph", 0.0))
-            puffer_element["speed_limit_kmh"] = float(element_data.get("speed_limit_kmh", 0.0))
+            # Convert speed limit from km/h to m/s
+            speed_limit_kmh = element_data.get("speed_limit_kmh", 0.0)
+            puffer_element["speed_limit"] = speed_limit_kmh / 3.6  # m/s
 
             # Convert lane connectivity (entry/exit/neighbors)
             entry_lanes = element_data.get("entry_lanes", [])

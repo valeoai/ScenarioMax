@@ -13,9 +13,14 @@ def merge_tfrecord_files(tfrecord_files: list, merged_file_path: str) -> None:
     """
     Merge TFRecord files from multiple directories into a single file and clean up.
 
+    Optimized approach:
+    - Streams records from each file (no memory loading)
+    - Deletes individual files immediately after reading (reduces disk usage)
+    - Single-pass merge (no redundant I/O)
+
     Args:
-        output_dir: Directory containing subdirectories with TFRecord files
-        merged_filename: Name for the output merged file
+        tfrecord_files: List of TFRecord file paths to merge
+        merged_file_path: Path for the output merged file
     """
     import shutil
 
@@ -47,15 +52,26 @@ def merge_tfrecord_files(tfrecord_files: list, merged_file_path: str) -> None:
                 # Track directory for later removal
                 dir_to_remove = os.path.dirname(tfrecord_file)
                 dirs_to_remove.add(dir_to_remove)
+
+                # Delete the individual file immediately after reading to free disk space
+                try:
+                    os.remove(tfrecord_file)
+                    logger.debug(f"Deleted merged file: {tfrecord_file}")
+                except OSError as e:
+                    logger.warning(f"Could not delete file {tfrecord_file}: {e!s}")
             except Exception as e:
                 logger.error(f"Error processing file {tfrecord_file}: {e!s}")
 
-    # Remove directories after all files are processed
+    # Remove empty directories after all files are processed
     for dir_to_remove in dirs_to_remove:
         if os.path.exists(dir_to_remove):
             try:
-                shutil.rmtree(dir_to_remove)
-                logger.debug(f"Removed directory: {dir_to_remove}")
+                # Only remove if directory is empty (all files were successfully deleted)
+                if not os.listdir(dir_to_remove):
+                    shutil.rmtree(dir_to_remove)
+                    logger.debug(f"Removed empty directory: {dir_to_remove}")
+                else:
+                    logger.warning(f"Directory not empty, skipping removal: {dir_to_remove}")
             except Exception as e:
                 logger.warning(f"Could not remove directory {dir_to_remove}: {e!s}")
 

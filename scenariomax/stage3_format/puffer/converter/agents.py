@@ -30,10 +30,7 @@ def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length
     # Extract lane centers once for all agents (optimization)
     lane_data = routes.extract_lane_centers(road_map_elements)
 
-    # Put ego agent first
-    sorted_agent_items = sorted(dynamic_agents.items(), key=lambda item: (item[0] != ego_id, item[0]))
-
-    for idx, (agent_id, agent_data) in enumerate(sorted_agent_items):
+    for idx, (agent_id, agent_data) in enumerate(dynamic_agents.items()):
         states = agent_data.get("states", {})
 
         # Get position data (x, y, z)
@@ -49,12 +46,6 @@ def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length
         width = states.get("width", np.zeros(length))
         height = states.get("height", np.zeros(length))
         valid = states.get("valid", np.ones(length, dtype=bool))
-
-        # Calculate total distance traveled
-        total_distance = _calculate_distance_traveled(position, valid)
-
-        # Determine if this agent should be marked as expert (ego vehicle)
-        mark_as_expert = agent_id == ego_id
 
         # Convert agent type to int
         agent_type_int = _convert_agent_type_to_int(agent_data.get("type", "TYPE_UNSET"))
@@ -82,32 +73,11 @@ def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length
                 "valid": valid,
             },
             "routes": agent_routes,
-            "mark_as_expert": mark_as_expert,
-            "total_distance_traveled": total_distance,
         }
 
         puffer_agents.append(puffer_agent)
 
     return puffer_agents
-
-
-def _calculate_distance_traveled(position: np.ndarray, valid: np.ndarray) -> float:
-    """
-    Calculate total distance traveled by an agent.
-
-    Args:
-        position: (N, 3) array of positions
-        valid: (N,) boolean array indicating valid timesteps
-
-    Returns:
-        Total distance traveled in meters
-    """
-    if len(position) < 2:
-        return 0.0
-
-    # Calculate distances between consecutive valid positions
-    distances = np.linalg.norm(np.diff(position[valid], axis=0), axis=1)
-    return float(np.sum(distances))
 
 
 def _convert_agent_type_to_int(agent_type: str) -> int:
