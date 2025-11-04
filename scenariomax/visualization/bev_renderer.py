@@ -596,7 +596,7 @@ def visualize_scenarios(
     output_format: str = "png",
     fps: int = 10,
     scatter_map: bool = False,
-    follow_ego: bool = True,
+    follow_ego: bool = False,
     field_radius: float | None = None,
 ) -> dict[str, Any]:
     """
@@ -639,10 +639,6 @@ def visualize_scenarios(
     # Create output directory
     os.makedirs(output_path, exist_ok=True)
 
-    # Process scenarios
-    success_count = 0
-    error_count = 0
-
     for pickle_file in tqdm(pickle_files, desc="Visualizing"):
         # Load scenario
         with open(pickle_file, "rb") as f:
@@ -662,6 +658,7 @@ def visualize_scenarios(
                 output_path=output_file,
                 show_trajectory=show_trajectory,
                 scatter_map=scatter_map,
+                field_radius=field_radius,
             )
         elif output_format == "video":
             output_file = os.path.join(output_path, f"{scenario_id}.mp4")
@@ -672,6 +669,8 @@ def visualize_scenarios(
                 show_trajectory=show_trajectory,
                 fps=fps,
                 scatter_map=scatter_map,
+                follow_ego=follow_ego,
+                field_radius=field_radius,
             )
         else:
             raise ValueError(f"Unknown output format: {output_format}")
