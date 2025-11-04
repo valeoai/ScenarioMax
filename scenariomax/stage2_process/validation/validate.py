@@ -557,33 +557,32 @@ def _validate_lane_connectivity(
     all_lane_ids = {eid for eid, elem in all_elements.items() if types.is_lane(elem.get("type", ""))}
 
     for entry_id in lane.get("entry_lanes", []):
-        if str(entry_id) not in all_lane_ids:
+        if entry_id not in all_lane_ids:
             errors.append(f"Lane '{lane_id}' references non-existent entry lane '{entry_id}'")
 
     for exit_id in lane.get("exit_lanes", []):
-        if str(exit_id) not in all_lane_ids:
+        if exit_id not in all_lane_ids:
             errors.append(f"Lane '{lane_id}' references non-existent exit lane '{exit_id}'")
 
     if validation_level >= 3:
         for exit_id in lane.get("exit_lanes", []):
-            exit_id_str = str(exit_id)
-            if exit_id_str in all_elements:
-                exit_lane = all_elements[exit_id_str]
-                exit_entries = [str(e) for e in exit_lane.get("entry_lanes", [])]
-                if lane_id not in exit_entries:
+            if exit_id in all_elements:
+                exit_lane = all_elements[exit_id]
+                exit_entries = exit_lane.get("entry_lanes", [])
+                if int(lane_id) not in exit_entries:
                     warnings.append(
-                        f"Lane '{lane_id}' exits to '{exit_id_str}', but '{exit_id_str}' doesn't list '{lane_id}' as entry",  # noqa: E501
+                        f"Lane '{lane_id}' exits to '{exit_id}', but '{exit_id}' doesn't list '{lane_id}' as entry",  # noqa: E501
                     )
 
 
 def _validate_lane_boundaries(lane_id: str, lane: dict, all_elements: dict, errors: list) -> None:
     """Validate lane boundaries."""
     for boundary_id in lane.get("left_boundaries", []):
-        if str(boundary_id) not in all_elements:
+        if boundary_id not in all_elements:
             errors.append(f"Lane '{lane_id}' references non-existent left boundary '{boundary_id}'")
 
     for boundary_id in lane.get("right_boundaries", []):
-        if str(boundary_id) not in all_elements:
+        if boundary_id not in all_elements:
             errors.append(f"Lane '{lane_id}' references non-existent right boundary '{boundary_id}'")
 
 
@@ -599,23 +598,22 @@ def _validate_lane_neighbors(
     all_lane_ids = {eid for eid, elem in all_elements.items() if types.is_lane(elem.get("type", ""))}
 
     for neighbor_id in lane.get("left_neighbor", []):
-        if str(neighbor_id) not in all_lane_ids:
+        if neighbor_id not in all_lane_ids:
             errors.append(f"Lane '{lane_id}' references non-existent left neighbor '{neighbor_id}'")
 
     for neighbor_id in lane.get("right_neighbor", []):
-        if str(neighbor_id) not in all_lane_ids:
+        if neighbor_id not in all_lane_ids:
             errors.append(f"Lane '{lane_id}' references non-existent right neighbor '{neighbor_id}'")
 
     if validation_level >= 3:
         for right_neighbor_id in lane.get("right_neighbor", []):
-            right_neighbor_id_str = str(right_neighbor_id)
-            if right_neighbor_id_str in all_elements:
-                right_neighbor = all_elements[right_neighbor_id_str]
-                left_neighbors = [str(n) for n in right_neighbor.get("left_neighbor", [])]
-                if lane_id not in left_neighbors:
+            if right_neighbor_id in all_elements:
+                right_neighbor = all_elements[right_neighbor_id]
+                left_neighbors = right_neighbor.get("left_neighbor", [])
+                if int(lane_id) not in left_neighbors:
                     warnings.append(
-                        f"Lane '{lane_id}' has right neighbor '{right_neighbor_id_str}', "
-                        f"but '{right_neighbor_id_str}' doesn't list '{lane_id}' as left neighbor",
+                        f"Lane '{lane_id}' has right neighbor '{right_neighbor_id}', "
+                        f"but '{right_neighbor_id}' doesn't list '{lane_id}' as left neighbor",
                     )
 
 
@@ -888,10 +886,10 @@ def _validate_traffic_light(
 ) -> None:
     """Validate traffic light."""
     if "lane" in traffic_light:
-        lane_id = str(traffic_light["lane"])
+        lane_id = traffic_light["lane"]
         if lane_id not in all_lane_ids:
             errors.append(f"Traffic light '{tl_id}' references non-existent lane '{lane_id}'")
-        elif "position" in traffic_light and "polyline" in static_map_elements[lane_id]:
+        elif "position" in traffic_light and lane_id in static_map_elements and "polyline" in static_map_elements[lane_id]:  # noqa: E501
             tl_position = traffic_light["position"][:2]
             lane_polyline = static_map_elements[lane_id]["polyline"][:, :2]
             distances = np.linalg.norm(lane_polyline - tl_position, axis=1)
@@ -945,12 +943,14 @@ def _validate_scenario_coherence(scenario: dict, validation_level: int, errors: 
 
     if "objects_of_interest" in metadata:
         for obj_id in metadata["objects_of_interest"]:
-            if str(obj_id) not in dynamic_agents:
+            if obj_id not in dynamic_agents:
                 errors.append(f"Object of interest '{obj_id}' not found in dynamic_agents")
 
     if "tracks_to_predict" in metadata:
-        for track_id in metadata["tracks_to_predict"]:
-            if str(track_id) not in dynamic_agents:
+        for track_info in metadata["tracks_to_predict"]:
+            # tracks_to_predict is a list of dicts with "track_index" keys
+            track_id = track_info.get("track_index") if isinstance(track_info, dict) else track_info
+            if track_id is not None and track_id not in dynamic_agents:
                 errors.append(f"Track to predict '{track_id}' not found in dynamic_agents")
 
     if "timesteps" in metadata:

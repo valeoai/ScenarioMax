@@ -82,7 +82,11 @@ def worker_scenario_func(
             if process_func:
                 scenario = process_func(scenario)
 
-            scenario_id = scenario["id"]
+            # Validate scenario has required ID field
+            scenario_id = scenario.get("id")
+            if not scenario_id:
+                logger.error(f"Scenario missing 'id' field after processing. Scenario keys: {list(scenario.keys())}")
+                raise ValueError("Invalid scenario: missing 'id' field")
 
             if format_func:
                 scenario = format_func(scenario)
@@ -91,8 +95,10 @@ def worker_scenario_func(
                 _save_result(scenario, scenario_id, output_path, format_func, target_format)
 
             successes += 1
-        except Exception:
-            logger.exception("Failed to process scenario from %s", scenario)
+        except Exception as e:
+            # Log error with scenario ID if available, otherwise log type info
+            scenario_info = scenario.get("id", f"<unknown, type: {type(scenario).__name__}>") if isinstance(scenario, dict) else f"<invalid type: {type(scenario).__name__}>"  # noqa: E501
+            logger.exception("Failed to process scenario %s: %s", scenario_info, str(e))
             failures += 1
 
     return {"successes": successes, "failures": failures}

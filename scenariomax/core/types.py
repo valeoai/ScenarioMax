@@ -164,24 +164,25 @@ def is_valid_type(obj_type: str) -> bool:
 
 # ===== Utility Functions =====
 def is_yellow_line(line_type: str) -> bool:
-    return "yellow" in line_type
+    return "YELLOW" in line_type.upper()
 
 
 def is_broken_line(line_type: str) -> bool:
-    return "broken" in line_type
+    return "BROKEN" in line_type.upper()
 
 
 def is_solid_line(line_type: str) -> bool:
-    return "solid" in line_type
+    return "SOLID" in line_type.upper()
 
 
 def simplify_traffic_light(state: str) -> str:
     """Convert detailed traffic light states to basic red/yellow/green/unknown"""
-    if "red" in state or state == TRAFFIC_LIGHT_FLASHING_RED:
+    state_upper = state.upper()
+    if "RED" in state_upper or state == TRAFFIC_LIGHT_FLASHING_RED:
         return TRAFFIC_LIGHT_RED
-    elif "yellow" in state:
+    elif "YELLOW" in state_upper:
         return TRAFFIC_LIGHT_YELLOW
-    elif "green" in state:
+    elif "GREEN" in state_upper:
         return TRAFFIC_LIGHT_GREEN
     else:
         return TRAFFIC_LIGHT_UNKNOWN

@@ -391,7 +391,7 @@ The `pipeline` command runs all 3 stages together:
   - `convert_raw_to_unified()`: Stage 1
   - `process_unified_scenarios()`: Stage 2 (file-by-file)
   - `format_unified_to_target()`: Stage 3 (file-by-file)
-  - `process_scenarios()`: Full pipeline
+  - `run_all_pipeline()`: Full pipeline
 - **`scenariomax/dataset_registry.py`**: Dataset configuration registry
 - **`scenariomax/stage1_convert/`**: Dataset-specific extractors and converters
   - `datasets/waymo/`: Waymo Open Motion Dataset

@@ -21,7 +21,7 @@
 #
 #   # Full pipeline (all 3 stages)
 #   scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
-#               output.format=tfexample processing.processors=[validation] 
+#               output.format=tfexample processing.processors=[validation]
 #
 # ═══════════════════════════════════════════════════════════════════════════
 defaults:
