@@ -132,22 +132,16 @@ def handle_process_command(cfg: DictConfig):
 
     # If no processors specified, warn user
     if not processors or len(processors) == 0:
-        from scenariomax.stage2_process import list_processors
-
-        available = list(list_processors().keys())
-        logger.warning("⚠️  No processors specified in config. Available processors:")
-        for name in available:
-            logger.warning(f"   - {name}")
+        logger.warning("⚠️  No processors specified. Scenarios will be copied without modifications.")
+        logger.warning("   Available processors: validation, traffic_lights, polyline_interpolation")
         logger.warning("")
         logger.warning("   Set 'processing.processors=[validation]' in config or override from CLI")
-        logger.warning("   Example: scenariomax command=process processors=[validation]")
+        logger.warning("   Example: scenariomax command=process processing.processors=[validation]")
         logger.warning("")
-        logger.warning("   Proceeding with no-op processor")
+        logger.warning("   Proceeding with identity copy (no processing)")
 
-        # Use no-op for backward compatibility
-        from scenariomax.stage2_process import enhance_scenarios
-
-        processors = [enhance_scenarios]
+        # Set empty list - will be handled by pipeline
+        processors = []
         processor_configs = None
 
     # For 'process' command, src is the input and dst is the output

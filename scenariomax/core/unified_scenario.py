@@ -104,11 +104,6 @@ class UnifiedScenario(dict):
             "timesteps": [],
         }
 
-    @property
-    def export_file_name(self):
-        """Return the file name of .pkl file of this scenario, if exported."""
-        return f"{self['metadata']['dataset_name']}_{self['metadata']['dataset_version']}_{self['id']}"
-
     def get_dynamic_agents_by_type(self, agent_type: str) -> dict[str, dict]:
         """Get all dynamic agents of a specific type."""
         if not types.is_participant(agent_type):

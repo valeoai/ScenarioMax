@@ -59,7 +59,17 @@ def get_processors(
                 return validate_scenario(scenario, **validation_config)
 
             processors.append(validation_processor)
+        elif name == "polyline_interpolation":
+            from scenariomax.stage2_process.polyline_interpolation.processor import interpolate_polylines
 
+            # Get polyline_interpolation config
+            pi_config = configs.get("polyline_interpolation", {})
+
+            # Create processor function
+            def polyline_processor(scenario):
+                return interpolate_polylines(scenario, **pi_config)
+
+            processors.append(polyline_processor)
         elif name == "traffic_lights":
             from scenariomax.stage2_process.traffic_lights.processor import add_traffic_lights_to_scenario
 
@@ -71,7 +81,6 @@ def get_processors(
                 return add_traffic_lights_to_scenario(scenario, **tl_config)
 
             processors.append(traffic_lights_processor)
-
         else:
             raise ValueError(
                 f"Unknown processor: {name}. Available: validation, traffic_lights, polyline_interpolation"

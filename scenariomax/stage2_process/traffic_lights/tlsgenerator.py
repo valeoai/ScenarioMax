@@ -38,15 +38,27 @@ class TLSGenerator:
     """
 
     def __init__(self, T: int, delta_t: int = 10, smoothing_width: int = 30, yellow_duration: int = 20) -> None:
+        """
+        Initialize traffic light signal generator with kinematic thresholds.
+
+        Velocity and acceleration thresholds used to infer traffic light states
+        from observed vehicle behavior:
+        - V_GREEN (m/s): Min velocity indicating vehicles moving (green light)
+        - V_RED (m/s): Max velocity indicating vehicles stopped (red light)
+        - A_GREEN (m/s²): Min acceleration indicating vehicles accelerating (green)
+        - A_RED (m/s²): Max acceleration indicating vehicles decelerating (red/yellow)
+        - THETA: Confidence threshold for state detection [0-1]
+        - W_BIG / W_SMALL: Weights for optimization scoring
+        """
         self.T = T
-        self.V_GREEN = 3
-        self.V_RED = 1
-        self.A_GREEN = 0.5
-        self.A_RED = -1
+        self.V_GREEN = 3          # m/s - velocity threshold for green light
+        self.V_RED = 1            # m/s - velocity threshold for red light
+        self.A_GREEN = 0.5        # m/s² - acceleration threshold for green light
+        self.A_RED = -1           # m/s² - acceleration threshold for red light
         self.DELTA_T = delta_t
-        self.THETA = 0.8
-        self.W_BIG = 100
-        self.W_SMALL = 0.1
+        self.THETA = 0.8          # confidence threshold
+        self.W_BIG = 100          # large weight for optimization
+        self.W_SMALL = 0.1        # small weight for optimization
         self.SMOOTHING_WIDTH = smoothing_width
         self.YELLOW_DURATION = yellow_duration
 

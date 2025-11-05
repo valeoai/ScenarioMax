@@ -3,11 +3,7 @@ import pickle
 
 import numpy as np
 
-from scenariomax import logger_utils
 from scenariomax.core.types import FORMAT_JSON, FORMAT_PUFFER, FORMAT_TFEXAMPLE
-
-
-logger = logger_utils.get_logger(__name__)
 
 
 class NumpyEncoder(json.JSONEncoder):

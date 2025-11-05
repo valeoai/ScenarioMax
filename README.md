@@ -21,9 +21,9 @@ With ScenarioMax, you can:
    - Results saved in folders named by dataset combination (e.g., "waymo_nuplan")
 
 2. **Process and enhance scenarios**: Modify the unified format with various processors
-   - Traffic light inference from vehicle behavior
-   - Two-level validation (soft/strict)
-   - Filtering, interpolation, and data cleaning
+   - `validation`: Two-level validation (soft/strict) for data quality
+   - `traffic_lights`: Traffic light inference from vehicle behavior
+   - `polyline_interpolation`: Interpolate polylines for dense representation
 
 3. **Flexible pipeline modes**:
    - **3-stage independent**: Run Convert → Process → Format separately
@@ -37,7 +37,7 @@ With ScenarioMax, you can:
 - Unified Scenario (intermediate `.pkl` format)
 - TFExample (`.tfrecord` for Waymax/V-Max simulators)
 - JSON (for GPUDrive simulator)
-- Puffer (JSON format for PufferDrive simulator)
+- Puffer (binary `.bin` format for PufferDrive simulator)
 
 ## 🚀 Key Features
 
@@ -85,7 +85,7 @@ uv venv -p 3.10
 source .venv/bin/activate
 
 # Install ScenarioMax with dataset support
-make womd          # Waymo Open Motion Dataset
+make waymo         # Waymo Open Motion Dataset
 make nuplan        # nuPlan dataset
 make nuscenes      # nuScenes dataset (WIP)
 make all           # All datasets
@@ -96,7 +96,7 @@ make dev           # Development environment
 
 ```bash
 # For specific datasets
-uv pip install -e ".[womd]"       # Waymo Open Motion Dataset
+uv pip install -e ".[waymo]"      # Waymo Open Motion Dataset
 uv pip install -e ".[nuplan]"     # nuPlan support
 uv pip install -e ".[nuscenes]"   # nuScenes support (WIP)
 uv pip install -e ".[dev]"        # Development tools
@@ -139,32 +139,25 @@ Stage 3: Format   - Unified pickles → Target format (tfexample/json/puffer)
 ### Basic Usage
 
 ```bash
-# Stage 1: Convert raw Waymo to unified format (with optional validation)
-scenariomax convert --waymo_src /data/waymo --dst /output/unified --num_workers 16 --validate
+# Stage 1: Convert raw dataset to unified format
+scenariomax command=convert datasets.waymo=/data/waymo output.dst=/output/unified execution.num_workers=16
 
-# Stage 2: Process unified scenarios (optional - add traffic lights, validate, etc.)
-scenariomax process --src /output/unified --dst /output/processed --traffic-lights --validate
+# Stage 2: Process unified scenarios (add traffic lights, validate, etc.)
+scenariomax command=process input_path=/output/unified output.dst=/output/processed \
+            processing.processors=[validation,traffic_lights]
 
 # Stage 3: Convert to target format
-scenariomax format --src /output/processed --dst /output/tfrecord --format tfexample --shard 10
-scenariomax format --src /output/processed --dst /output/json --format json
-scenariomax format --src /output/processed --dst /output/puffer --format puffer
+scenariomax command=format input_path=/output/processed output.dst=/output/tfrecord \
+            output.format=tfexample output.num_shards=10
+scenariomax command=format input_path=/output/processed output.dst=/output/json output.format=json
+scenariomax command=format input_path=/output/processed output.dst=/output/puffer output.format=puffer
 
-# Or run all 3 stages at once (file-by-file streaming by default)
-scenariomax pipeline --waymo_src /data/waymo --dst /output --format tfexample --process --num_workers 16
+# Or run all 3 stages at once (file-by-file streaming, memory efficient)
+scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
+            output.format=tfexample execution.num_workers=16
 
-# With production features (checkpointing, validation reports)
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format tfexample \
-  --process \
-  --checkpoint \
-  --validation-report \
-  --num_workers 16
-
-# Visualize unified scenarios (BEV PNG images)
-scenariomax viz --src /output/unified --dst /output/viz --timestep 10 --max-scenarios 100
+# Visualize unified scenarios (BEV PNG/video)
+scenariomax command=viz input_path=/output/unified output.dst=/output/viz
 ```
 
 ## 📊 Usage Examples
@@ -173,89 +166,58 @@ scenariomax viz --src /output/unified --dst /output/viz --timestep 10 --max-scen
 
 ```bash
 # Convert Waymo to TFRecord format (file-by-file streaming)
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format tfexample \
-  --num_workers 8
+scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
+            output.format=tfexample execution.num_workers=8
 ```
 
 ### Use Case 2: Multi-Dataset Processing
 
 ```bash
 # Combine Waymo and nuPlan datasets into single output
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --nuplan_src /data/nuplan \
-  --dst /output \
-  --format tfexample \
-  --shard 10 \
-  --num_workers 16
+scenariomax command=pipeline datasets.waymo=/data/waymo datasets.nuplan=/data/nuplan \
+            output.dst=/output output.format=tfexample output.num_shards=10 \
+            execution.num_workers=16
 ```
 
 ### Use Case 3: Enhanced Processing with Validation
 
 ```bash
 # Add traffic light processing with strict validation
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format tfexample \
-  --process \
-  --traffic-lights \
-  --validate-strict \
-  --num_workers 8
+scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
+            output.format=tfexample processing.processors=[validation,traffic_lights] \
+            processing.processor_configs.validation.mode=strict execution.num_workers=8
 ```
 
 ### Use Case 4: Convert to Puffer Format
 
 ```bash
 # Convert to Puffer simulator format
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format puffer \
-  --process \
-  --num_workers 16
+scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
+            output.format=puffer execution.num_workers=16
 ```
 
-### Use Case 5: Production Pipeline with Checkpointing
+### Use Case 5: Validation-Only Mode
 
 ```bash
-# Run production pipeline with resumable checkpoints
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format tfexample \
-  --checkpoint \
-  --validation-report \
-  --num_workers 16
-
-# If interrupted, re-run the same command - it will resume from checkpoint
+# Process scenarios with validation only
+scenariomax command=process input_path=/output/unified output.dst=/tmp/validation \
+            processing.processors=[validation] \
+            processing.processor_configs.validation.mode=strict
 ```
 
-### Use Case 6: Validation-Only Mode
-
-```bash
-# Validate scenarios without generating output
-scenariomax process \
-  --src /output/unified \
-  --dst /tmp/validation \
-  --validate-strict \
-  --no-output
-```
-
-### Use Case 7: Visualization Workflow
+### Use Case 6: Visualization Workflow
 
 ```bash
 # Stage 1: Convert to unified format
-scenariomax convert --waymo_src /data/waymo --dst /unified --num_workers 8
+scenariomax command=convert datasets.waymo=/data/waymo output.dst=/unified \
+            execution.num_workers=8
 
 # Visualize scenarios
-scenariomax viz --src /unified --dst /viz --timestep 10 --max-scenarios 50
+scenariomax command=viz input_path=/unified output.dst=/viz
 
 # Stage 3: Convert to target format
-scenariomax format --src /unified --dst /output --format json --num_workers 8
+scenariomax command=format input_path=/unified output.dst=/output output.format=json \
+            execution.num_workers=8
 ```
 
 ## 🗂️ Supported Datasets
@@ -315,8 +277,8 @@ scenariomax \
 ```
 
 - **Use Case**: Simulation with PufferDrive simulator
-- **Output**: JSON files in Puffer format with roadgraph and agent data
-- **Features**: Dedicated converters for agents, roadgraph, and traffic lights
+- **Output**: Binary `.bin` files in Puffer format with roadgraph and agent data
+- **Features**: In-memory binary conversion, dedicated converters for agents, roadgraph, routes, and traffic lights
 - **Location**: `scenariomax/stage3_format/puffer/`
 
 ### Unified Pickle Format
@@ -352,10 +314,9 @@ Raw Data          →  Unified Format     →  Target Format
 2. **Stage 2 (process)**: Unified → Enhanced (Optional)
    - Apply transformations, filtering, or augmentation
    - **File-by-file streaming**: Each worker loads one pkl → processes → saves → next file
-   - Processors: traffic light inference, validation, filtering, interpolation
+   - Available processors: `validation`, `traffic_lights`, `polyline_interpolation`
    - Each processor is any function that takes/returns UnifiedScenario
    - No batch loading - memory efficient
-   - Options: `--traffic-lights`, `--validate`, `--validate-strict`, `--no-output`
 
 3. **Stage 3 (format)**: Unified → Target format
    - **File-by-file streaming**: Each worker loads one pkl → formats → saves → next file
