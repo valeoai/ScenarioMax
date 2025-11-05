@@ -889,7 +889,11 @@ def _validate_traffic_light(
         lane_id = traffic_light["lane"]
         if lane_id not in all_lane_ids:
             errors.append(f"Traffic light '{tl_id}' references non-existent lane '{lane_id}'")
-        elif "position" in traffic_light and lane_id in static_map_elements and "polyline" in static_map_elements[lane_id]:  # noqa: E501
+        elif (
+            "position" in traffic_light
+            and lane_id in static_map_elements
+            and "polyline" in static_map_elements[lane_id]
+        ):
             tl_position = traffic_light["position"][:2]
             lane_polyline = static_map_elements[lane_id]["polyline"][:, :2]
             distances = np.linalg.norm(lane_polyline - tl_position, axis=1)

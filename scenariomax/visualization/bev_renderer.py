@@ -675,7 +675,6 @@ def visualize_scenarios(
         else:
             raise ValueError(f"Unknown output format: {output_format}")
 
-
     logger.info("✅ Visualization complete")
 
     return {}

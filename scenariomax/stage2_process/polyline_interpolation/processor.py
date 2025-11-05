@@ -41,7 +41,7 @@ def interpolate_polylines(
     # Validate input
     if max_segment_length <= 0:
         logger.warning(
-            f"Scenario {scenario_id}: max_segment_length must be positive, got {max_segment_length}. Skipping interpolation."
+            f"Scenario {scenario_id}: max_segment_length must be positive, got {max_segment_length}. Skipping interpolation.",  # noqa: E501
         )
         return unified_scenario
 
@@ -70,7 +70,7 @@ def interpolate_polylines(
         # Skip short polylines (< 2 points)
         if len(polyline) < 2:
             logger.debug(
-                f"Scenario {scenario_id}, element {element_id}: polyline too short ({len(polyline)} points), skipping"
+                f"Scenario {scenario_id}, element {element_id}: polyline too short ({len(polyline)} points), skipping",
             )
             elements_skipped += 1
             continue
@@ -87,16 +87,14 @@ def interpolate_polylines(
         try:
             interpolated_polyline = distance_based_interpolate(polyline, max_segment_length)
         except Exception as e:
-            logger.error(
-                f"Scenario {scenario_id}, element {element_id}: interpolation failed: {e}. Skipping element."
-            )
+            logger.error(f"Scenario {scenario_id}, element {element_id}: interpolation failed: {e}. Skipping element.")
             elements_skipped += 1
             continue
 
         # Validate interpolated polyline
         if not validate_polyline(interpolated_polyline, element_id=str(element_id)):
             logger.warning(
-                f"Scenario {scenario_id}, element {element_id}: interpolated polyline is invalid, keeping original"
+                f"Scenario {scenario_id}, element {element_id}: interpolated polyline is invalid, keeping original",
             )
             elements_skipped += 1
             continue
@@ -111,13 +109,13 @@ def interpolate_polylines(
             logger.debug(
                 f"Scenario {scenario_id}, element {element_id}: "
                 f"interpolated {original_point_count} → {len(interpolated_polyline)} points "
-                f"({points_added} added)"
+                f"({points_added} added)",
             )
 
     # Log summary
     logger.info(
         f"Scenario {scenario_id}: interpolated {total_elements_processed}/{total_elements_with_polylines} polylines, "
-        f"added {total_points_added} points total, skipped {elements_skipped} elements"
+        f"added {total_points_added} points total, skipped {elements_skipped} elements",
     )
 
     return unified_scenario

@@ -51,14 +51,14 @@ class TLSGenerator:
         - W_BIG / W_SMALL: Weights for optimization scoring
         """
         self.T = T
-        self.V_GREEN = 3          # m/s - velocity threshold for green light
-        self.V_RED = 1            # m/s - velocity threshold for red light
-        self.A_GREEN = 0.5        # m/s² - acceleration threshold for green light
-        self.A_RED = -1           # m/s² - acceleration threshold for red light
+        self.V_GREEN = 3  # m/s - velocity threshold for green light
+        self.V_RED = 1  # m/s - velocity threshold for red light
+        self.A_GREEN = 0.5  # m/s² - acceleration threshold for green light
+        self.A_RED = -1  # m/s² - acceleration threshold for red light
         self.DELTA_T = delta_t
-        self.THETA = 0.8          # confidence threshold
-        self.W_BIG = 100          # large weight for optimization
-        self.W_SMALL = 0.1        # small weight for optimization
+        self.THETA = 0.8  # confidence threshold
+        self.W_BIG = 100  # large weight for optimization
+        self.W_SMALL = 0.1  # small weight for optimization
         self.SMOOTHING_WIDTH = smoothing_width
         self.YELLOW_DURATION = yellow_duration
 

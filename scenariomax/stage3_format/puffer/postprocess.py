@@ -15,6 +15,7 @@ from scenariomax import logger_utils
 
 logger = logger_utils.get_logger(__name__)
 
+
 def merge_dataset_workers(dataset_dir: str, dataset_name: str) -> None:
     """
     Merge JSON files from worker subdirectories into the parent directory.

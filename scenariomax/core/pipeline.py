@@ -103,7 +103,11 @@ def worker_scenario_func(
             successes += 1
         except Exception as e:
             # Log error with scenario ID if available, otherwise log type info
-            scenario_info = scenario.get("id", f"<unknown, type: {type(scenario).__name__}>") if isinstance(scenario, dict) else f"<invalid type: {type(scenario).__name__}>"  # noqa: E501
+            scenario_info = (
+                scenario.get("id", f"<unknown, type: {type(scenario).__name__}>")
+                if isinstance(scenario, dict)
+                else f"<invalid type: {type(scenario).__name__}>"
+            )
             logger.exception("Failed to process scenario %s: %s", scenario_info, str(e))
             failures += 1
 
@@ -285,6 +289,7 @@ def process_unified_scenarios(
     # Resolve processor names
     if processors:
         from scenariomax.stage2_process import apply_processors
+
         _apply_processors = partial(apply_processors, processor_names=processors, configs=processor_configs)
     else:
         _apply_processors = None
@@ -372,6 +377,7 @@ def format_unified_to_target(
     # Resolve processor names
     if processors:
         from scenariomax.stage2_process import apply_processors
+
         _apply_processors = partial(apply_processors, processor_names=processors, configs=processor_configs)
     else:
         _apply_processors = None
@@ -515,7 +521,7 @@ def _postprocess_puffer(output_path: str) -> None:
             os.rmdir(subdir_path)
             logger.info(f"  Removed empty directory: {subdir}")
 
-    logger.info(f"✅ Puffer binaries ready: map_000.bin to map_{len(all_binary_files)-1:03d}.bin")
+    logger.info(f"✅ Puffer binaries ready: map_000.bin to map_{len(all_binary_files) - 1:03d}.bin")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -576,6 +582,7 @@ def run_all_pipeline(
     # Resolve processors once (not per dataset) to avoid closure issues
     if processors:
         from scenariomax.stage2_process import apply_processors
+
         _apply_processors = partial(apply_processors, processor_names=processors, configs=processor_configs)
     else:
         _apply_processors = None

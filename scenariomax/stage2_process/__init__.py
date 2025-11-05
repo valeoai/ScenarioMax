@@ -75,7 +75,7 @@ def _get_processors(
             processors.append(traffic_lights_processor)
         else:
             raise ValueError(
-                f"Unknown processor: {name}. Available: validation, traffic_lights, polyline_interpolation"
+                f"Unknown processor: {name}. Available: validation, traffic_lights, polyline_interpolation",
             )
 
     logger.debug(f"Loaded {len(processors)} processors: {processor_names}")
