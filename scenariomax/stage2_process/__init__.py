@@ -5,14 +5,6 @@ Available processors:
 - 'validation': Validate scenario structure and physics
 - 'traffic_lights': Add/interpolate traffic light states
 - 'polyline_interpolation': Interpolate polylines to ensure dense representation
-
-Usage:
-    from scenariomax.stage2_process import get_processors
-
-    # Get processors as callable functions
-    processors = get_processors(['validation', 'traffic_lights'])
-    for processor_fn in processors:
-        scenario = processor_fn(scenario)
 """
 
 from collections.abc import Callable
@@ -23,7 +15,7 @@ from scenariomax import logger_utils
 logger = logger_utils.get_logger(__name__)
 
 
-def get_processors(
+def _get_processors(
     processor_names: list[str],
     configs: dict[str, dict] | None = None,
 ) -> list[Callable]:
@@ -102,7 +94,7 @@ def apply_processors(scenario, processor_names: list[str], configs: dict[str, di
     Returns:
         Processed scenario after applying all processors
     """
-    processors = get_processors(processor_names, configs)
+    processors = _get_processors(processor_names, configs)
 
     for processor_fn in processors:
         scenario = processor_fn(scenario)
@@ -111,4 +103,4 @@ def apply_processors(scenario, processor_names: list[str], configs: dict[str, di
 
 
 # Export main function
-__all__ = ["get_processors", "apply_processors"]
+__all__ = ["apply_processors"]
