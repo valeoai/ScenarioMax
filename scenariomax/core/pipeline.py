@@ -83,6 +83,10 @@ def worker_scenario_func(
                 scenario = process_func(scenario)
 
             # Validate scenario has required ID field
+            if not isinstance(scenario, dict):
+                logger.error(f"Scenario is not a dict, got type: {type(scenario).__name__}")
+                raise ValueError(f"Invalid scenario type: {type(scenario).__name__}, expected dict")
+
             scenario_id = scenario.get("id")
             if not scenario_id:
                 logger.error(f"Scenario missing 'id' field after processing. Scenario keys: {list(scenario.keys())}")
@@ -425,7 +429,7 @@ def format_unified_to_target(
     if format == FORMAT_TFEXAMPLE:
         _postprocess_tfexample(output_path, format_options)
     elif format == FORMAT_JSON:
-        _postprocess_json(output_path)
+        logger.info("✅ JSON files ready")
     elif format == FORMAT_PUFFER:
         _postprocess_puffer(output_path)
 
@@ -655,7 +659,7 @@ def run_all_pipeline(
     if format == FORMAT_TFEXAMPLE:
         _postprocess_tfexample(output_path, kwargs)
     elif format == FORMAT_JSON:
-        _postprocess_json(output_path)
+        logger.info("✅ JSON files ready")  # No postprocessing needed for JSON format
     elif format == FORMAT_PUFFER:
         _postprocess_puffer(output_path)
 
