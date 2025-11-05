@@ -112,10 +112,4 @@ def interpolate_polylines(
                 f"({points_added} added)",
             )
 
-    # Log summary
-    logger.info(
-        f"Scenario {scenario_id}: interpolated {total_elements_processed}/{total_elements_with_polylines} polylines, "
-        f"added {total_points_added} points total, skipped {elements_skipped} elements",
-    )
-
     return unified_scenario
