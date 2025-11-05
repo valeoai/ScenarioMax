@@ -64,7 +64,7 @@ output:
 # ═══════════════════════════════════════════════════════════════════════════
 processing:
   # Processor selection (use processor names as strings)
-  # Available processors: validation, traffic_lights, polyline_interpolation
+  # Available processors: validation, traffic_lights, polyline_interpolation, overpass_filtering
   processors: []                         # List of processor names (e.g., [validation, traffic_lights])
 
   # Processor-specific configurations
@@ -82,6 +82,10 @@ processing:
 
     polyline_interpolation:
       max_segment_length: 2.0            # Maximum distance between consecutive polyline points (meters)
+
+    overpass_filtering:
+      xy_distance_threshold: 0.8         # Maximum XY distance (meters) to check for vertical separation
+      z_difference_threshold: 4.0        # Minimum Z difference (meters) to consider as overpass
 
   # Processing behavior
   save_output: true                      # Save processed scenarios (false for validation-only)

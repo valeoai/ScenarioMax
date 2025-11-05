@@ -5,6 +5,7 @@ Available processors:
 - 'validation': Validate scenario structure and physics
 - 'traffic_lights': Add/interpolate traffic light states
 - 'polyline_interpolation': Interpolate polylines to ensure dense representation
+- 'overpass_filtering': Detect and filter scenarios with overpasses
 """
 
 from collections.abc import Callable
@@ -62,6 +63,17 @@ def _get_processors(
                 return interpolate_polylines(scenario, **pi_config)
 
             processors.append(polyline_processor)
+        elif name == "overpass_filtering":
+            from scenariomax.stage2_process.overpass_filtering.processor import detect_overpass_in_scenario
+
+            # Get overpass_filtering config
+            overpass_config = configs.get("overpass_filtering", {})
+
+            # Create processor function
+            def overpass_filtering_processor(scenario):
+                return detect_overpass_in_scenario(scenario, **overpass_config)
+
+            processors.append(overpass_filtering_processor)
         elif name == "traffic_lights":
             from scenariomax.stage2_process.traffic_lights.processor import add_traffic_lights_to_scenario
 
@@ -75,7 +87,7 @@ def _get_processors(
             processors.append(traffic_lights_processor)
         else:
             raise ValueError(
-                f"Unknown processor: {name}. Available: validation, traffic_lights, polyline_interpolation",
+                f"Unknown processor: {name}. Available: validation, traffic_lights, polyline_interpolation, overpass_filtering",  # noqa: E501
             )
 
     logger.debug(f"Loaded {len(processors)} processors: {processor_names}")

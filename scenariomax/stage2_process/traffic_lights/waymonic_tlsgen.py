@@ -284,7 +284,7 @@ class WaymonicTLSGenerator:
                         )
 
                         # [dynamic map states]
-                        traffic_light_id = str(conn.id)
+                        traffic_light_id = int(conn.id)
                         if traffic_light_id not in dynamic_map_states:
                             dynamic_map_states[traffic_light_id] = {
                                 "type": types.TRAFFIC_LIGHT,

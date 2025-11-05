@@ -24,6 +24,7 @@ from scenariomax.core.utils import (
     load_pickle,
     save_pickle,
 )
+from scenariomax.stage2_process.overpass_filtering.processor import OverpassDetectedException
 
 
 logger = logger_utils.get_logger(__name__)
@@ -76,6 +77,7 @@ def worker_scenario_func(
     """
     successes = 0
     failures = 0
+    filtered = 0
 
     preprocess_func = getattr(dataset_config, "preprocess_func", None) if dataset_config else None
     dataset_version = getattr(dataset_config, "version", None) if dataset_config else None
@@ -107,6 +109,8 @@ def worker_scenario_func(
                 _save_result(scenario, scenario_id, output_path, format_func, target_format)
 
             successes += 1
+        except OverpassDetectedException:
+            filtered += 1
         except Exception as e:
             # Log error with scenario ID if available, otherwise log type info
             scenario_info = (
@@ -117,7 +121,7 @@ def worker_scenario_func(
             logger.exception("Failed to process scenario %s: %s", scenario_info, str(e))
             failures += 1
 
-    return {"successes": successes, "failures": failures}
+    return {"successes": successes, "filtedred": filtered, "failures": failures}
 
 
 def _save_result(
@@ -203,6 +207,7 @@ def convert_raw_to_unified(
     clean_and_create_output_directory(output_path)
 
     total_scenarios = 0
+    total_filtered = 0
     total_errors = 0
 
     # Process each dataset
@@ -237,12 +242,14 @@ def convert_raw_to_unified(
 
         # Aggregate statistics
         successes = sum(r["successes"] for r in results)
+        filtered = sum(r["filtedred"] for r in results)
         failures = sum(r["failures"] for r in results)
 
         total_scenarios += successes
+        total_filtered += filtered
         total_errors += failures
 
-        logger.info(f"   ✅ Processed: {successes}, ❌ Errors: {failures}")
+        logger.info(f"   ✅ Processed: {successes}, 🚫 Filtered: {filtered}, ❌ Errors: {failures}")
 
     elapsed_time = time.time() - start_time
     logger.info(f"✅ Stage 1 completed in {elapsed_time:.2f}s")
@@ -252,6 +259,7 @@ def convert_raw_to_unified(
         "datasets_processed": len(datasets),
         "total_scenarios": total_scenarios,
         "errors": total_errors,
+        "filtered": total_filtered,
         "elapsed_time": elapsed_time,
     }
 
@@ -325,16 +333,18 @@ def process_unified_scenarios(
 
     # Aggregate statistics
     successes = sum(r["successes"] for r in results)
+    filtered = sum(r["filtedred"] for r in results)
     failures = sum(r["failures"] for r in results)
 
     elapsed_time = time.time() - start_time
     logger.info(f"✅ Stage 2 completed in {elapsed_time:.2f}s")
-    logger.info(f"   ✅ Processed: {successes}, ❌ Errors: {failures}")
+    logger.info(f"   ✅ Processed: {successes}, 🚫 Filtered: {filtered}, ❌ Errors: {failures}")
 
     return {
         "stage": "process_unified",
         "scenarios_processed": successes,
         "errors": failures,
+        "filtered": filtered,
         "elapsed_time": elapsed_time,
     }
 
@@ -417,6 +427,7 @@ def format_unified_to_target(
 
     # Aggregate statistics
     successes = sum(r["successes"] for r in results)
+    filtered = sum(r["filtedred"] for r in results)
     failures = sum(r["failures"] for r in results)
 
     # Postprocess if needed (merge workers, shuffle, shard)
@@ -429,13 +440,14 @@ def format_unified_to_target(
 
     elapsed_time = time.time() - start_time
     logger.info(f"✅ Stage 3 completed in {elapsed_time:.2f}s")
-    logger.info(f"   ✅ Processed: {successes}, ❌ Errors: {failures}")
+    logger.info(f"   ✅ Processed: {successes}, 🚫 Filtered: {filtered}, ❌ Errors: {failures}")
 
     return {
         "stage": "unified_to_target",
         "format": format,
         "scenarios_processed": successes,
         "errors": failures,
+        "filtered": filtered,
         "elapsed_time": elapsed_time,
     }
 
@@ -583,6 +595,7 @@ def run_all_pipeline(
     clean_and_create_output_directory(output_path)
 
     total_scenarios = 0
+    total_filtered = 0
     total_errors = 0
 
     # Resolve processors once (not per dataset) to avoid closure issues
@@ -630,12 +643,14 @@ def run_all_pipeline(
 
         # Aggregate statistics
         successes = sum(r["successes"] for r in results)
+        filtered = sum(r["filtedred"] for r in results)
         failures = sum(r["failures"] for r in results)
 
         total_scenarios += successes
+        total_filtered += filtered
         total_errors += failures
 
-        logger.info(f"   ✅ Processed: {successes}, ❌ Errors: {failures}")
+        logger.info(f"   ✅ Processed: {successes}, 🚫 Filtered: {filtered}, ❌ Errors: {failures}")
 
     # Postprocess based on format
     if format == FORMAT_TFEXAMPLE:
@@ -654,6 +669,7 @@ def run_all_pipeline(
         "mode": "in_memory",
         "format": format,
         "scenarios_processed": total_scenarios,
+        "filtered": total_filtered,
         "errors": total_errors,
         "total_time": total_time,
     }
