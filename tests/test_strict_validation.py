@@ -15,7 +15,7 @@ class TestStrictValidator:
 
     def create_basic_scenario(self) -> UnifiedScenario:
         """Create a basic valid scenario for testing."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Add basic metadata
         scenario["metadata"]["length"] = 10

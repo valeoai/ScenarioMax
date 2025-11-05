@@ -80,14 +80,13 @@ def worker_scenario_func(
     filtered = 0
 
     preprocess_func = getattr(dataset_config, "preprocess_func", None) if dataset_config else None
-    dataset_version = getattr(dataset_config, "version", None) if dataset_config else None
 
     list_scenarios = preprocess_func(input_data) if preprocess_func else input_data
 
     for scenario in tqdm(list_scenarios, desc=" Processing scenarios", unit=" scenario", leave=False, position=1):
         try:
             if convert_func:
-                scenario = convert_func(scenario, dataset_version)
+                scenario = convert_func(scenario)
 
             if process_func:
                 scenario = process_func(scenario)
@@ -401,6 +400,14 @@ def format_unified_to_target(
     # Create format function
     _format_func = get_format_function(format)
 
+    # Wrap format function with format_options for puffer
+    if format == FORMAT_PUFFER:
+        _format_func = partial(
+            _format_func,
+            min_route_valid_points=format_options.get("min_route_valid_points", 0),
+            route_check_timestep=format_options.get("route_check_timestep", 0),
+        )
+
     # Get all pickle files
     pickle_files = sorted(glob.glob(os.path.join(input_path, "**/*.pkl"), recursive=True))
 
@@ -504,19 +511,23 @@ def _postprocess_puffer(output_path: str) -> None:
     # Collect all subdirectories
     subdirs = [d for d in os.listdir(output_path) if os.path.isdir(os.path.join(output_path, d))]
 
-    if not subdirs:
-        logger.info("✅ No subdirectories found, binaries already in output root")
-        return
-
-    logger.info(f"Found {len(subdirs)} dataset subdirectories: {subdirs}")
-
-    # Collect all binary files from subdirectories
-    all_binary_files = []
-    for subdir in subdirs:
-        subdir_path = os.path.join(output_path, subdir)
-        binary_files = [os.path.join(subdir_path, f) for f in os.listdir(subdir_path) if f.endswith(".bin")]
-        all_binary_files.extend(binary_files)
-        logger.info(f"  {subdir}: {len(binary_files)} binary files")
+    if subdirs:
+        # Collect from subdirectories (full pipeline case)
+        logger.info(f"Found {len(subdirs)} dataset subdirectories: {subdirs}")
+        all_binary_files = []
+        for subdir in subdirs:
+            subdir_path = os.path.join(output_path, subdir)
+            binary_files = [os.path.join(subdir_path, f) for f in os.listdir(subdir_path) if f.endswith(".bin")]
+            all_binary_files.extend(binary_files)
+            logger.info(f"  {subdir}: {len(binary_files)} binary files")
+    else:
+        # Collect from output root (Stage 3 alone case)
+        logger.info("No subdirectories found, processing binaries in output root")
+        all_binary_files = [
+            os.path.join(output_path, f)
+            for f in os.listdir(output_path)
+            if f.endswith(".bin")
+        ]
 
     if not all_binary_files:
         logger.info("⚠️  No binary files found")
@@ -525,19 +536,21 @@ def _postprocess_puffer(output_path: str) -> None:
     # Sort files to ensure consistent ordering
     all_binary_files.sort()
 
-    logger.info(f"Renaming and moving {len(all_binary_files)} files to output root")
+    logger.info(f"Renaming {'and moving ' if subdirs else ''}{len(all_binary_files)} files to output root")
 
     # Rename and move files to output root
     for idx, src_file in enumerate(all_binary_files):
         dst_file = os.path.join(output_path, f"map_{idx:03d}.bin")
-        shutil.move(src_file, dst_file)
+        if src_file != dst_file:  # Avoid self-rename
+            shutil.move(src_file, dst_file)
 
     # Clean up empty subdirectories
-    for subdir in subdirs:
-        subdir_path = os.path.join(output_path, subdir)
-        if os.path.exists(subdir_path) and not os.listdir(subdir_path):
-            os.rmdir(subdir_path)
-            logger.info(f"  Removed empty directory: {subdir}")
+    if subdirs:
+        for subdir in subdirs:
+            subdir_path = os.path.join(output_path, subdir)
+            if os.path.exists(subdir_path) and not os.listdir(subdir_path):
+                os.rmdir(subdir_path)
+                logger.info(f"  Removed empty directory: {subdir}")
 
     logger.info(f"✅ Puffer binaries ready: map_000.bin to map_{len(all_binary_files) - 1:03d}.bin")
 
@@ -607,6 +620,14 @@ def run_all_pipeline(
         _apply_processors = None
 
     _format_func = get_format_function(format)
+
+    # Wrap format function with format_options for puffer
+    if format == FORMAT_PUFFER:
+        _format_func = partial(
+            _format_func,
+            min_route_valid_points=kwargs.get("min_route_valid_points", 0),
+            route_check_timestep=kwargs.get("route_check_timestep", 0),
+        )
 
     # Process each dataset
     for dataset_name, dataset_path in datasets.items():

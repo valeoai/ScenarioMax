@@ -400,7 +400,6 @@ UnifiedScenario (dict subclass):
     }
   - "metadata": {                                # Scenario information
       dataset_name,                              # Source dataset
-      dataset_version,                           # Dataset version
       length,                                    # Duration (seconds)
       timesteps,                                 # Number of timesteps
       ego_id...                                  # Ego vehicle ID

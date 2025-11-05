@@ -10,7 +10,7 @@ from scenariomax.stage1_convert.datasets.waymo import types as waymo_types
 from scenariomax.stage1_convert.datasets.waymo import utils as waymo_utils
 
 
-def convert_waymo_scenario(data: Any, version: str) -> UnifiedScenario:
+def convert_waymo_scenario(data: Any) -> UnifiedScenario:
     """Convert Waymo scenario to unified format."""
     # Unserialize scenario from bytes
     waymo_scenario = scenario_pb2.Scenario()
@@ -19,7 +19,7 @@ def convert_waymo_scenario(data: Any, version: str) -> UnifiedScenario:
     scenario_id = waymo_scenario.scenario_id
 
     # Create unified scenario
-    scenario = UnifiedScenario(scenario_id=scenario_id, dataset_name="waymo", dataset_version=version)
+    scenario = UnifiedScenario(scenario_id=scenario_id, dataset_name="waymo")
 
     # Convert data
     dynamic_agents, ego_id = extract_dynamic_agents(waymo_scenario)

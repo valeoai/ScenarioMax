@@ -25,7 +25,7 @@ SAMPLE_RATE = 0.1  # nuPlan default sample rate in seconds
 DEFAULT_MAP_EXTRACTION_RADIUS_METERS = 250
 
 
-def convert_nuplan_scenario(nuplan_scenario: NuPlanScenario, version: str) -> UnifiedScenario:
+def convert_nuplan_scenario(nuplan_scenario: NuPlanScenario) -> UnifiedScenario:
     """Convert nuPlan scenario to unified format."""
     # Validate sample rate
     scenario_log_interval = nuplan_scenario.database_interval
@@ -39,7 +39,7 @@ def convert_nuplan_scenario(nuplan_scenario: NuPlanScenario, version: str) -> Un
     scenario_id = nuplan_scenario.scenario_name
 
     # Create unified scenario
-    scenario = UnifiedScenario(scenario_id=scenario_id, dataset_name="nuPlan", dataset_version=version)
+    scenario = UnifiedScenario(scenario_id=scenario_id, dataset_name="nuPlan")
 
     # Get scenario center from ego initial position
     initial_ego_state = nuplan_scenario.get_ego_state_at_iteration(0)

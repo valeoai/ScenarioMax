@@ -241,6 +241,8 @@ def handle_pipeline_command(cfg: DictConfig):
         split=cfg.dataset_options.split,
         shard=cfg.format_options.shard,
         tfrecord_name=cfg.format_options.tfrecord_name,
+        min_route_valid_points=cfg.format_options.min_route_valid_points,
+        route_check_timestep=cfg.format_options.route_check_timestep,
         openscenes_metadata_src=cfg.dataset_options.openscenes_metadata_src,
         nuplan_direct_from_logs=cfg.dataset_options.nuplan_direct_from_logs,
     )

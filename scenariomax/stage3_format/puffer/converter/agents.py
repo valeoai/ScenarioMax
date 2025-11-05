@@ -12,7 +12,13 @@ from scenariomax.stage3_format.puffer.converter import routes
 logger = logger_utils.get_logger(__name__)
 
 
-def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length: int, ego_id: str) -> list[dict]:
+def convert_dynamic_agents(
+    dynamic_agents: dict,
+    road_map_elements: dict,
+    length: int,
+    min_route_valid_points: int = 0,
+    route_check_timestep: int = 0,
+) -> list[dict]:
     """
     Convert dynamic agents from unified format to Puffer format.
 
@@ -21,6 +27,8 @@ def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length
         road_map_elements: Dict of static map elements (for reference)
         length: Number of timesteps
         ego_id: ID of ego vehicle
+        min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
+        route_check_timestep: Timestep at which agent must be valid for route computation (default: 0)
 
     Returns:
         List of dynamic agent dictionaries in Puffer format
@@ -52,11 +60,21 @@ def convert_dynamic_agents(dynamic_agents: dict, road_map_elements: dict, length
 
         # Routes are computed only for:
         # 1. VEHICLE type (type == 1)
-        # 2. Agents with sufficient valid trajectory points (>10)
-        # 3. Agents close to lanes (within 2m) - checked inside compute_agent_route()
-        # 4. Agents not off-map/parked (≥50% of trajectory near lanes) - checked inside compute_agent_route()
-        if agent_type_int == 1 and np.sum(valid) > 10:
-            agent_routes = _compute_routes(position, heading, valid, road_map_elements, lane_data, agent_id)
+        # 2. Agents valid at route_check_timestep (configurable, default: 0)
+        # 3. Agents with sufficient valid trajectory points (configurable, default: 0)
+        # 4. Agents close to lanes (within 2m) - checked inside compute_agent_route()
+        # 5. Agents not off-map/parked (≥50% of trajectory near lanes) - checked inside compute_agent_route()
+        should_compute_routes = (
+            agent_type_int == 1
+            and route_check_timestep < len(valid)
+            and valid[route_check_timestep]
+            and np.sum(valid) >= min_route_valid_points
+        )
+
+        if should_compute_routes:
+            agent_routes = _compute_routes(
+                position, heading, valid, road_map_elements, lane_data, agent_id, min_route_valid_points
+            )
         else:
             agent_routes = []
 
@@ -106,6 +124,7 @@ def _compute_routes(
     road_map_elements: dict,
     lane_data: tuple,
     agent_id: int | str,
+    min_route_valid_points: int = 0,
 ) -> list:
     """
     Compute routes an agent follows based on ground truth trajectory.
@@ -122,6 +141,7 @@ def _compute_routes(
         road_map_elements: Dict of static map elements (for reference)
         lane_data: Precomputed lane data (lane_ids, lane_polylines, lane_metadata)
         agent_id: Agent identifier for debugging
+        min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
 
     Returns:
         List of route paths, where each path is a list of lane IDs
@@ -135,6 +155,7 @@ def _compute_routes(
         static_map_elements=road_map_elements,
         lane_data=lane_data,
         agent_id=agent_id,
+        min_route_valid_points=min_route_valid_points,
     )
 
     # Return list of route paths

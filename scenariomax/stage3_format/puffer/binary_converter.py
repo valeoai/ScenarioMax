@@ -55,11 +55,15 @@ For each TrafficControlElement:
     - states[state_length] (int32[])
     - controlled_lane (int32)
 
-Metadata (200 bytes):
+Metadata (variable length):
     - scenario_id (char[128]) - null-padded UTF-8 string
     - dataset_name (char[64]) - null-padded UTF-8 string
     - length (int32) - number of timesteps
     - ego_id (int32) - ego vehicle ID
+    - num_objects_of_interest (int32)
+    - objects_of_interest[num_objects_of_interest] (int32[])
+    - num_tracks_to_predict (int32)
+    - tracks_to_predict[num_tracks_to_predict] (int32[])
 """
 
 import struct
@@ -280,5 +284,19 @@ def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
     # ego_id (int)
     ego_id = int(metadata.get("ego_id", -1))
     buffer.extend(struct.pack("i", ego_id))
+
+    # objects_of_interest
+    objects_of_interest = metadata.get("objects_of_interests", [])
+    num_oi = len(objects_of_interest)
+    buffer.extend(struct.pack("i", num_oi))
+    for oi in objects_of_interest:
+        buffer.extend(struct.pack("i", int(oi)))
+
+    # tracks_to_predict
+    tracks_to_predict = metadata.get("tracks_to_predict", [])
+    num_ttp = len(tracks_to_predict)
+    buffer.extend(struct.pack("i", num_ttp))
+    for ttp in tracks_to_predict:
+        buffer.extend(struct.pack("i", int(ttp)))
 
     return bytes(buffer)

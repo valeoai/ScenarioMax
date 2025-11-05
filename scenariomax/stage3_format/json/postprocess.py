@@ -20,7 +20,6 @@ def postprocess_gpudrive(
     worker_index: int,
     scenarios: list[Any] | Generator[Any, None, None] | Iterable[Any],
     convert_func: Callable,
-    dataset_version: str,
     dataset_name: str,
     pbar: tqdm,
     process_scenario_func: Callable,
@@ -36,7 +35,6 @@ def postprocess_gpudrive(
         worker_index: Worker index for parallel processing
         scenarios: List or generator of scenarios to process
         convert_func: Function to convert scenarios
-        dataset_version: Dataset version
         dataset_name: Dataset name
         pbar: Progress bar instance
         process_scenario_func: Function to process individual scenarios
@@ -50,7 +48,6 @@ def postprocess_gpudrive(
             unified_scenario = process_scenario_func(
                 scenario,
                 convert_func,
-                dataset_version,
                 dataset_name,
                 **kwargs,
             )

@@ -15,7 +15,12 @@ from scenariomax.stage3_format.puffer.converter import agents, roadgraph, traffi
 logger = logger_utils.get_logger(__name__)
 
 
-def convert(unified_scenario, polyline_reduction_threshold: float = 0.1) -> dict:
+def convert(
+    unified_scenario,
+    polyline_reduction_threshold: float = 0.1,
+    min_route_valid_points: int = 0,
+    route_check_timestep: int = 0,
+) -> dict:
     """
     Convert a UnifiedScenario to Puffer format.
 
@@ -23,6 +28,8 @@ def convert(unified_scenario, polyline_reduction_threshold: float = 0.1) -> dict
         unified_scenario: UnifiedScenario object or dict
         polyline_reduction_threshold: Minimum triangle area threshold for roadgraph polyline simplification.
                                        If 0.0 (default), no simplification is applied.
+        min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
+        route_check_timestep: Timestep at which agent must be valid for route computation (default: 0)
 
     Returns:
         Dictionary in Puffer format with dynamic_agents, road_map_elements,
@@ -55,7 +62,8 @@ def convert(unified_scenario, polyline_reduction_threshold: float = 0.1) -> dict
         unified_scenario.get("dynamic_agents", {}),
         unified_scenario.get("static_map_elements", {}),
         scenario_metadata.get("length", 0),
-        scenario_metadata.get("ego_id", ""),
+        min_route_valid_points=min_route_valid_points,
+        route_check_timestep=route_check_timestep,
     )
 
     # Convert dynamic map elements to traffic_control_elements
@@ -68,7 +76,6 @@ def convert(unified_scenario, polyline_reduction_threshold: float = 0.1) -> dict
     metadata = unified_scenario.get("metadata", {})
     puffer_metadata = {
         "dataset_name": metadata.get("dataset_name", ""),
-        "dataset_version": metadata.get("dataset_version", ""),
         "length": metadata.get("length", 0),
         "timesteps": metadata.get("timesteps", np.array([])),
         "ego_id": metadata.get("ego_id", ""),
@@ -80,29 +87,7 @@ def convert(unified_scenario, polyline_reduction_threshold: float = 0.1) -> dict
         tracks_to_predict = metadata.get("tracks_to_predict", [])
 
         puffer_metadata["objects_of_interests"] = [int(oi) for oi in objects_of_interest]
-
-        # Convert tracks_to_predict format with validation
-        if tracks_to_predict:
-            if isinstance(tracks_to_predict[0], dict):
-                # Dict format with track_index and difficulty
-                puffer_metadata["tracks_to_predict"] = [
-                    {"track_index": int(t.get("track_index", 0)), "difficulty": float(t.get("difficulty", 0))}
-                    for t in tracks_to_predict
-                    if isinstance(t, dict)
-                ]
-            elif isinstance(tracks_to_predict[0], (int, float)):
-                # Simple list of track indices
-                puffer_metadata["tracks_to_predict"] = [
-                    {"track_index": int(t), "difficulty": 0.0} for t in tracks_to_predict
-                ]
-            else:
-                logger.warning(
-                    f"Unexpected tracks_to_predict format: {type(tracks_to_predict[0]).__name__}. "
-                    "Expected dict or int. Setting to empty list.",
-                )
-                puffer_metadata["tracks_to_predict"] = []
-        else:
-            puffer_metadata["tracks_to_predict"] = []
+        puffer_metadata["tracks_to_predict"] = [t.get("track_index") for t in tracks_to_predict]
 
     puffer_scenario = {
         "scenario_id": scenario_id,

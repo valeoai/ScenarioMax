@@ -98,6 +98,10 @@ format_options:
   shard: 1                               # Number of output shards (tfexample only)
   tfrecord_name: "training"              # TFRecord filename (default: training)
 
+  # Puffer-specific route computation options
+  min_route_valid_points: 0               # Minimum valid trajectory points required for route computation (0 = no filtering)
+  route_check_timestep: 0                # Timestep at which agent must be valid for route computation (default: 0)
+
   # Optional: Apply processors before conversion to target format
   # This allows processing during Stage 3 without running Stage 2 separately
   processors: []                         # List of processor names (e.g., [validation, traffic_lights])

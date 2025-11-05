@@ -25,7 +25,7 @@ class ValidationError(Exception):
 
 # Expected keys
 _REQUIRED_TOP_LEVEL_KEYS = {"id", "dynamic_agents", "static_map_elements", "dynamic_map_elements", "metadata"}
-_REQUIRED_METADATA_KEYS = {"dataset_name", "dataset_version", "length", "timesteps", "ego_id"}
+_REQUIRED_METADATA_KEYS = {"dataset_name", "length", "timesteps", "ego_id"}
 _OPTIONAL_METADATA_KEYS = {
     "scenario_id",
     "current_frame_index",
@@ -113,9 +113,6 @@ def _validate_metadata(metadata: dict, errors: list, warnings: list, strict_keys
 
     if "dataset_name" in metadata and not isinstance(metadata["dataset_name"], str):
         errors.append(f"metadata['dataset_name'] must be a string, got {type(metadata['dataset_name']).__name__}")
-
-    if "dataset_version" in metadata and not isinstance(metadata["dataset_version"], str):
-        errors.append(f"metadata['dataset_version'] must be a string, got {type(metadata['dataset_version']).__name__}")
 
     if "length" in metadata and not isinstance(metadata["length"], int):
         errors.append(f"metadata['length'] must be an int, got {type(metadata['length']).__name__}")
@@ -949,13 +946,6 @@ def _validate_scenario_coherence(scenario: dict, validation_level: int, errors: 
         for obj_id in metadata["objects_of_interest"]:
             if obj_id not in dynamic_agents:
                 errors.append(f"Object of interest '{obj_id}' not found in dynamic_agents")
-
-    if "tracks_to_predict" in metadata:
-        for track_info in metadata["tracks_to_predict"]:
-            # tracks_to_predict is a list of dicts with "track_index" keys
-            track_id = track_info.get("track_index") if isinstance(track_info, dict) else track_info
-            if track_id is not None and track_id not in dynamic_agents:
-                errors.append(f"Track to predict '{track_id}' not found in dynamic_agents")
 
     if "timesteps" in metadata:
         timesteps = metadata["timesteps"]

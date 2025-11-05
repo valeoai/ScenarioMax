@@ -45,8 +45,6 @@ ALIGNMENT_THRESHOLD = 0.3  # Cosine similarity threshold for direction alignment
 # Algorithm parameters
 MAX_ROUTE_DEPTH = 10  # Maximum number of lanes to extend beyond GT trajectory
 # Prevents infinite extension while allowing reasonable planning horizon
-MIN_VALID_TRAJECTORY_POINTS = 10  # Minimum valid points to compute route (1 second at 10Hz)
-# Ensures sufficient data for reliable lane matching
 ROOT_LANE_POINTS = 3  # Number of initial trajectory points used to determine current lane
 # Balances accuracy (more points) vs responsiveness to lane changes
 MAX_ROUTES = 10  # Maximum number of route paths to generate per agent
@@ -74,6 +72,7 @@ def compute_agent_route(
     static_map_elements: dict,
     lane_data: tuple,
     agent_id: int | str = None,
+    min_route_valid_points: int = 0,
 ) -> list[list[int]]:
     """
     Compute routes (lists of lane IDs) for an agent based on ground truth trajectory.
@@ -89,6 +88,7 @@ def compute_agent_route(
         lane_data: Precomputed lane data (lane_ids, lane_polylines, lane_metadata).
                    Must be provided - use extract_lane_centers() to generate.
         agent_id: Optional agent identifier for debugging logs
+        min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
 
     Returns:
         List of routes, where each route is a list of lane center IDs
@@ -106,10 +106,10 @@ def compute_agent_route(
     # Format agent identifier for logging
     agent_str = f"Agent {agent_id}" if agent_id is not None else "Agent"
 
-    # Check if agent has enough valid trajectory points
-    if len(valid_trajectory) < MIN_VALID_TRAJECTORY_POINTS:
+    # Check if trajectory has sufficient valid points
+    if min_route_valid_points > 0 and len(valid_trajectory) < min_route_valid_points:
         logger.debug(
-            f"{agent_str}: Trajectory too short ({len(valid_trajectory)} < {MIN_VALID_TRAJECTORY_POINTS} points)",
+            f"{agent_str}: Insufficient valid points ({len(valid_trajectory)} < {min_route_valid_points})",
         )
         return []
 

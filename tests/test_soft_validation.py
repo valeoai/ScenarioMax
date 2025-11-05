@@ -15,7 +15,7 @@ class TestSoftValidator:
 
     def test_valid_scenario(self):
         """Test that a valid scenario passes validation."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Add dynamic agent
         scenario["dynamic_agents"][1] = {
@@ -81,7 +81,7 @@ class TestSoftValidator:
 
     def test_invalid_agent_type(self):
         """Test that invalid agent types are caught."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         scenario["dynamic_agents"]["agent_1"] = {
             "type": "INVALID_TYPE",  # Invalid type
@@ -95,7 +95,7 @@ class TestSoftValidator:
 
     def test_invalid_array_shape(self):
         """Test that incorrect array shapes are caught."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         scenario["dynamic_agents"]["agent_1"] = {
             "type": types.VEHICLE,
@@ -112,7 +112,7 @@ class TestSoftValidator:
 
     def test_invalid_traffic_light_state(self):
         """Test that invalid traffic light states are caught."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         scenario["dynamic_map_elements"]["tl_1"] = {
             "type": types.TRAFFIC_LIGHT,
@@ -127,7 +127,7 @@ class TestSoftValidator:
 
     def test_wrong_datatype(self):
         """Test that wrong datatypes are caught."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         scenario["metadata"]["length"] = "not_an_int"  # Should be int
 
@@ -145,21 +145,20 @@ class TestSoftValidator:
             "dynamic_map_elements": {},
             "metadata": {
                 "dataset_name": "test",
-                # Missing: dataset_version, length, timesteps, ego_id
+                # Missing: length, timesteps, ego_id
             },
         }
 
         is_valid, errors, warnings = soft_validate(scenario)
 
         assert not is_valid
-        assert any("dataset_version" in err for err in errors)
         assert any("length" in err for err in errors)
         assert any("timesteps" in err for err in errors)
         assert any("ego_id" in err for err in errors)
 
     def test_strict_keys_mode(self):
         """Test that strict_keys mode catches unexpected keys."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
         scenario["metadata"]["ego_id"] = 1
 
         scenario["unexpected_key"] = "some_value"
@@ -177,7 +176,7 @@ class TestSoftValidator:
 
     def test_functional_validation(self):
         """Test that functional soft_validate() works correctly."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Valid scenario
         scenario["metadata"]["ego_id"] = 1
@@ -191,7 +190,7 @@ class TestSoftValidator:
 
     def test_map_element_type_validation(self):
         """Test that map element types are validated correctly."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Invalid map element type
         scenario["static_map_elements"]["elem_1"] = {
@@ -206,7 +205,7 @@ class TestSoftValidator:
 
     def test_lane_specific_fields(self):
         """Test that lane-specific fields are validated."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Lane with invalid speed_limit_mph type
         scenario["static_map_elements"]["lane_1"] = {
@@ -222,7 +221,7 @@ class TestSoftValidator:
 
     def test_polyline_shape_validation(self):
         """Test that polyline shapes are validated."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Polyline with wrong shape (should be N x 3)
         scenario["static_map_elements"]["lane_1"] = {
@@ -237,7 +236,7 @@ class TestSoftValidator:
 
     def test_valid_mask_dtype(self):
         """Test that valid mask must be boolean."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         scenario["dynamic_agents"]["agent_1"] = {
             "type": types.VEHICLE,
@@ -253,7 +252,7 @@ class TestSoftValidator:
 
     def test_map_element_with_polygon(self):
         """Test that map elements can have polygon instead of polyline."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
         scenario["metadata"]["ego_id"] = 1
 
         # Map element with polygon (e.g., crosswalk)
@@ -268,7 +267,7 @@ class TestSoftValidator:
 
     def test_map_element_missing_polyline_and_polygon(self):
         """Test that map elements must have either polyline or polygon."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Map element without polyline or polygon
         scenario["static_map_elements"]["elem_1"] = {
@@ -283,7 +282,7 @@ class TestSoftValidator:
 
     def test_polygon_shape_validation(self):
         """Test that polygon shapes are validated."""
-        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset", dataset_version="v1.0")
+        scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Polygon with wrong shape (should be N x 3)
         scenario["static_map_elements"]["crosswalk_1"] = {

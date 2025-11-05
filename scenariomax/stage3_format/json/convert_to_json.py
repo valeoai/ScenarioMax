@@ -69,7 +69,6 @@ def convert(unified_scenario):
     else:
         metadata = {
             "dataset_name": metadata.get("dataset_name", ""),
-            "dataset_version": metadata.get("dataset_version", ""),
             "scenario_id": metadata.get("scenario_id", scenario_id),
             "length": metadata.get("length", 0),
             "timesteps": metadata.get("timesteps", []),

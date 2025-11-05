@@ -61,7 +61,6 @@ class UnifiedScenario(dict):
 
         "metadata": {                 # Additional scenario information
             "dataset_name": str,          # Source dataset name
-            "dataset_version": str,       # Dataset version
             "scenario_id": str,           # Original scenario identifier
             "length": int,                # Number of timesteps
             "timesteps": np.ndarray,      # Timestamp array (length,)
@@ -83,14 +82,13 @@ class UnifiedScenario(dict):
         scenario = cls(
             scenario_id=data.get("id", ""),
             dataset_name=metadata.get("dataset_name", data.get("dataset_name", "")),
-            dataset_version=metadata.get("dataset_version", data.get("dataset_version", "")),
         )
         for key, value in data.items():
             scenario[key] = value
 
         return scenario
 
-    def __init__(self, scenario_id: str = "", dataset_name: str = "", dataset_version: str = ""):
+    def __init__(self, scenario_id: str = "", dataset_name: str = ""):
         super().__init__()
         self["id"] = scenario_id
         self["dynamic_agents"] = {}
@@ -98,7 +96,6 @@ class UnifiedScenario(dict):
         self["dynamic_map_elements"] = {}
         self["metadata"] = {
             "dataset_name": dataset_name,
-            "dataset_version": dataset_version,
             "length": 0,
             "ego_id": "",
             "timesteps": [],
@@ -124,7 +121,7 @@ class UnifiedScenario(dict):
                 raise ValueError(f"Missing required field: {field}")
 
         # Check required metadata fields
-        metadata_fields = ["dataset_name", "dataset_version", "length", "timesteps"]
+        metadata_fields = ["dataset_name", "length", "timesteps"]
         for field in metadata_fields:
             if field not in self["metadata"]:
                 raise ValueError(f"Missing required metadata field: {field}")
