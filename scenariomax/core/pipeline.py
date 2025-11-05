@@ -489,11 +489,6 @@ def _postprocess_tfexample(output_path: str, format_options: dict) -> None:
             )
 
 
-def _postprocess_json(output_path: str) -> None:
-    """Postprocess JSON files for GPUDrive simulator."""
-    logger.info("✅ JSON files ready")
-
-
 def _postprocess_puffer(output_path: str) -> None:
     """Merge Puffer binary files from subdirectories and rename sequentially."""
     import shutil
