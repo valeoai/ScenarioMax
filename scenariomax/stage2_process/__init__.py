@@ -90,5 +90,25 @@ def get_processors(
     return processors
 
 
+def apply_processors(scenario, processor_names: list[str], configs: dict[str, dict] | None = None):
+    """
+    Apply a sequence of processors to a scenario.
+
+    Args:
+        scenario: The scenario object to process
+        processor_names: List of processor names to apply
+        configs: Optional dict of processor-specific configurations
+
+    Returns:
+        Processed scenario after applying all processors
+    """
+    processors = get_processors(processor_names, configs)
+
+    for processor_fn in processors:
+        scenario = processor_fn(scenario)
+
+    return scenario
+
+
 # Export main function
-__all__ = ["get_processors"]
+__all__ = ["get_processors", "apply_processors"]

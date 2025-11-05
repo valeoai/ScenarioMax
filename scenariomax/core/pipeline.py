@@ -5,9 +5,11 @@ Core concept: One universal function that processes a single scenario/file throu
 any combination of stages (convert, process, format). Parallelization handled by joblib.
 """
 
+import glob
 import os
 import time
 from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 from joblib import Parallel, delayed
@@ -74,7 +76,7 @@ def worker_scenario_func(
 
     list_scenarios = preprocess_func(input_data) if preprocess_func else input_data
 
-    for scenario in tqdm(list_scenarios, desc="  Processing scenarios", unit=" scenario", leave=False, position=1):
+    for scenario in tqdm(list_scenarios, desc=" Processing scenarios", unit=" scenario", leave=False, position=1):
         try:
             if convert_func:
                 scenario = convert_func(scenario, dataset_version)
@@ -280,25 +282,15 @@ def process_unified_scenarios(
     logger.info(f"   • Workers: {num_workers}, Batch size: {batch_size}")
     logger.info(f"   • Save output: {save_output}")
 
-    # Resolve processor names to functions
-    if processors and isinstance(processors[0], str):
-        from scenariomax.stage2_process import get_processors
-
-        processors = get_processors(processors, configs=processor_configs)
-
-    # Create process function that applies all processors
-    def process_all(scenario):
-        if processors:
-            for processor_fn in processors:
-                scenario = processor_fn(scenario)
-        return scenario
+    # Resolve processor names
+    if processors:
+        from scenariomax.stage2_process import apply_processors
+        _apply_processors = partial(apply_processors, processor_names=processors, configs=processor_configs)
+    else:
+        _apply_processors = None
 
     # Get all pickle files
-    pickle_files = []
-    for root, _, files in os.walk(input_path):
-        for file in sorted(files):
-            if file.endswith(".pkl"):
-                pickle_files.append(os.path.join(root, file))
+    pickle_files = sorted(glob.glob(os.path.join(input_path, "**/*.pkl"), recursive=True))
 
     logger.info(f"   • Found {len(pickle_files)} pickle files")
 
@@ -314,7 +306,7 @@ def process_unified_scenarios(
         delayed(worker_scenario_func)(
             input_data=batch,
             convert_func=load_pickle,
-            process_func=process_all,
+            process_func=_apply_processors,
             output_path=output_path if save_output else None,
         )
         for batch in tqdm(file_batches, desc="Processing batches", unit=" batch")
@@ -378,27 +370,17 @@ def format_unified_to_target(
     logger.info(f"   • Workers: {num_workers}, Batch size: {batch_size}")
 
     # Resolve processor names
-    if processors and isinstance(processors[0], str):
-        from scenariomax.stage2_process import get_processors
-
-        processors = get_processors(processors, configs=processor_configs)
-
-    # Create process function
-    def process_all(scenario):
-        if processors:
-            for processor_fn in processors:
-                scenario = processor_fn(scenario)
-        return scenario
+    if processors:
+        from scenariomax.stage2_process import apply_processors
+        _apply_processors = partial(apply_processors, processor_names=processors, configs=processor_configs)
+    else:
+        _apply_processors = None
 
     # Create format function
     _format_func = get_format_function(format)
 
     # Get all pickle files
-    pickle_files = []
-    for root, _, files in os.walk(input_path):
-        for file in sorted(files):
-            if file.endswith(".pkl"):
-                pickle_files.append(os.path.join(root, file))
+    pickle_files = sorted(glob.glob(os.path.join(input_path, "**/*.pkl"), recursive=True))
 
     logger.info(f"   • Found {len(pickle_files)} pickle files")
 
@@ -413,7 +395,7 @@ def format_unified_to_target(
         delayed(worker_scenario_func)(
             input_data=batch,
             convert_func=load_pickle,
-            process_func=process_all if processors else None,
+            process_func=_apply_processors,
             format_func=_format_func,
             output_path=output_path,
             target_format=format,
@@ -592,19 +574,11 @@ def run_all_pipeline(
     total_errors = 0
 
     # Resolve processors once (not per dataset) to avoid closure issues
-    process_all = None
     if processors:
-        from scenariomax.stage2_process import get_processors
-
-        if isinstance(processors[0], str):
-            processor_funcs = get_processors(processors, configs=processor_configs)
-        else:
-            processor_funcs = processors
-
-        def process_all(scenario):
-            for processor_fn in processor_funcs:
-                scenario = processor_fn(scenario)
-            return scenario
+        from scenariomax.stage2_process import apply_processors
+        _apply_processors = partial(apply_processors, processor_names=processors, configs=processor_configs)
+    else:
+        _apply_processors = None
 
     _format_func = get_format_function(format)
 
@@ -632,7 +606,7 @@ def run_all_pipeline(
             delayed(worker_scenario_func)(
                 input_data=batch,
                 convert_func=config.convert_func,
-                process_func=process_all,
+                process_func=_apply_processors,
                 format_func=_format_func,
                 output_path=dataset_output,
                 target_format=format,
