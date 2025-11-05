@@ -17,7 +17,13 @@ from tqdm import tqdm
 
 from scenariomax import dataset_registry, logger_utils
 from scenariomax.core.types import FORMAT_JSON, FORMAT_PUFFER, FORMAT_TFEXAMPLE, SUPPORTED_FORMATS
-from scenariomax.core.utils import NumpyEncoder, get_format_function, load_pickle, save_pickle
+from scenariomax.core.utils import (
+    NumpyEncoder,
+    clean_and_create_output_directory,
+    get_format_function,
+    load_pickle,
+    save_pickle,
+)
 
 
 logger = logger_utils.get_logger(__name__)
@@ -194,7 +200,7 @@ def convert_raw_to_unified(
     logger.info(f"🚀 Stage 1: Converting {len(datasets)} dataset(s) → Unified")
     logger.info(f"   • Workers: {num_workers}, Batch size: {batch_size}")
 
-    os.makedirs(output_path, exist_ok=True)
+    clean_and_create_output_directory(output_path)
 
     total_scenarios = 0
     total_errors = 0
@@ -300,7 +306,7 @@ def process_unified_scenarios(
     logger.info(f"   • Found {len(pickle_files)} pickle files")
 
     if save_output:
-        os.makedirs(output_path, exist_ok=True)
+        clean_and_create_output_directory(output_path)
 
     # Create batches
     file_batches = [pickle_files[i : i + batch_size] for i in range(0, len(pickle_files), batch_size)]
@@ -390,7 +396,7 @@ def format_unified_to_target(
 
     logger.info(f"   • Found {len(pickle_files)} pickle files")
 
-    os.makedirs(output_path, exist_ok=True)
+    clean_and_create_output_directory(output_path)
 
     # Create batches
     file_batches = [pickle_files[i : i + batch_size] for i in range(0, len(pickle_files), batch_size)]
@@ -574,7 +580,7 @@ def run_all_pipeline(
     if format not in SUPPORTED_FORMATS:
         raise ValueError(f"Unsupported format: {format}. Use {', '.join(sorted(SUPPORTED_FORMATS))}")
 
-    os.makedirs(output_path, exist_ok=True)
+    clean_and_create_output_directory(output_path)
 
     total_scenarios = 0
     total_errors = 0

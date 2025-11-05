@@ -15,7 +15,7 @@ from matplotlib.animation import FFMpegWriter
 from tqdm import tqdm
 
 from scenariomax import logger_utils
-from scenariomax.core import types
+from scenariomax.core import types, utils
 
 
 logger = logger_utils.get_logger(__name__)
@@ -637,7 +637,7 @@ def visualize_scenarios(
     logger.info(f"Found {len(pickle_files)} scenarios to visualize")
 
     # Create output directory
-    os.makedirs(output_path, exist_ok=True)
+    utils.clean_and_create_output_directory(output_path)
 
     for pickle_file in tqdm(pickle_files, desc="Visualizing"):
         # Load scenario

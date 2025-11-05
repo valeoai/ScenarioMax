@@ -1,9 +1,18 @@
 import json
+import os
 import pickle
+import shutil
 
 import numpy as np
 
 from scenariomax.core.types import FORMAT_JSON, FORMAT_PUFFER, FORMAT_TFEXAMPLE
+
+
+def clean_and_create_output_directory(output_path: str) -> None:
+    """Remove output directory if it exists, then create fresh."""
+    if os.path.exists(output_path):
+        shutil.rmtree(output_path)
+    os.makedirs(output_path, exist_ok=True)
 
 
 class NumpyEncoder(json.JSONEncoder):

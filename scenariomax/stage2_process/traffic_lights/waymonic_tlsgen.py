@@ -290,7 +290,7 @@ class WaymonicTLSGenerator:
                                 "type": types.TRAFFIC_LIGHT,
                                 "position": np.array(tl_head_location),
                                 "states": [None] * self.scenario["metadata"]["length"],
-                                "lane": int(conn.id),
+                                "controlled_lane": int(conn.id),
                             }
 
                         dynamic_map_states[traffic_light_id]["states"][t] = get_traffic_light_state(

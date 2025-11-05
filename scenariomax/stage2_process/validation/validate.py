@@ -367,7 +367,7 @@ def _validate_dynamic_map_elements(dynamic_map_elements: dict, errors: list, war
                             f"Must be one of: {types.TRAFFIC_LIGHT_STATES}",
                         )
 
-        if "lane" in element and not isinstance(element["lane"], int):
+        if "controlled_lane" in element and not isinstance(element["controlled_lane"], int):
             errors.append(
                 f"Dynamic map element '{element_id}' lane must be an int, got {type(element['lane']).__name__}",
             )
@@ -885,8 +885,8 @@ def _validate_traffic_light(
     warnings: list,
 ) -> None:
     """Validate traffic light."""
-    if "lane" in traffic_light:
-        lane_id = traffic_light["lane"]
+    if "controlled_lane" in traffic_light:
+        lane_id = traffic_light["controlled_lane"]
         if lane_id not in all_lane_ids:
             errors.append(f"Traffic light '{tl_id}' references non-existent lane '{lane_id}'")
         elif (
