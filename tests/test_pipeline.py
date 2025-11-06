@@ -85,11 +85,9 @@ class TestStage1RawToUnified:
 
         # Stage 1: Convert
         stats = pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 2}},
             output_path=str(unified_dir),
             num_workers=2,
-            num_files=2,  # Process only 2 files for testing
-            validate=False,
         )
 
         # Verify output
@@ -127,11 +125,9 @@ class TestStage1RawToUnified:
 
         # Stage 1: Convert with validation
         stats = pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
-            num_files=1,  # Process only 1 file
-            validate=True,  # Enable validation
         )
 
         # Should still succeed (validation is soft)
@@ -147,11 +143,9 @@ class TestStage1RawToUnified:
 
         # Stage 1: Convert
         stats = pipeline.convert_raw_to_unified(
-            datasets={"nuplan": str(NUPLAN_DATA_DIR)},
+            datasets={"nuplan": {"path": str(NUPLAN_DATA_DIR), "max_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
-            num_files=1,  # Process only 1 file
-            validate=False,
         )
 
         # Verify output
@@ -195,11 +189,9 @@ class TestStage2ProcessUnified:
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
-            num_files=1,
-            validate=False,
         )
 
         # Stage 2: Process with traffic lights
@@ -236,11 +228,9 @@ class TestStage2ProcessUnified:
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
-            num_files=1,
-            validate=False,
         )
 
         # Custom processor that adds a metadata field
@@ -281,11 +271,9 @@ class TestStage3FormatToTarget:
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
-            num_files=1,
-            validate=False,
         )
 
         # Stage 3: Format to TFExample
@@ -294,7 +282,7 @@ class TestStage3FormatToTarget:
             output_path=str(tfrecord_dir),
             format="tfexample",
             num_workers=2,
-            tfrecord_name="test",
+            format_config={"base_filename": "test"},
         )
 
         # Verify output
@@ -352,11 +340,9 @@ class TestStage3FormatToTarget:
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
-            num_files=1,
-            validate=False,
         )
 
         # Stage 3: Format to JSON
@@ -572,11 +558,9 @@ class TestValidation:
 
         # Convert with validation disabled first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
-            num_files=1,
-            validate=False,
         )
 
         # Load scenarios and validate manually
@@ -604,11 +588,9 @@ class TestValidation:
 
         # Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
-            num_files=1,
-            validate=False,
         )
 
         # Load scenarios and validate with strict validation
