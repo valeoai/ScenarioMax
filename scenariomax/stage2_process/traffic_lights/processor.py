@@ -1,4 +1,3 @@
-import copy
 from typing import Any
 
 from scenariomax.stage2_process.traffic_lights.waymonic_tlsgen import WaymonicTLSGenerator
@@ -20,9 +19,7 @@ def add_traffic_lights_to_scenario(unified_scenario: dict[str, Any]) -> dict[str
         end_step=unified_scenario["metadata"]["length"],
     )
 
-    # after that, you can replace the old dynamic_map_states object with the new one
-    scenario_copied = copy.deepcopy(unified_scenario)
+    # Replace dynamic_map_elements with generated traffic lights
+    unified_scenario["dynamic_map_elements"] = {**dynamic_map_states}
 
-    scenario_copied["dynamic_map_elements"] = {**dynamic_map_states}
-
-    return scenario_copied
+    return unified_scenario

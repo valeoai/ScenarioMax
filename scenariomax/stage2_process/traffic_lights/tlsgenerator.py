@@ -152,9 +152,9 @@ class TLSGenerator:
         candidate_states = self._score_candidate_states(feas_states, imp_state, weight)
 
         if prev_state in candidate_states:
-            final_state = copy.deepcopy(prev_state)
+            final_state = copy.copy(prev_state)  # Shallow copy sufficient for dict[tuple, TLS]
         else:
-            final_state = self._fill_right_turn_signal(copy.deepcopy(candidate_states[0]))
+            final_state = self._fill_right_turn_signal(copy.copy(candidate_states[0]))
 
         return final_state
 
