@@ -14,7 +14,6 @@ class OverpassDetectedException(Exception):
     """Raised when an overpass is detected in a scenario."""
 
 
-
 def detect_overpass_in_scenario(
     unified_scenario: dict[str, Any],
     xy_distance_threshold: float = 0.8,

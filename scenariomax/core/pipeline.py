@@ -525,11 +525,7 @@ def _postprocess_puffer(output_path: str) -> None:
     else:
         # Collect from output root (Stage 3 alone case)
         logger.info("No subdirectories found, processing binaries in output root")
-        all_binary_files = [
-            os.path.join(output_path, f)
-            for f in os.listdir(output_path)
-            if f.endswith(".bin")
-        ]
+        all_binary_files = [os.path.join(output_path, f) for f in os.listdir(output_path) if f.endswith(".bin")]
 
     if not all_binary_files:
         logger.info("⚠️  No binary files found")

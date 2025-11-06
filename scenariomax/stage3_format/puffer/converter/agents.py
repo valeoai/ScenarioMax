@@ -73,7 +73,13 @@ def convert_dynamic_agents(
 
         if should_compute_routes:
             agent_routes = _compute_routes(
-                position, heading, valid, road_map_elements, lane_data, agent_id, min_route_valid_points
+                position,
+                heading,
+                valid,
+                road_map_elements,
+                lane_data,
+                agent_id,
+                min_route_valid_points,
             )
         else:
             agent_routes = []
