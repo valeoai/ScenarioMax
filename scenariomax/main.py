@@ -57,46 +57,51 @@ def validate_config(cfg: DictConfig) -> None:
     command = cfg.command
 
     if command in ["convert", "pipeline"]:
-        # Check that at least one dataset is specified
+        # Check that at least one dataset has path specified
         datasets_specified = any(
             [
-                cfg.datasets.waymo,
-                cfg.datasets.nuplan,
-                cfg.datasets.nuscenes,
-                cfg.datasets.argoverse2,
-                cfg.datasets.openscenes,
+                cfg.datasets.waymo.path,
+                cfg.datasets.nuplan.path,
+                cfg.datasets.nuscenes.path,
+                cfg.datasets.openscenes.path,
             ],
         )
         if not datasets_specified:
             raise ValueError(
                 "No datasets specified. Set at least one dataset path:\n"
-                "  datasets.waymo=/path/to/waymo\n"
-                "  datasets.nuplan=/path/to/nuplan\n"
+                "  datasets.waymo.path=/path/to/waymo\n"
+                "  datasets.nuplan.path=/path/to/nuplan\n"
                 "  etc.",
             )
 
-    if command in ["process", "format"] and not cfg.output.dst:
-        # These commands need source path in output.dst
-        raise ValueError(f"Command '{command}' requires output.dst to be set")
+    if command in ["process", "format", "viz"]:
+        # These commands need input path
+        if not cfg.paths.input_dir and not cfg.paths.output_dir:
+            raise ValueError(
+                f"Command '{command}' requires paths.input_dir or paths.output_dir to be set",
+            )
+
+    # OpenScenes requires metadata_dir
+    if cfg.datasets.openscenes.path and not cfg.datasets.openscenes.metadata_dir:
+        raise ValueError(
+            "OpenScenes dataset requires metadata_dir to be specified:\n"
+            "  datasets.openscenes.metadata_dir=/path/to/metadata",
+        )
 
 
-def build_datasets_dict(cfg: DictConfig) -> dict[str, str]:
-    """Build datasets dictionary from config."""
+def build_datasets_dict(cfg: DictConfig) -> dict[str, dict]:
+    """Build datasets dictionary from config, filtering those with path set."""
     datasets = {}
 
-    if cfg.datasets.waymo:
-        datasets["waymo"] = cfg.datasets.waymo
-    if cfg.datasets.nuplan:
-        if cfg.dataset_options.openscenes_metadata_src:
-            datasets["openscenes"] = cfg.datasets.nuplan
-        else:
-            datasets["nuplan"] = cfg.datasets.nuplan
-    if cfg.datasets.nuscenes:
-        datasets["nuscenes"] = cfg.datasets.nuscenes
-    if cfg.datasets.argoverse2:
-        datasets["argoverse2"] = cfg.datasets.argoverse2
-    if cfg.datasets.openscenes:
-        datasets["openscenes"] = cfg.datasets.openscenes
+    # Only include datasets that have path specified
+    if cfg.datasets.waymo.path:
+        datasets["waymo"] = OmegaConf.to_container(cfg.datasets.waymo, resolve=True)
+    if cfg.datasets.nuplan.path:
+        datasets["nuplan"] = OmegaConf.to_container(cfg.datasets.nuplan, resolve=True)
+    if cfg.datasets.nuscenes.path:
+        datasets["nuscenes"] = OmegaConf.to_container(cfg.datasets.nuscenes, resolve=True)
+    if cfg.datasets.openscenes.path:
+        datasets["openscenes"] = OmegaConf.to_container(cfg.datasets.openscenes, resolve=True)
 
     return datasets
 
@@ -109,13 +114,9 @@ def handle_convert_command(cfg: DictConfig):
 
     stats = pipeline.convert_raw_to_unified(
         datasets=datasets,
-        output_path=cfg.output.dst,
+        output_path=cfg.paths.output_dir,
         num_workers=cfg.execution.num_workers,
         batch_size=cfg.execution.batch_size,
-        num_files=cfg.dataset_options.num_files,
-        split=cfg.dataset_options.split,
-        openscenes_metadata_src=cfg.dataset_options.openscenes_metadata_src,
-        nuplan_direct_from_logs=cfg.dataset_options.nuplan_direct_from_logs,
     )
 
     logger.info(f"✅ Stage 1 completed: {stats}")
@@ -126,9 +127,12 @@ def handle_process_command(cfg: DictConfig):
     """Handle Stage 2: Unified → Processed."""
     logger.info("🚀 Executing command: process (Stage 2)")
 
-    # Get processors and configs from config file
+    # Get processors list
     processors = cfg.processing.processors if cfg.processing.processors else None
-    processor_configs = OmegaConf.to_container(cfg.processing.processor_configs, resolve=True)
+
+    # Extract processor configs (everything in processing except 'processors' key)
+    processing_dict = OmegaConf.to_container(cfg.processing, resolve=True)
+    processor_configs = {k: v for k, v in processing_dict.items() if k != "processors"}
 
     # If no processors specified, warn user
     if not processors or len(processors) == 0:
@@ -144,10 +148,9 @@ def handle_process_command(cfg: DictConfig):
         processors = []
         processor_configs = None
 
-    # For 'process' command, src is the input and dst is the output
-    # We use output.dst for both, but user should override
-    input_path = cfg.get("input_path", cfg.output.dst)
-    output_path = cfg.output.dst
+    # Determine input and output paths
+    input_path = cfg.paths.input_dir if cfg.paths.input_dir else f"{cfg.paths.output_dir}/unified"
+    output_path = cfg.paths.output_dir
 
     stats = pipeline.process_unified_scenarios(
         input_path=input_path,
@@ -155,7 +158,6 @@ def handle_process_command(cfg: DictConfig):
         processors=processors,
         processor_configs=processor_configs,
         num_workers=cfg.execution.num_workers,
-        save_output=cfg.processing.save_output,
     )
 
     logger.info(f"✅ Stage 2 completed: {stats}")
@@ -166,27 +168,31 @@ def handle_format_command(cfg: DictConfig):
     """Handle Stage 3: Unified → Target Format."""
     logger.info("🚀 Executing command: format (Stage 3)")
 
-    # For 'format' command, src is the input
-    input_path = cfg.get("input_path", cfg.output.dst)
-    output_path = cfg.output.dst
+    # Determine input and output paths
+    input_path = cfg.paths.input_dir if cfg.paths.input_dir else f"{cfg.paths.output_dir}/unified"
+    output_path = cfg.paths.output_dir
 
-    # Get optional processors from format_options
-    processors = cfg.format_options.get("processors", None)
-    processor_configs = cfg.format_options.get("processor_configs", None)
+    # Handle optional processors during formatting
+    processors = None
+    processor_configs = None
+    if cfg.formatting.apply_processors:
+        processors = cfg.processing.processors if cfg.processing.processors else None
+        if processors:
+            processing_dict = OmegaConf.to_container(cfg.processing, resolve=True)
+            processor_configs = {k: v for k, v in processing_dict.items() if k != "processors"}
 
-    # Convert OmegaConf to regular Python types
-    if processor_configs:
-        processor_configs = OmegaConf.to_container(processor_configs, resolve=True)
+    # Get format-specific configs
+    target_format = cfg.formatting.target_format
+    format_config = OmegaConf.to_container(cfg.formatting.get(target_format, {}), resolve=True)
 
     stats = pipeline.format_unified_to_target(
         input_path=input_path,
         output_path=output_path,
-        format=cfg.output.format,
+        format=target_format,
         num_workers=cfg.execution.num_workers,
         processors=processors,
         processor_configs=processor_configs,
-        shard=cfg.format_options.shard,
-        tfrecord_name=cfg.format_options.tfrecord_name,
+        format_config=format_config,
     )
 
     logger.info(f"✅ Stage 3 completed: {stats}")
@@ -199,16 +205,16 @@ def handle_viz_command(cfg: DictConfig):
 
     from scenariomax.visualization import visualize_scenarios
 
-    # For 'viz' command, src is the input
-    input_path = cfg.get("input_path", cfg.output.dst)
-    output_path = cfg.output.dst
+    # Determine input and output paths
+    input_path = cfg.paths.input_dir if cfg.paths.input_dir else f"{cfg.paths.output_dir}/unified"
+    output_path = cfg.paths.output_dir
 
     stats = visualize_scenarios(
         input_path=input_path,
         output_path=output_path,
         max_scenarios=cfg.visualization.max_scenarios,
         show_trajectory=cfg.visualization.show_trajectory,
-        output_format=cfg.visualization.output_format,
+        output_format=cfg.visualization.format,
         fps=cfg.visualization.fps,
         scatter_map=cfg.visualization.scatter_map,
         follow_ego=cfg.visualization.get("follow_ego", False),
@@ -227,24 +233,22 @@ def handle_pipeline_command(cfg: DictConfig):
 
     # Get processors and configs from config file
     processors = cfg.processing.processors if cfg.processing.processors else None
-    processor_configs = OmegaConf.to_container(cfg.processing.processor_configs, resolve=True)
+    processing_dict = OmegaConf.to_container(cfg.processing, resolve=True)
+    processor_configs = {k: v for k, v in processing_dict.items() if k != "processors"}
+
+    # Get format-specific configs
+    target_format = cfg.formatting.target_format
+    format_config = OmegaConf.to_container(cfg.formatting.get(target_format, {}), resolve=True)
 
     stats = pipeline.run_all_pipeline(
         datasets=datasets,
-        output_path=cfg.output.dst,
-        format=cfg.output.format,
+        output_path=cfg.paths.output_dir,
+        format=target_format,
         processors=processors,
         processor_configs=processor_configs,
         num_workers=cfg.execution.num_workers,
         batch_size=cfg.execution.batch_size,
-        num_files=cfg.dataset_options.num_files,
-        split=cfg.dataset_options.split,
-        shard=cfg.format_options.shard,
-        tfrecord_name=cfg.format_options.tfrecord_name,
-        min_route_valid_points=cfg.format_options.min_route_valid_points,
-        route_check_timestep=cfg.format_options.route_check_timestep,
-        openscenes_metadata_src=cfg.dataset_options.openscenes_metadata_src,
-        nuplan_direct_from_logs=cfg.dataset_options.nuplan_direct_from_logs,
+        format_config=format_config,
     )
 
     logger.info(f"✅ Full pipeline completed: {stats}")

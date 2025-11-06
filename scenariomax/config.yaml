@@ -1,27 +1,27 @@
 # ═══════════════════════════════════════════════════════════════════════════
-# ScenarioMax Configuration File (Simplified Pipeline)
+# ScenarioMax Configuration File
 # ═══════════════════════════════════════════════════════════════════════════
 #
 # Architecture:
-#   - Core function: process_single_scenario() handles one file at a time
-#   - Parallelization: Automatic via joblib.Parallel (no complex worker management)
-#   - Clean & Simple: ~676 lines of code (down from 1600+ lines)
+#   - 3-stage pipeline: convert → process → format
+#   - File-by-file streaming: Workers process files individually
+#   - Parallelization: joblib.Parallel with configurable workers
 #
 # Usage Examples:
 #   # Stage 1: Convert raw → unified
-#   scenariomax command=convert datasets.waymo=/data/waymo output.dst=/output/unified
+#   scenariomax command=convert datasets.waymo.path=/data/waymo paths.output_dir=/output
 #
 #   # Stage 2: Process unified scenarios
-#   scenariomax command=process input_path=/unified output.dst=/processed \
+#   scenariomax command=process paths.input_dir=/output/unified paths.output_dir=/processed \
 #               processing.processors=[validation,traffic_lights]
 #
 #   # Stage 3: Format unified → target
-#   scenariomax command=format input_path=/unified output.dst=/output \
-#               output.format=puffer format_options.processors=[traffic_lights]
+#   scenariomax command=format paths.input_dir=/output/unified paths.output_dir=/final \
+#               formatting.target_format=puffer
 #
 #   # Full pipeline (all 3 stages)
-#   scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
-#               output.format=tfexample processing.processors=[validation]
+#   scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+#               formatting.target_format=puffer processing.processors=[validation]
 #
 # ═══════════════════════════════════════════════════════════════════════════
 defaults:
@@ -30,116 +30,131 @@ defaults:
   - override hydra/job_logging: disabled
 
 
-# Command to execute (convert, process, format, pipeline, viz)
-command: pipeline
+# ═══════════════════════════════════════════════════════════════════════════
+# Command Selection
+# ═══════════════════════════════════════════════════════════════════════════
+command: pipeline  # Options: convert | process | format | pipeline | viz
+
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Dataset Sources
+# Dataset Sources (Stage 1: Convert)
 # ═══════════════════════════════════════════════════════════════════════════
+# Only datasets with non-null 'path' will be processed
 datasets:
-  waymo: null              # Path to Waymo dataset
-  nuplan: null             # Path to nuPlan dataset
-  nuscenes: null           # Path to nuScenes dataset (WIP)
-  argoverse2: null         # Path to Argoverse2 dataset (WIP)
-  openscenes: null         # Path to OpenScenes dataset (uses nuplan loader)
+  waymo:
+    path: null           # Path to Waymo Open Motion Dataset
+    max_files: null      # Limit number of files (null = all files)
 
-# Dataset-specific options
-dataset_options:
-  split: "v1.0-trainval"                 # nuScenes split
-  openscenes_metadata_src: null          # OpenScenes metadata directory
-  nuplan_direct_from_logs: false         # Parse nuPlan directly from logs
-  num_files: null                        # Limit number of files to process (useful for testing)
+  nuplan:
+    path: null           # Path to nuPlan dataset
+    split: null          # Dataset split: train | val | test
+    max_files: null
+    direct_from_logs: false  # Parse directly from logs (slower but more flexible)
+
+  nuscenes:
+    path: null           # Path to nuScenes dataset (WIP)
+    split: "v1.0-trainval"  # Dataset split
+    max_files: null
+
+  openscenes:
+    path: null           # Path to OpenScenes dataset
+    metadata_dir: null   # REQUIRED: OpenScenes metadata directory
+    max_files: null
+
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Input/Output Configuration
+# Input/Output Paths
 # ═══════════════════════════════════════════════════════════════════════════
-input_path: null                         # Input directory (for process/format/viz commands)
+paths:
+  input_dir: null        # Input directory for process/format/viz commands
+                         # If null, will attempt to use output_dir/unified
+  output_dir: "./output" # Output directory for all commands
 
-output:
-  dst: "./output"                        # Base output directory
-  format: "tfexample"                    # Target format: tfexample, json, puffer
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Stage 2: Processing Configuration
+# Stage 2: Processing
 # ═══════════════════════════════════════════════════════════════════════════
+# Processing runs if processors list is non-empty
+# These configs apply globally to both Stage 2 (process) and Stage 3 (format with apply_processors=true)
 processing:
-  # Processor selection (use processor names as strings)
-  # Available processors: validation, traffic_lights, polyline_interpolation, overpass_filtering
-  processors: []                         # List of processor names (e.g., [validation, traffic_lights])
+  # List of processors to run in order
+  # Available: validation, traffic_lights, polyline_interpolation, overpass_filtering
+  processors: []
 
   # Processor-specific configurations
-  processor_configs:
-    validation:
-      strict: false                      # Use strict validation (physics checks)
-      fail_on_error: false               # Raise exception on validation failure
-      validation_level: 2                # Strictness level (1-4) for strict validation
-      speed_limit_tolerance: 0.12        # Relative tolerance for speed limit checks
-      position_jump_threshold: 50.0      # Max position jump between timesteps (meters)
-      velocity_tolerance: 2.0            # Tolerance for velocity-position consistency (m/s)
-      heading_tolerance_deg: 30.0        # Tolerance for heading-velocity alignment (degrees)
+  validation:
+    strict: false                      # Use strict validation (physics checks)
+    fail_on_error: false               # Raise exception on validation failure
+    validation_level: 2                # Strictness level (1=minimal, 2=standard, 3=strict, 4=paranoid)
+    speed_limit_tolerance: 0.12        # Relative tolerance for speed limit checks
+    position_jump_threshold: 50.0      # Max position jump between timesteps (meters)
+    velocity_tolerance: 2.0            # Tolerance for velocity-position consistency (m/s)
+    heading_tolerance_deg: 30.0        # Tolerance for heading-velocity alignment (degrees)
 
-    traffic_lights: {}                   # Traffic lights processor config (no options currently)
+  traffic_lights: {}                   # No config options currently
 
-    polyline_interpolation:
-      max_segment_length: 2.0            # Maximum distance between consecutive polyline points (meters)
+  polyline_interpolation:
+    max_segment_length: 2.0            # Maximum distance between polyline points (meters)
 
-    overpass_filtering:
-      xy_distance_threshold: 0.8         # Maximum XY distance (meters) to check for vertical separation
-      z_difference_threshold: 4.0        # Minimum Z difference (meters) to consider as overpass
+  overpass_filtering:
+    xy_distance_threshold: 0.8         # Maximum XY distance to check for vertical separation (meters)
+    z_difference_threshold: 4.0        # Minimum Z difference to consider as overpass (meters)
 
-  # Processing behavior
-  save_output: true                      # Save processed scenarios (false for validation-only)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Stage 3: Format Configuration
+# Stage 3: Formatting
 # ═══════════════════════════════════════════════════════════════════════════
-format_options:
-  # TFRecord-specific options
-  shard: 1                               # Number of output shards (tfexample only)
-  tfrecord_name: "training"              # TFRecord filename (default: training)
+formatting:
+  target_format: tfexample             # Options: tfexample | json | puffer
+  apply_processors: false              # Run processing.processors during formatting?
 
-  # Puffer-specific route computation options
-  min_route_valid_points: 0               # Minimum valid trajectory points required for route computation (0 = no filtering)
-  route_check_timestep: 0                # Timestep at which agent must be valid for route computation (default: 0)
+  # Format-specific options
+  tfexample:
+    num_shards: 1                      # Number of output .tfrecord files
+    base_filename: "training"          # Filename prefix for sharded files
 
-  # Optional: Apply processors before conversion to target format
-  # This allows processing during Stage 3 without running Stage 2 separately
-  processors: []                         # List of processor names (e.g., [validation, traffic_lights])
-  processor_configs: {}                  # Processor-specific configurations (same structure as processing.processor_configs)
+  json:
+    pretty_print: false                # Human-readable JSON formatting
+
+  puffer:
+    min_route_valid_points: 0          # Min valid trajectory points for route computation (0 = no filtering)
+    route_check_timestep: 0            # Timestep where agent must be valid for route computation
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Visualization Configuration
 # ═══════════════════════════════════════════════════════════════════════════
 visualization:
-  output_format: "png"                   # Output format: png (first timestep) or video (animated)
-  fps: 10                                # Frames per second for video output
-  max_scenarios: null                    # Maximum number of scenarios to visualize
-  show_trajectory: true                  # Show trajectory history
-  scatter_map: false                     # Render road map as scattered points
-  follow_ego: false                      # Center view on ego vehicle (video: dynamic tracking)
-  field_radius: null                     # Viewport radius in meters (default: 50m if follow_ego=true)
+  format: "png"                        # Output format: png | mp4 | gif
+  fps: 10                              # Frames per second for video output
+  max_scenarios: null                  # Maximum number of scenarios to visualize (null = all)
+  show_trajectory: true                # Show agent trajectory history
+  scatter_map: false                   # Render road map as scattered points
+  follow_ego: false                    # Center view on ego vehicle
+  field_radius: null                   # Viewport radius in meters (default: 50m if follow_ego=true)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Execution Configuration
 # ═══════════════════════════════════════════════════════════════════════════
 execution:
-  num_workers: 8                         # Number of parallel workers (joblib.Parallel)
-                                         # Each worker processes files independently using process_single_scenario()
-  batch_size: 10                         # Number of files per worker batch
-                                         # Higher values = better DB connection reuse for nuPlan
-                                         # Lower values = better load balancing
-                                         # Recommended: 5-10 for Waymo, 20-50 for nuPlan
+  num_workers: 8                       # Number of parallel workers
+  batch_size: 10                       # Files per worker batch
+                                       # Higher = better DB reuse (nuPlan)
+                                       # Lower = better load balancing (Waymo)
+                                       # Recommended: 5-10 for Waymo, 20-50 for nuPlan
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Logging Configuration
 # ═══════════════════════════════════════════════════════════════════════════
 logging:
-  level: "INFO"                          # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  log_file: null                         # Log file path (null for stdout only)
+  level: "INFO"                        # Options: DEBUG | INFO | WARNING | ERROR | CRITICAL
+  log_file: null                       # Log file path (null = stdout only)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Hydra Configuration
+# Hydra Configuration (Internal)
 # ═══════════════════════════════════════════════════════════════════════════
 hydra:
   output_subdir: null
