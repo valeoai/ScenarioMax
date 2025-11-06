@@ -175,21 +175,20 @@ def _save_result(
 
 
 def convert_raw_to_unified(
-    datasets: dict[str, str] | str,
+    datasets: dict[str, dict] | str,
     output_path: str,
     num_workers: int = 8,
     batch_size: int = 10,
-    **kwargs,
 ) -> dict[str, Any]:
     """
     Stage 1: Convert raw dataset(s) to unified pickle format.
 
     Args:
-        datasets: Dict mapping dataset names to paths OR single path string
+        datasets: Dict mapping dataset names to config dicts (with 'path' and options)
+                  OR single path string (auto-detected dataset)
         output_path: Output directory for unified pickles
         num_workers: Number of parallel workers
         batch_size: Number of files per worker batch
-        **kwargs: Dataset-specific arguments
 
     Returns:
         Statistics dict
@@ -198,7 +197,7 @@ def convert_raw_to_unified(
 
     # Normalize datasets to dict
     if isinstance(datasets, str):
-        datasets = {"auto": datasets}
+        datasets = {"auto": {"path": datasets}}
 
     logger.info(f"🚀 Stage 1: Converting {len(datasets)} dataset(s) → Unified")
     logger.info(f"   • Workers: {num_workers}, Batch size: {batch_size}")
@@ -210,14 +209,18 @@ def convert_raw_to_unified(
     total_errors = 0
 
     # Process each dataset
-    for dataset_name, dataset_path in datasets.items():
+    for dataset_name, dataset_config in datasets.items():
         logger.info(f"Processing dataset: {dataset_name}")
 
-        # Get dataset config
+        # Get dataset path and options from config
+        dataset_path = dataset_config["path"]
+        dataset_options = {k: v for k, v in dataset_config.items() if k != "path"}
+
+        # Get dataset config from registry
         config = dataset_registry.get_dataset_config(dataset_name)
 
         # Load file paths/metadata
-        file_list = config.load_func(data_path=dataset_path, **kwargs)
+        file_list = config.load_func(data_path=dataset_path, **dataset_options)
         logger.info(f"   • Found {len(file_list)} files")
 
         # Create batches
@@ -275,7 +278,6 @@ def process_unified_scenarios(
     processor_configs: dict[str, dict] | None = None,
     num_workers: int = 8,
     batch_size: int = 10,
-    save_output: bool = True,
 ) -> dict[str, Any]:
     """
     Stage 2: Process unified scenarios (apply transformations).
@@ -287,7 +289,6 @@ def process_unified_scenarios(
         processor_configs: Processor configurations
         num_workers: Number of parallel workers
         batch_size: Number of files per worker batch (default: 10)
-        save_output: Whether to save processed scenarios
 
     Returns:
         Statistics dict
@@ -297,7 +298,6 @@ def process_unified_scenarios(
     logger.info("🚀 Stage 2: Processing Unified Scenarios")
     logger.info(f"   • Processors: {len(processors) if processors else 0}")
     logger.info(f"   • Workers: {num_workers}, Batch size: {batch_size}")
-    logger.info(f"   • Save output: {save_output}")
 
     # Resolve processor names
     if processors:
@@ -312,8 +312,7 @@ def process_unified_scenarios(
 
     logger.info(f"   • Found {len(pickle_files)} pickle files")
 
-    if save_output:
-        clean_and_create_output_directory(output_path)
+    clean_and_create_output_directory(output_path)
 
     # Create batches
     file_batches = [pickle_files[i : i + batch_size] for i in range(0, len(pickle_files), batch_size)]
@@ -325,7 +324,7 @@ def process_unified_scenarios(
             input_data=batch,
             convert_func=load_pickle,
             process_func=_apply_processors,
-            output_path=output_path if save_output else None,
+            output_path=output_path,
         )
         for batch in tqdm(file_batches, desc="Processing batches", unit=" batch")
     )
@@ -361,7 +360,7 @@ def format_unified_to_target(
     batch_size: int = 10,
     processors: list[Callable] | list[str] | None = None,
     processor_configs: dict[str, dict] | None = None,
-    **format_options,
+    format_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Stage 3: Format unified scenarios to target format.
@@ -374,7 +373,7 @@ def format_unified_to_target(
         batch_size: Number of files per worker batch (default: 10)
         processors: Optional processors to apply before formatting
         processor_configs: Processor configurations
-        **format_options: Format-specific options
+        format_config: Format-specific configuration dict
 
     Returns:
         Statistics dict
@@ -389,6 +388,9 @@ def format_unified_to_target(
     logger.info(f"   • Processors: {len(processors) if processors else 0}")
     logger.info(f"   • Workers: {num_workers}, Batch size: {batch_size}")
 
+    if format_config is None:
+        format_config = {}
+
     # Resolve processor names
     if processors:
         from scenariomax.stage2_process import apply_processors
@@ -400,12 +402,12 @@ def format_unified_to_target(
     # Create format function
     _format_func = get_format_function(format)
 
-    # Wrap format function with format_options for puffer
+    # Wrap format function with format_config for puffer
     if format == FORMAT_PUFFER:
         _format_func = partial(
             _format_func,
-            min_route_valid_points=format_options.get("min_route_valid_points", 0),
-            route_check_timestep=format_options.get("route_check_timestep", 0),
+            min_route_valid_points=format_config.get("min_route_valid_points", 0),
+            route_check_timestep=format_config.get("route_check_timestep", 0),
         )
 
     # Get all pickle files
@@ -439,7 +441,7 @@ def format_unified_to_target(
 
     # Postprocess if needed (merge workers, shuffle, shard)
     if format == FORMAT_TFEXAMPLE:
-        _postprocess_tfexample(output_path, format_options)
+        _postprocess_tfexample(output_path, format_config)
     elif format == FORMAT_JSON:
         logger.info("✅ JSON files ready")
     elif format == FORMAT_PUFFER:
@@ -459,14 +461,14 @@ def format_unified_to_target(
     }
 
 
-def _postprocess_tfexample(output_path: str, format_options: dict) -> None:
+def _postprocess_tfexample(output_path: str, format_config: dict) -> None:
     """Merge TFRecord files, shuffle, and optionally shard."""
     from scenariomax.stage3_format.tfexample import postprocess
 
     logger.info("🔄 Merging TFRecord files")
 
     # Merge all .tfrecord files into one
-    tfrecord_name = format_options.get("tfrecord_name", "training")
+    base_filename = format_config.get("base_filename", "training")
 
     # # Collect all subdirectories
     subdirs = [d for d in os.listdir(output_path) if os.path.isdir(os.path.join(output_path, d))]
@@ -483,21 +485,21 @@ def _postprocess_tfexample(output_path: str, format_options: dict) -> None:
 
     if all_tfrecord_files:
         # Merge all files from all datasets
-        merged_file = os.path.join(output_path, f"{tfrecord_name}.tfrecord")
+        merged_file = os.path.join(output_path, f"{base_filename}.tfrecord")
         logger.info(f"Merging {len(all_tfrecord_files)} files into {merged_file}")
         postprocess.merge_tfrecord_files(all_tfrecord_files, merged_file)
         postprocess.shuffle_tfrecord_file(merged_file)
 
         # Shard if requested
-        num_shards = format_options.get("shard", 1)
+        num_shards = format_config.get("num_shards", 1)
         if num_shards > 1:
             from scenariomax.stage3_format.tfexample import shard
 
             logger.info(f"Sharding into {num_shards} shards")
             shard.shard_tfrecord(
                 src=output_path,
-                filename=tfrecord_name,
-                num_threads=format_options.get("num_workers", 8),
+                filename=base_filename,
+                num_threads=format_config.get("num_workers", 8),
                 num_shards=num_shards,
             )
 
@@ -561,14 +563,14 @@ def _postprocess_puffer(output_path: str) -> None:
 
 
 def run_all_pipeline(
-    datasets: dict[str, str] | str,
+    datasets: dict[str, dict] | str,
     output_path: str,
     format: str,
     processors: list[Callable] | list[str] | None = None,
     processor_configs: dict[str, dict] | None = None,
     num_workers: int = 8,
     batch_size: int = 10,
-    **kwargs,
+    format_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Full pipeline: Run all 3 stages together.
@@ -576,14 +578,15 @@ def run_all_pipeline(
     Raw → Unified → Processed → Target Format
 
     Args:
-        datasets: Dict mapping dataset names to paths OR single path string
+        datasets: Dict mapping dataset names to config dicts (with 'path' and options)
+                  OR single path string (auto-detected dataset)
         output_path: Output directory
         format: Target format (tfexample, json, puffer)
         processors: Optional processors to apply (e.g., validation, traffic_lights)
         processor_configs: Processor configurations
         num_workers: Number of parallel workers
         batch_size: Number of files per worker batch
-        **kwargs: Dataset-specific arguments
+        format_config: Format-specific configuration dict
 
     Returns:
         Combined statistics dict
@@ -596,7 +599,10 @@ def run_all_pipeline(
 
     # Normalize datasets to dict
     if isinstance(datasets, str):
-        datasets = {"auto": datasets}
+        datasets = {"auto": {"path": datasets}}
+
+    if format_config is None:
+        format_config = {}
 
     # Otherwise, run all 3 stages in memory (one pass)
     logger.info("Mode: In-memory streaming (no intermediate files)")
@@ -621,23 +627,27 @@ def run_all_pipeline(
 
     _format_func = get_format_function(format)
 
-    # Wrap format function with format_options for puffer
+    # Wrap format function with format_config for puffer
     if format == FORMAT_PUFFER:
         _format_func = partial(
             _format_func,
-            min_route_valid_points=kwargs.get("min_route_valid_points", 0),
-            route_check_timestep=kwargs.get("route_check_timestep", 0),
+            min_route_valid_points=format_config.get("min_route_valid_points", 0),
+            route_check_timestep=format_config.get("route_check_timestep", 0),
         )
 
     # Process each dataset
-    for dataset_name, dataset_path in datasets.items():
+    for dataset_name, dataset_config in datasets.items():
         logger.info(f"Processing dataset: {dataset_name}")
 
-        # Get dataset config
+        # Get dataset path and options from config
+        dataset_path = dataset_config["path"]
+        dataset_options = {k: v for k, v in dataset_config.items() if k != "path"}
+
+        # Get dataset config from registry
         config = dataset_registry.get_dataset_config(dataset_name)
 
         # Load raw file paths/metadata (don't preprocess yet - let worker do it)
-        file_list = config.load_func(data_path=dataset_path, **kwargs)
+        file_list = config.load_func(data_path=dataset_path, **dataset_options)
         logger.info(f"   • Found {len(file_list)} files")
 
         # Create batches of file paths/metadata
@@ -675,7 +685,7 @@ def run_all_pipeline(
 
     # Postprocess based on format
     if format == FORMAT_TFEXAMPLE:
-        _postprocess_tfexample(output_path, kwargs)
+        _postprocess_tfexample(output_path, format_config)
     elif format == FORMAT_JSON:
         logger.info("✅ JSON files ready")  # No postprocessing needed for JSON format
     elif format == FORMAT_PUFFER:
