@@ -85,7 +85,7 @@ class TestStage1RawToUnified:
 
         # Stage 1: Convert
         stats = pipeline.convert_raw_to_unified(
-            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 2}},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 2}},
             output_path=str(unified_dir),
             num_workers=2,
         )
@@ -125,7 +125,7 @@ class TestStage1RawToUnified:
 
         # Stage 1: Convert with validation
         stats = pipeline.convert_raw_to_unified(
-            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
         )
@@ -143,7 +143,7 @@ class TestStage1RawToUnified:
 
         # Stage 1: Convert
         stats = pipeline.convert_raw_to_unified(
-            datasets={"nuplan": {"path": str(NUPLAN_DATA_DIR), "max_files": 1}},
+            datasets={"nuplan": {"path": str(NUPLAN_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
         )
@@ -189,7 +189,7 @@ class TestStage2ProcessUnified:
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
         )
@@ -228,7 +228,7 @@ class TestStage2ProcessUnified:
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
         )
@@ -271,7 +271,7 @@ class TestStage3FormatToTarget:
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
         )
@@ -340,7 +340,7 @@ class TestStage3FormatToTarget:
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
         )
@@ -558,7 +558,7 @@ class TestValidation:
 
         # Convert with validation disabled first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
         )
@@ -588,7 +588,7 @@ class TestValidation:
 
         # Convert first
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "max_files": 1}},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=2,
         )
