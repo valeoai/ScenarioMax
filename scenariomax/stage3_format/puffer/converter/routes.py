@@ -1,22 +1,22 @@
 """
 Compute agent routes for Puffer format.
 
-Routes are lists of lane center IDs that:
-1. Cover the ground truth trajectory
-2. Extend beyond the trajectory using lane connectivity
+Routes are lists of lane center IDs that cover the ground truth trajectory
+and explore different possible paths through the road network.
 
 Algorithm Overview:
 ------------------
-The route computation uses a multi-step approach:
+The route computation uses a 4-step graph-based approach:
 
 1. Validation: Check if agent has sufficient trajectory points and is on lanes (not parked)
 2. Root Lane Selection: Find the current lane using the first N trajectory points
-3. Route Building: Use BFS to explore exit lanes and match against ground truth trajectory
-4. Route Extension: Extend routes beyond GT trajectory using lane connectivity
+3. Graph Building: Build full reachability graph from root lane (no pruning)
+4. Metadata Computation: Score each edge against ground truth trajectory
+5. Path Extraction: Extract top N paths using GT coverage metric
 
 Multiple route paths are generated to represent different possible paths through
-exit lanes (e.g., at highway interchanges or intersections). Each route covers
-the ground truth trajectory and extends beyond it.
+exit lanes (e.g., at highway interchanges or intersections). This graph-based
+approach enables flexible path selection with pluggable metrics.
 
 The algorithm uses vectorized operations for performance and scores lane matches
 based on both spatial proximity (distance) and directional alignment (heading).
@@ -35,33 +35,24 @@ logger = logger_utils.get_logger(__name__)
 
 # Constants for route computation
 # Physical thresholds
-LANE_WIDTH_THRESHOLD = 3.5  # Meters - maximum distance from lane center to consider agent "on lane"
-# Based on typical lane width of 3.0-3.7m, allowing some margin
+LANE_WIDTH_THRESHOLD = 4.0  # Meters - maximum distance from lane center to consider agent "on lane"
 ALIGNMENT_THRESHOLD = 0.3  # Cosine similarity threshold for direction alignment
 # Value of 0.3 corresponds to ~72.5° angle deviation (arccos(0.3) ≈ 72.5°)
 # Allows moderate heading mismatch while filtering out wrong-way or perpendicular lanes
 # Range: [-1, 1] where 1 = perfect alignment, 0 = perpendicular, -1 = opposite direction
 
 # Algorithm parameters
-MAX_ROUTE_DEPTH = 10  # Maximum number of lanes to extend beyond GT trajectory
-# Prevents infinite extension while allowing reasonable planning horizon
+MAX_GRAPH_DEPTH = 10  # Maximum depth when building reachability graph from root lane
 ROOT_LANE_POINTS = 3  # Number of initial trajectory points used to determine current lane
-# Balances accuracy (more points) vs responsiveness to lane changes
+MAX_PATH_LENGTH = 10  # Maximum number of lanes per route path
 MAX_ROUTES = 10  # Maximum number of route paths to generate per agent
-# Limits memory usage for complex intersections with many exit options
 
 # Score calculation weights
 # These weights determine the relative importance of direction vs. distance in lane matching
 # The scoring formula is: score = ALIGNMENT_WEIGHT * alignment + DISTANCE_WEIGHT * distance_score
 # where alignment ∈ [-1, 1] and distance_score = 1/(1+distance) ∈ (0, 1]
 ALIGNMENT_WEIGHT = 0.7  # Weight for directional alignment (heading match)
-# Higher weight (0.7) prioritizes direction over proximity
-# Rationale: Direction is a stronger signal for lane matching than proximity alone
-# An agent 2m away but heading along the lane is more likely "on lane" than
-# an agent 1m away but crossing perpendicular to the lane
 DISTANCE_WEIGHT = 0.3  # Weight for spatial proximity
-# Lower weight (0.3) but still penalizes far lanes
-# Rationale: Distance matters, but less than direction for lane identification
 # Combined weights sum to 1.0 for interpretable normalized scoring
 
 
@@ -77,7 +68,12 @@ def compute_agent_route(
     """
     Compute routes (lists of lane IDs) for an agent based on ground truth trajectory.
 
-    The routes cover the ground truth trajectory and extend beyond it using lane connectivity.
+    Algorithm:
+    1. Find root lane using first N trajectory points
+    2. Build full reachability graph from root (no pruning)
+    3. Compute GT matching metadata for each edge
+    4. Extract top N paths using GT coverage metric
+
     Multiple route paths are generated to explore different exit lane possibilities.
 
     Args:
@@ -131,8 +127,18 @@ def compute_agent_route(
         logger.debug(f"{agent_str}: No current lane found")
         return []
 
-    # Step 2: Build route paths by exploring exit lanes and matching with GT trajectory
-    routes = _build_route_paths_from_root(root_lane, valid_trajectory, valid_heading, static_map_elements, lane_data)
+    # Step 2: Build reachability graph from root lane (no pruning)
+    graph = _build_graph(root_lane, static_map_elements)
+
+    if not graph:
+        logger.debug(f"{agent_str}: No reachable lanes from root {root_lane}")
+        return [[root_lane]]
+
+    # Step 3: Compute GT matching metadata for graph edges
+    metadata = _compute_gt_metadata(graph, root_lane, valid_trajectory, valid_heading, lane_data)
+
+    # Step 4: Extract top N paths using GT coverage metric
+    routes = extract_top_n_paths(graph, root_lane, metadata, n=MAX_ROUTES)
 
     return routes
 
@@ -189,6 +195,187 @@ def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, d
     return lane_ids, lane_polylines, lane_metadata
 
 
+def _build_graph(
+    root_lane: int | str,
+    static_map_elements: dict,
+    max_depth: int = MAX_GRAPH_DEPTH,
+) -> dict[int | str, list]:
+    """
+    Build complete reachability graph from root lane with no pruning.
+
+    Explores all exit lanes up to max_depth using BFS with cycle detection.
+    Returns adjacency list representation of the lane connectivity graph.
+
+    Args:
+        root_lane: Starting lane ID
+        static_map_elements: Dict of static map elements
+        max_depth: Maximum depth to explore from root
+
+    Returns:
+        Dict mapping lane_id to list of exit lane IDs: {lane_id: [exit_ids]}
+    """
+    graph = {}
+    visited_lanes = {root_lane}
+    queue = deque([(root_lane, 0)])
+
+    while queue:
+        lane_id, depth = queue.popleft()
+
+        if depth >= max_depth:
+            continue
+
+        if lane_id not in static_map_elements:
+            continue
+
+        exit_lanes = static_map_elements[lane_id].get("exit_lanes", [])
+        graph[lane_id] = []
+
+        for exit_id in exit_lanes:
+            if exit_id in static_map_elements:
+                graph[lane_id].append(exit_id)
+
+                if exit_id not in visited_lanes:
+                    visited_lanes.add(exit_id)
+                    queue.append((exit_id, depth + 1))
+
+    return graph
+
+
+def _compute_gt_metadata(
+    graph: dict,
+    root_lane: int | str,
+    trajectory: np.ndarray,
+    heading: np.ndarray,
+    lane_data: tuple,
+    max_depth: int = MAX_GRAPH_DEPTH,
+) -> dict[tuple, tuple]:
+    """
+    Compute GT trajectory matching metadata for each edge in the graph.
+
+    For each edge (from_lane, to_lane), calculates how well the to_lane
+    matches the remaining ground truth trajectory.
+
+    Args:
+        graph: Adjacency list from _build_graph
+        root_lane: Starting lane ID
+        trajectory: Valid trajectory points (M, 2/3)
+        heading: Valid headings (M,)
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
+        max_depth: Maximum depth to compute metadata for
+
+    Returns:
+        Dict mapping (from_lane, to_lane) to (score, next_traj_idx, traj_start_idx)
+    """
+    lane_ids, lane_polylines, _ = lane_data
+    lane_id_to_idx = {lane_id: idx for idx, lane_id in enumerate(lane_ids)}
+
+    trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
+
+    metadata = {}
+    queue = deque([(root_lane, 0, 0)])
+    visited_states = set()
+
+    while queue:
+        lane_id, depth, traj_idx = queue.popleft()
+
+        if (lane_id, traj_idx) in visited_states or depth >= max_depth:
+            continue
+        visited_states.add((lane_id, traj_idx))
+
+        for exit_id in graph.get(lane_id, []):
+            score, next_traj_idx = _score_lane_against_trajectory(
+                exit_id,
+                lane_id_to_idx,
+                lane_polylines,
+                trajectory_2d,
+                heading,
+                traj_idx,
+            )
+            metadata[(lane_id, exit_id)] = (score, next_traj_idx, traj_idx)
+            queue.append((exit_id, depth + 1, next_traj_idx))
+
+    return metadata
+
+
+def _gt_coverage_metric(path: list, metadata: dict) -> float:
+    """
+    Calculate GT coverage score for a path.
+
+    Sums the GT matching scores along all edges in the path.
+
+    Args:
+        path: List of lane IDs
+        metadata: Edge metadata from _compute_gt_metadata
+
+    Returns:
+        Total score (sum of edge scores)
+    """
+    total_score = 0.0
+    for i in range(len(path) - 1):
+        edge = (path[i], path[i + 1])
+        if edge in metadata:
+            score, _, _ = metadata[edge]
+            total_score += score
+    return total_score
+
+
+def extract_top_n_paths(
+    graph: dict,
+    root_lane: int | str,
+    metadata: dict,
+    n: int = MAX_ROUTES,
+    max_length: int = MAX_PATH_LENGTH,
+) -> list[list]:
+    """
+    Extract top N paths from graph using GT coverage metric.
+
+    Enumerates paths via DFS with per-path cycle detection, scores each
+    path using _gt_coverage_metric, and returns the best N paths.
+
+    Args:
+        graph: Adjacency list from _build_graph
+        root_lane: Starting lane ID
+        metadata: Edge metadata from _compute_gt_metadata
+        n: Number of top paths to return
+        max_length: Maximum path length in number of lanes
+
+    Returns:
+        List of N best paths, each path is a list of lane IDs
+    """
+    complete_paths = []
+    queue = [([root_lane], {root_lane})]
+
+    while queue:
+        path, visited = queue.pop(0)
+        current = path[-1]
+
+        if len(path) >= max_length or current not in graph:
+            complete_paths.append(path)
+            continue
+
+        exits = graph.get(current, [])
+        if not exits:
+            complete_paths.append(path)
+            continue
+
+        has_valid_exit = False
+        for exit_id in exits:
+            if exit_id not in visited:
+                has_valid_exit = True
+                queue.append((path + [exit_id], visited | {exit_id}))
+
+        if not has_valid_exit:
+            complete_paths.append(path)
+
+    if not complete_paths:
+        return [[root_lane]]
+
+    scored_paths = [(_gt_coverage_metric(path, metadata), path) for path in complete_paths]
+    scored_paths.sort(reverse=True)
+
+    return [path for _, path in scored_paths[:n]]
+
+
 def _is_agent_on_lanes(trajectory: np.ndarray, lane_polylines: np.ndarray) -> bool:
     """
     Check if an agent's trajectory is mostly on lanes (not parked or off-map).
@@ -218,15 +405,17 @@ def _is_agent_on_lanes(trajectory: np.ndarray, lane_polylines: np.ndarray) -> bo
     if trajectory_displacement < STATIONARY_THRESHOLD:
         # Agent is stationary (parked, waiting at light, etc.), only check start position
         trajectory_sample = trajectory_2d[:1]
+        _lane_width_threshold = 1.0  # Tighter threshold for parked agents
     else:
         # Agent is moving, check start and end positions to verify on-lane status
         trajectory_sample = np.array([trajectory_2d[0], trajectory_2d[-1]])
+        _lane_width_threshold = LANE_WIDTH_THRESHOLD
 
     # Vectorized: Calculate distances for all sample points at once
     min_distances = _points_to_polylines_distance_batch(trajectory_sample, lane_polylines)
 
     # Check if any sampled point is near any lane
-    return np.any(min_distances < LANE_WIDTH_THRESHOLD)
+    return np.any(min_distances < _lane_width_threshold)
 
 
 def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tuple) -> int | None:
@@ -287,155 +476,6 @@ def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tupl
 
     best_lane_idx = np.argmax(lane_total_scores)
     return lane_ids[best_lane_idx]
-
-
-def _add_route_if_unique(
-    route: list[int],
-    seen_routes: set,
-    all_routes: list[list[int]],
-    max_routes: int,
-) -> bool:
-    """
-    Add route to all_routes if it's unique and under the max limit.
-
-    Args:
-        route: Route to add (list of lane IDs)
-        seen_routes: Set of already seen route tuples
-        all_routes: List of all routes found so far
-        max_routes: Maximum number of routes allowed
-
-    Returns:
-        True if route was added, False if it was duplicate or limit reached
-    """
-    if len(all_routes) >= max_routes:
-        return False
-
-    route_tuple = tuple(route)
-    if route_tuple not in seen_routes:
-        seen_routes.add(route_tuple)
-        all_routes.append(route)
-        return True
-
-    return False
-
-
-def _build_route_paths_from_root(
-    root_lane: int,
-    trajectory: np.ndarray,
-    heading: np.ndarray,
-    static_map_elements: dict,
-    lane_data: tuple,
-) -> list[list[int]]:
-    """
-    Build multiple route paths starting from the root lane.
-
-    For each exit lane choice, determines if it follows the GT trajectory.
-    Creates new route paths when beyond the GT trajectory.
-    Each route path contains the GT trajectory.
-
-    Uses BFS with route deduplication and count limits to prevent excessive
-    route generation at complex intersections.
-
-    Args:
-        root_lane: The current lane ID where the agent starts
-        trajectory: Valid trajectory points (M, 2/3)
-        heading: Valid headings (M,)
-        static_map_elements: Dict of static map elements
-        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
-
-    Returns:
-        List of route paths, each containing lane IDs covering the GT trajectory
-    """
-    lane_ids, lane_polylines, lane_metadata = lane_data
-
-    # Build a mapping from lane_id to lane_idx for quick lookup
-    lane_id_to_idx = {lane_id: idx for idx, lane_id in enumerate(lane_ids)}
-
-    # Extract 2D positions
-    trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
-
-    # Start with the root lane
-    all_routes = []
-    seen_routes = set()  # For deduplication
-
-    # Use BFS to explore all paths through exit lanes
-    # State: (current_route, current_trajectory_idx, current_lane_id)
-    queue = deque([([root_lane], 0, root_lane)])
-
-    while queue and len(all_routes) < MAX_ROUTES:
-        current_route, traj_idx, current_lane_id = queue.popleft()  # BFS: FIFO queue behavior
-
-        # Check if we've covered the entire trajectory
-        if traj_idx >= len(trajectory_2d):
-            # Extend beyond GT trajectory using exit lanes
-            extended_route = _extend_beyond_trajectory(current_route, static_map_elements)
-            _add_route_if_unique(extended_route, seen_routes, all_routes, MAX_ROUTES)
-            continue
-
-        # Get exit lanes from current lane
-        if current_lane_id not in static_map_elements:
-            # No exit lanes, save current route
-            _add_route_if_unique(current_route, seen_routes, all_routes, MAX_ROUTES)
-            continue
-
-        current_lane_data = static_map_elements[current_lane_id]
-        exit_lanes = current_lane_data.get("exit_lanes", [])
-
-        if not exit_lanes:
-            # No exit lanes, extend beyond trajectory
-            extended_route = _extend_beyond_trajectory(current_route, static_map_elements)
-            _add_route_if_unique(extended_route, seen_routes, all_routes, MAX_ROUTES)
-            continue
-
-        # Score each exit lane based on how well it matches the remaining GT trajectory
-        exit_lane_scores = []
-        for exit_lane_id in exit_lanes:
-            if exit_lane_id not in lane_id_to_idx:
-                continue
-
-            score, next_traj_idx = _score_lane_against_trajectory(
-                exit_lane_id,
-                lane_id_to_idx,
-                lane_polylines,
-                trajectory_2d,
-                heading,
-                traj_idx,
-            )
-
-            exit_lane_scores.append((exit_lane_id, score, next_traj_idx))
-
-        if not exit_lane_scores:
-            # No valid exit lanes, save current route
-            _add_route_if_unique(current_route, seen_routes, all_routes, MAX_ROUTES)
-            continue
-
-        # Sort by score (descending) and select the best matching exit lanes
-        exit_lane_scores.sort(key=lambda x: x[1], reverse=True)
-
-        # Add paths for all exit lanes with positive scores (following GT)
-        # This creates multiple route possibilities
-        # Score interpretation:
-        # - Positive score: Exit lane matches ground truth trajectory, continue exploration
-        # - Zero/negative score: Exit lane goes beyond ground truth, finalize and extend route
-        for exit_lane_id, score, next_traj_idx in exit_lane_scores:
-            if score > 0:  # Only follow lanes that match GT trajectory
-                new_route = current_route + [exit_lane_id]
-                # Check deduplication before adding to queue for further exploration
-                route_tuple = tuple(new_route)
-                if route_tuple not in seen_routes and len(all_routes) < MAX_ROUTES:
-                    seen_routes.add(route_tuple)  # Mark as seen to avoid re-exploring
-                    queue.append((new_route, next_traj_idx, exit_lane_id))
-            else:
-                # Beyond GT trajectory, finalize by extending and add to results
-                new_route = current_route + [exit_lane_id]
-                extended_route = _extend_beyond_trajectory(new_route, static_map_elements)
-                _add_route_if_unique(extended_route, seen_routes, all_routes, MAX_ROUTES)
-
-    # If no routes were found, return just the root lane
-    if not all_routes:
-        all_routes = [[root_lane]]
-
-    return all_routes
 
 
 def _score_lane_against_trajectory(
@@ -520,55 +560,6 @@ def _score_lane_against_trajectory(
     return float(avg_score), next_traj_idx
 
 
-def _extend_beyond_trajectory(route: list[int], static_map_elements: dict) -> list[int]:
-    """
-    Extend route beyond the GT trajectory using exit lanes.
-
-    Follows the first valid exit lane at each step, with cycle detection
-    to prevent infinite loops.
-
-    Args:
-        route: Current route (list of lane IDs)
-        static_map_elements: Dict of static map elements
-
-    Returns:
-        Extended route with cycle detection
-    """
-    extended_route = route.copy()
-    current_lane_id = route[-1] if route else None
-
-    if not current_lane_id:
-        return extended_route
-
-    # Track visited lanes to prevent cycles
-    visited = set(route)
-
-    # Extend using exit lanes
-    for _ in range(MAX_ROUTE_DEPTH):
-        if current_lane_id not in static_map_elements:
-            break
-
-        current_lane = static_map_elements[current_lane_id]
-        exit_lanes = current_lane.get("exit_lanes", [])
-
-        if not exit_lanes:
-            break
-
-        # Filter out already visited lanes and invalid lanes
-        valid_exits = [eid for eid in exit_lanes if eid not in visited and eid in static_map_elements]
-
-        if not valid_exits:
-            break
-
-        # Take first valid exit lane
-        next_lane_id = valid_exits[0]
-        extended_route.append(next_lane_id)
-        visited.add(next_lane_id)
-        current_lane_id = next_lane_id
-
-    return extended_route
-
-
 def _points_to_polylines_distance_batch(points: np.ndarray, polylines: np.ndarray) -> np.ndarray:
     """
     Vectorized calculation of minimum distances from multiple points to multiple polylines.
@@ -577,7 +568,7 @@ def _points_to_polylines_distance_batch(points: np.ndarray, polylines: np.ndarra
 
     Args:
         points: 2D points array (N_points, 2)
-        polylines: Array of polylines (N_lanes, max_points, 2)
+        polylines: Array of polylines (N_lanes, max_points, 2) - padded with [0, 0]
 
     Returns:
         Array of minimum distances for each point-lane pair (N_points, N_lanes)
@@ -586,46 +577,54 @@ def _points_to_polylines_distance_batch(points: np.ndarray, polylines: np.ndarra
     n_lanes = len(polylines)
     max_segments = polylines.shape[1] - 1
 
-    # Pre-compute segment vectors and lengths (shared across all points)
-    seg_starts = polylines[:, :-1, :]  # (N_lanes, max_segments, 2)
-    seg_ends = polylines[:, 1:, :]  # (N_lanes, max_segments, 2)
+    # Extract segment endpoints: (N_lanes, max_segments, 2)
+    seg_starts = polylines[:, :-1, :]
+    seg_ends = polylines[:, 1:, :]
+
+    # Detect valid segments (exclude padding and transitions to padding)
+    # A segment is valid only if BOTH endpoints are non-zero
+    # Shape: (N_lanes, max_segments)
+    starts_nonzero = np.any(seg_starts != 0, axis=2)  # True if start point is not [0, 0]
+    ends_nonzero = np.any(seg_ends != 0, axis=2)  # True if end point is not [0, 0]
+    valid_segs = starts_nonzero & ends_nonzero  # Both must be non-zero
+
+    # Compute segment vectors and squared lengths
     seg_vecs = seg_ends - seg_starts  # (N_lanes, max_segments, 2)
-    # Use einsum for faster squared length calculation
     seg_lens_sq = np.einsum("ijk,ijk->ij", seg_vecs, seg_vecs)  # (N_lanes, max_segments)
-    valid_segs = seg_lens_sq > 1e-10
-    seg_lens_sq_safe = seg_lens_sq + 1e-10
 
-    # Reshape for broadcasting: (1, N_lanes, max_segments, 2/1)
-    seg_starts_bc = seg_starts.reshape(1, n_lanes, max_segments, 2)
-    seg_vecs_bc = seg_vecs.reshape(1, n_lanes, max_segments, 2)
-    seg_lens_sq_bc = seg_lens_sq_safe.reshape(1, n_lanes, max_segments)
-    valid_segs_bc = valid_segs.reshape(1, n_lanes, max_segments)
+    # Additional check: filter zero-length valid segments (degenerate polylines)
+    valid_segs = valid_segs & (seg_lens_sq > 1e-10)
+    seg_lens_sq_safe = seg_lens_sq + 1e-10  # Avoid division by zero
 
-    # Reshape points for broadcasting: (N_points, 1, 1, 2)
-    points_reshaped = points.reshape(n_points, 1, 1, 2)
+    # Reshape for broadcasting
+    seg_starts_bc = seg_starts.reshape(1, n_lanes, max_segments, 2)  # (1, N_lanes, max_segments, 2)
+    seg_vecs_bc = seg_vecs.reshape(1, n_lanes, max_segments, 2)  # (1, N_lanes, max_segments, 2)
+    seg_lens_sq_bc = seg_lens_sq_safe.reshape(1, n_lanes, max_segments)  # (1, N_lanes, max_segments)
+    valid_segs_bc = valid_segs.reshape(1, n_lanes, max_segments)  # (1, N_lanes, max_segments)
+    points_bc = points.reshape(n_points, 1, 1, 2)  # (N_points, 1, 1, 2)
 
-    # Project points onto each segment
-    point_vecs = points_reshaped - seg_starts_bc  # (N_points, N_lanes, max_segments, 2)
+    # Project each point onto each segment
+    # t = (point - seg_start) · seg_vec / |seg_vec|²
+    # Shape: (N_points, N_lanes, max_segments)
+    point_to_start = points_bc - seg_starts_bc  # (N_points, N_lanes, max_segments, 2)
+    t = np.einsum("ijkl,jkl->ijk", point_to_start, seg_vecs) / seg_lens_sq_bc
+    t = np.clip(t, 0, 1, out=t)  # Clamp to [0, 1] for segment bounds
 
-    # Use einsum for faster dot product
-    t = np.einsum("ijkl,jkl->ijk", point_vecs, seg_vecs) / seg_lens_sq_bc
-    t = np.clip(t, 0, 1, out=t)  # In-place clipping
-
-    # Calculate closest point on each segment
+    # Find closest point on segment: closest = seg_start + t * seg_vec
+    # Shape: (N_points, N_lanes, max_segments, 2)
     t_expanded = t[..., np.newaxis]  # (N_points, N_lanes, max_segments, 1)
-    closest_points = seg_starts_bc + t_expanded * seg_vecs_bc
+    closest_on_seg = seg_starts_bc + t_expanded * seg_vecs_bc
 
-    # Calculate squared distances (avoid sqrt until necessary)
-    # Use einsum for faster squared distance calculation
-    diff = points_reshaped - closest_points
-    distances_sq = np.einsum("ijkl,ijkl->ijk", diff, diff)  # (N_points, N_lanes, max_segments)
-    # Apply validity mask directly - invalid segments get infinite distance
+    # Compute squared distance from point to closest point on segment
+    # Shape: (N_points, N_lanes, max_segments)
+    diff = points_bc - closest_on_seg
+    distances_sq = np.einsum("ijkl,ijkl->ijk", diff, diff)
+
+    # Mask invalid segments with infinite distance
     distances_sq = np.where(valid_segs_bc, distances_sq, np.inf)
 
-    # Find minimum squared distance for each point-lane pair
+    # Find minimum distance across all segments for each point-lane pair
     min_distances_sq = np.min(distances_sq, axis=2)  # (N_points, N_lanes)
-
-    # Only take sqrt at the end
     min_distances = np.sqrt(min_distances_sq)
 
     return min_distances
@@ -642,7 +641,7 @@ def _points_to_polylines_distance_batch_with_indices(
 
     Args:
         points: 2D points array (N_points, 2)
-        polylines: Array of polylines (N_lanes, max_points, 2)
+        polylines: Array of polylines (N_lanes, max_points, 2) - padded with [0, 0]
 
     Returns:
         Tuple of:
@@ -653,55 +652,58 @@ def _points_to_polylines_distance_batch_with_indices(
     n_lanes = len(polylines)
     max_segments = polylines.shape[1] - 1
 
-    # Pre-compute segment vectors and lengths (shared across all points)
-    # This avoids recomputing for each point
-    seg_starts = polylines[:, :-1, :]  # (N_lanes, max_segments, 2)
-    seg_ends = polylines[:, 1:, :]  # (N_lanes, max_segments, 2)
+    # Extract segment endpoints: (N_lanes, max_segments, 2)
+    seg_starts = polylines[:, :-1, :]
+    seg_ends = polylines[:, 1:, :]
+
+    # Detect valid segments (exclude padding and transitions to padding)
+    # A segment is valid only if BOTH endpoints are non-zero
+    # Shape: (N_lanes, max_segments)
+    starts_nonzero = np.any(seg_starts != 0, axis=2)  # True if start point is not [0, 0]
+    ends_nonzero = np.any(seg_ends != 0, axis=2)  # True if end point is not [0, 0]
+    valid_segs = starts_nonzero & ends_nonzero  # Both must be non-zero
+
+    # Compute segment vectors and squared lengths
     seg_vecs = seg_ends - seg_starts  # (N_lanes, max_segments, 2)
-    # Use einsum for faster squared length calculation
     seg_lens_sq = np.einsum("ijk,ijk->ij", seg_vecs, seg_vecs)  # (N_lanes, max_segments)
-    valid_segs = seg_lens_sq > 1e-10
 
-    # Avoid division by zero
-    seg_lens_sq_safe = seg_lens_sq + 1e-10
+    # Additional check: filter zero-length valid segments (degenerate polylines)
+    valid_segs = valid_segs & (seg_lens_sq > 1e-10)
+    seg_lens_sq_safe = seg_lens_sq + 1e-10  # Avoid division by zero
 
-    # Allocate output arrays once
-    min_distances = np.empty((n_points, n_lanes), dtype=np.float32)
-    closest_indices = np.empty((n_points, n_lanes), dtype=np.int32)
+    # Reshape for broadcasting
+    seg_starts_bc = seg_starts.reshape(1, n_lanes, max_segments, 2)  # (1, N_lanes, max_segments, 2)
+    seg_vecs_bc = seg_vecs.reshape(1, n_lanes, max_segments, 2)  # (1, N_lanes, max_segments, 2)
+    seg_lens_sq_bc = seg_lens_sq_safe.reshape(1, n_lanes, max_segments)  # (1, N_lanes, max_segments)
+    valid_segs_bc = valid_segs.reshape(1, n_lanes, max_segments)  # (1, N_lanes, max_segments)
+    points_bc = points.reshape(n_points, 1, 1, 2)  # (N_points, 1, 1, 2)
 
-    # Reshape for broadcasting: (1, N_lanes, max_segments, 2)
-    seg_starts_bc = seg_starts.reshape(1, n_lanes, max_segments, 2)
-    seg_vecs_bc = seg_vecs.reshape(1, n_lanes, max_segments, 2)
-    seg_lens_sq_bc = seg_lens_sq_safe.reshape(1, n_lanes, max_segments)
-    valid_segs_bc = valid_segs.reshape(1, n_lanes, max_segments)
+    # Project each point onto each segment
+    # t = (point - seg_start) · seg_vec / |seg_vec|²
+    # Shape: (N_points, N_lanes, max_segments)
+    point_to_start = points_bc - seg_starts_bc  # (N_points, N_lanes, max_segments, 2)
+    t = np.einsum("ijkl,jkl->ijk", point_to_start, seg_vecs) / seg_lens_sq_bc
+    t = np.clip(t, 0, 1, out=t)  # Clamp to [0, 1] for segment bounds
 
-    # Reshape points for broadcasting: (N_points, 1, 1, 2)
-    points_reshaped = points.reshape(n_points, 1, 1, 2)
-
-    # Project points onto each segment
-    point_vecs = points_reshaped - seg_starts_bc  # (N_points, N_lanes, max_segments, 2)
-
-    # Use einsum for dot product - faster than sum(*, axis=3)
-    t = np.einsum("ijkl,jkl->ijk", point_vecs, seg_vecs) / seg_lens_sq_bc
-    t = np.clip(t, 0, 1, out=t)  # In-place clipping
-
-    # Calculate closest point on each segment (using in-place operations where possible)
+    # Find closest point on segment: closest = seg_start + t * seg_vec
+    # Shape: (N_points, N_lanes, max_segments, 2)
     t_expanded = t[..., np.newaxis]  # (N_points, N_lanes, max_segments, 1)
-    closest_points = seg_starts_bc + t_expanded * seg_vecs_bc
+    closest_on_seg = seg_starts_bc + t_expanded * seg_vecs_bc
 
-    # Calculate squared distances (avoid sqrt until necessary)
-    # Use einsum for faster squared distance calculation
-    diff = points_reshaped - closest_points
-    distances_sq = np.einsum("ijkl,ijkl->ijk", diff, diff)  # (N_points, N_lanes, max_segments)
-    # Apply validity mask directly - invalid segments get infinite distance
+    # Compute squared distance from point to closest point on segment
+    # Shape: (N_points, N_lanes, max_segments)
+    diff = points_bc - closest_on_seg
+    distances_sq = np.einsum("ijkl,ijkl->ijk", diff, diff)
+
+    # Mask invalid segments with infinite distance
     distances_sq = np.where(valid_segs_bc, distances_sq, np.inf)
 
-    # Find minimum squared distance and index for each point-lane pair
+    # Find minimum distance and closest segment index for each point-lane pair
     closest_indices = np.argmin(distances_sq, axis=2).astype(np.int32)  # (N_points, N_lanes)
     min_distances_sq = np.min(distances_sq, axis=2)  # (N_points, N_lanes)
 
-    # Only take sqrt at the end - use in-place operation to save memory
-    min_distances = np.sqrt(min_distances_sq, out=min_distances)
+    # Take sqrt at the end
+    min_distances = np.sqrt(min_distances_sq)
 
     return min_distances, closest_indices
 
