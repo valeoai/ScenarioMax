@@ -43,23 +43,23 @@ command: pipeline  # Options: convert | process | format | pipeline | viz
 datasets:
   waymo:
     path: null           # Path to Waymo Open Motion Dataset
-    max_files: null      # Limit number of files (null = all files)
+    num_files: null      # Limit number of files (null = all files)
 
   nuplan:
     path: null           # Path to nuPlan dataset
     split: null          # Dataset split: train | val | test
-    max_files: null
+    num_files: null
     direct_from_logs: false  # Parse directly from logs (slower but more flexible)
 
   nuscenes:
     path: null           # Path to nuScenes dataset (WIP)
     split: "v1.0-trainval"  # Dataset split
-    max_files: null
+    num_files: null
 
   openscenes:
     path: null           # Path to OpenScenes dataset
     metadata_dir: null   # REQUIRED: OpenScenes metadata directory
-    max_files: null
+    num_files: null
 
 
 # ═══════════════════════════════════════════════════════════════════════════
