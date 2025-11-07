@@ -90,6 +90,10 @@ def _get_processors(
                 f"Unknown processor: {name}. Available: validation, traffic_lights, polyline_interpolation, overpass_filtering",  # noqa: E501
             )
 
+    # Always add validation at the end
+    if "validation" in processor_names:
+        processors.append(validation_processor)
+
     logger.debug(f"Loaded {len(processors)} processors: {processor_names}")
     return processors
 
