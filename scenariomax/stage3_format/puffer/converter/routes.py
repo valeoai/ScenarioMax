@@ -412,7 +412,7 @@ def _is_agent_on_lanes(trajectory: np.ndarray, lane_polylines: np.ndarray) -> bo
         _lane_width_threshold = LANE_WIDTH_THRESHOLD
 
     # Vectorized: Calculate distances for all sample points at once
-    min_distances = _points_to_polylines_distance_batch(trajectory_sample, lane_polylines)
+    min_distances = _points_to_polylines_distance(trajectory_sample, lane_polylines, return_indices=False)
 
     # Check if any sampled point is near any lane
     return np.any(min_distances < _lane_width_threshold)
@@ -442,10 +442,7 @@ def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tupl
 
     # Vectorized: Calculate distances and directions for all points at once
     # Shape: (num_points, num_lanes)
-    min_distances_all, closest_indices_all = _points_to_polylines_distance_batch_with_indices(
-        first_points,
-        lane_polylines,
-    )
+    min_distances_all, closest_indices_all = _points_to_polylines_distance(first_points, lane_polylines)
 
     # Shape: (num_points, num_lanes, 2)
     lane_directions_all = _get_lane_directions_at_indices_batch(lane_polylines, closest_indices_all)
@@ -514,10 +511,7 @@ def _score_lane_against_trajectory(
         return 0.0, start_traj_idx
 
     # Vectorized: Calculate distances for all remaining trajectory points at once
-    min_distances, closest_indices = _points_to_polylines_distance_batch_with_indices(
-        remaining_trajectory,
-        lane_polyline,
-    )
+    min_distances, closest_indices = _points_to_polylines_distance(remaining_trajectory, lane_polyline)
     # Squeeze to 1D since we only have 1 lane
     min_distances = min_distances[:, 0]
     closest_indices = closest_indices[:, 0]
@@ -560,79 +554,10 @@ def _score_lane_against_trajectory(
     return float(avg_score), next_traj_idx
 
 
-def _points_to_polylines_distance_batch(points: np.ndarray, polylines: np.ndarray) -> np.ndarray:
-    """
-    Vectorized calculation of minimum distances from multiple points to multiple polylines.
-
-    Optimized for batch processing of points with reduced memory allocations.
-
-    Args:
-        points: 2D points array (N_points, 2)
-        polylines: Array of polylines (N_lanes, max_points, 2) - padded with [0, 0]
-
-    Returns:
-        Array of minimum distances for each point-lane pair (N_points, N_lanes)
-    """
-    n_points = len(points)
-    n_lanes = len(polylines)
-    max_segments = polylines.shape[1] - 1
-
-    # Extract segment endpoints: (N_lanes, max_segments, 2)
-    seg_starts = polylines[:, :-1, :]
-    seg_ends = polylines[:, 1:, :]
-
-    # Detect valid segments (exclude padding and transitions to padding)
-    # A segment is valid only if BOTH endpoints are non-zero
-    # Shape: (N_lanes, max_segments)
-    starts_nonzero = np.any(seg_starts != 0, axis=2)  # True if start point is not [0, 0]
-    ends_nonzero = np.any(seg_ends != 0, axis=2)  # True if end point is not [0, 0]
-    valid_segs = starts_nonzero & ends_nonzero  # Both must be non-zero
-
-    # Compute segment vectors and squared lengths
-    seg_vecs = seg_ends - seg_starts  # (N_lanes, max_segments, 2)
-    seg_lens_sq = np.einsum("ijk,ijk->ij", seg_vecs, seg_vecs)  # (N_lanes, max_segments)
-
-    # Additional check: filter zero-length valid segments (degenerate polylines)
-    valid_segs = valid_segs & (seg_lens_sq > 1e-10)
-    seg_lens_sq_safe = seg_lens_sq + 1e-10  # Avoid division by zero
-
-    # Reshape for broadcasting
-    seg_starts_bc = seg_starts.reshape(1, n_lanes, max_segments, 2)  # (1, N_lanes, max_segments, 2)
-    seg_vecs_bc = seg_vecs.reshape(1, n_lanes, max_segments, 2)  # (1, N_lanes, max_segments, 2)
-    seg_lens_sq_bc = seg_lens_sq_safe.reshape(1, n_lanes, max_segments)  # (1, N_lanes, max_segments)
-    valid_segs_bc = valid_segs.reshape(1, n_lanes, max_segments)  # (1, N_lanes, max_segments)
-    points_bc = points.reshape(n_points, 1, 1, 2)  # (N_points, 1, 1, 2)
-
-    # Project each point onto each segment
-    # t = (point - seg_start) · seg_vec / |seg_vec|²
-    # Shape: (N_points, N_lanes, max_segments)
-    point_to_start = points_bc - seg_starts_bc  # (N_points, N_lanes, max_segments, 2)
-    t = np.einsum("ijkl,jkl->ijk", point_to_start, seg_vecs) / seg_lens_sq_bc
-    t = np.clip(t, 0, 1, out=t)  # Clamp to [0, 1] for segment bounds
-
-    # Find closest point on segment: closest = seg_start + t * seg_vec
-    # Shape: (N_points, N_lanes, max_segments, 2)
-    t_expanded = t[..., np.newaxis]  # (N_points, N_lanes, max_segments, 1)
-    closest_on_seg = seg_starts_bc + t_expanded * seg_vecs_bc
-
-    # Compute squared distance from point to closest point on segment
-    # Shape: (N_points, N_lanes, max_segments)
-    diff = points_bc - closest_on_seg
-    distances_sq = np.einsum("ijkl,ijkl->ijk", diff, diff)
-
-    # Mask invalid segments with infinite distance
-    distances_sq = np.where(valid_segs_bc, distances_sq, np.inf)
-
-    # Find minimum distance across all segments for each point-lane pair
-    min_distances_sq = np.min(distances_sq, axis=2)  # (N_points, N_lanes)
-    min_distances = np.sqrt(min_distances_sq)
-
-    return min_distances
-
-
-def _points_to_polylines_distance_batch_with_indices(
+def _points_to_polylines_distance(
     points: np.ndarray,
     polylines: np.ndarray,
+    return_indices: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Vectorized calculation of minimum distances and closest segment indices from multiple points to polylines.
@@ -698,14 +623,16 @@ def _points_to_polylines_distance_batch_with_indices(
     # Mask invalid segments with infinite distance
     distances_sq = np.where(valid_segs_bc, distances_sq, np.inf)
 
-    # Find minimum distance and closest segment index for each point-lane pair
-    closest_indices = np.argmin(distances_sq, axis=2).astype(np.int32)  # (N_points, N_lanes)
-    min_distances_sq = np.min(distances_sq, axis=2)  # (N_points, N_lanes)
-
-    # Take sqrt at the end
-    min_distances = np.sqrt(min_distances_sq)
-
-    return min_distances, closest_indices
+    # Find minimum distance and optionally closest segment index
+    if return_indices:
+        closest_indices = np.argmin(distances_sq, axis=2).astype(np.int32)  # (N_points, N_lanes)
+        min_distances_sq = np.min(distances_sq, axis=2)  # (N_points, N_lanes)
+        min_distances = np.sqrt(min_distances_sq)
+        return min_distances, closest_indices
+    else:
+        min_distances_sq = np.min(distances_sq, axis=2)  # (N_points, N_lanes)
+        min_distances = np.sqrt(min_distances_sq)
+        return min_distances
 
 
 def _get_lane_directions_at_indices_batch(polylines: np.ndarray, indices: np.ndarray) -> np.ndarray:
