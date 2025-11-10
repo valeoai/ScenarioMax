@@ -237,7 +237,7 @@ class TestStage2ProcessUnified:
             return scenario
 
         # Stage 2: Process with custom processor
-        stats = pipeline.process_unified_scenarios(
+        pipeline.process_unified_scenarios(
             input_path=str(unified_dir),
             output_path=str(processed_dir),
             processors=[add_custom_metadata],
@@ -308,7 +308,7 @@ class TestStage3FormatToTarget:
         )
 
         # Stage 3: Format to Waymax with sharding
-        stats = pipeline.format_unified_to_target(
+        pipeline.format_unified_to_target(
             input_path=str(unified_dir),
             output_path=str(waymax_dir),
             format="waymax",
