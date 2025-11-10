@@ -107,12 +107,6 @@ processing:
 formatting:
   target_format: waymax               # Options: waymax | gpudrive | pufferdrive
 
-  # If true, applies processing.processors DURING Stage 3 formatting
-  # This runs processors in-memory without saving intermediate pickles
-  # Useful for: pipeline command (in-memory processing)
-  # Not needed for: separate stage-by-stage execution (Stage 2 → Stage 3)
-  apply_processors: false
-
   # Format-specific options
   waymax:
     num_shards: 1                      # Number of output .tfrecord files

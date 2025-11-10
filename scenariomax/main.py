@@ -175,11 +175,10 @@ def handle_format_command(cfg: DictConfig):
     # Handle optional processors during formatting
     processors = None
     processor_configs = None
-    if cfg.formatting.apply_processors:
-        processors = cfg.processing.processors if cfg.processing.processors else None
-        if processors:
-            processing_dict = OmegaConf.to_container(cfg.processing, resolve=True)
-            processor_configs = {k: v for k, v in processing_dict.items() if k != "processors"}
+    processors = cfg.processing.processors if cfg.processing.processors else None
+    if processors:
+        processing_dict = OmegaConf.to_container(cfg.processing, resolve=True)
+        processor_configs = {k: v for k, v in processing_dict.items() if k != "processors"}
 
     # Get format-specific configs
     target_format = cfg.formatting.target_format
