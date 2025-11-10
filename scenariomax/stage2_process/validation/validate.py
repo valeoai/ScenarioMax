@@ -366,7 +366,7 @@ def _validate_dynamic_map_elements(dynamic_map_elements: dict, errors: list, war
 
         if "controlled_lane" in element and not isinstance(element["controlled_lane"], int):
             errors.append(
-                f"Dynamic map element '{element_id}' lane must be an int, got {type(element['lane']).__name__}",
+                f"Dynamic map element '{element_id}' controlled_lane must be an int, got {type(element['controlled_lane']).__name__}", # noqa: E501
             )
 
 

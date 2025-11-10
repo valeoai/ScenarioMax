@@ -14,7 +14,7 @@ from scenariomax import logger_utils
 logger = logger_utils.get_logger(__name__)
 
 
-def get_nuplan_scenarios(
+def get_openscenes_scenarios(
     nuplan_data_root,
     nuplan_logs_root,
     nuplan_maps_root,

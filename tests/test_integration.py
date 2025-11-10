@@ -12,13 +12,25 @@ Uses minimal real data to keep tests fast:
 """
 
 import os
+import pickle
 import shutil
 from pathlib import Path
 
 import pytest
 
-from scenariomax.core import pipeline, processor
+from scenariomax.core import pipeline
 from scenariomax.stage2_process.validation import soft_validate, strict_validate
+
+
+def load_pickle_files(directory):
+    """Load all pickle files from a directory."""
+    scenarios = []
+    for root, _, files in os.walk(directory):
+        for file in sorted(files):
+            if file.endswith(".pkl"):
+                with open(os.path.join(root, file), "rb") as f:
+                    scenarios.append(pickle.load(f))
+    return scenarios
 
 
 # Test data paths
@@ -67,11 +79,9 @@ class TestWaymoConversion:
 
         # Convert
         stats = pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=1,
-            num_files=1,
-            validate=False,
         )
 
         # Verify
@@ -79,7 +89,7 @@ class TestWaymoConversion:
         assert stats["total_scenarios"] > 0
 
         # Load scenarios
-        scenarios = processor.load_pickle_files(str(unified_dir))
+        scenarios = load_pickle_files(str(unified_dir))
         assert len(scenarios) > 0
 
         # Check first scenario structure
@@ -104,11 +114,9 @@ class TestNuPlanConversion:
 
         # Convert
         stats = pipeline.convert_raw_to_unified(
-            datasets={"nuplan": str(NUPLAN_DATA_DIR)},
+            datasets={"nuplan": {"path": str(NUPLAN_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=1,
-            num_files=1,
-            validate=False,
         )
 
         # Verify
@@ -116,7 +124,7 @@ class TestNuPlanConversion:
         assert stats["total_scenarios"] > 0
 
         # Load scenarios
-        scenarios = processor.load_pickle_files(str(unified_dir))
+        scenarios = load_pickle_files(str(unified_dir))
         assert len(scenarios) > 0
 
         # Check first scenario structure
@@ -143,14 +151,12 @@ class TestValidationWaymo:
         unified_dir = tmpdir / "unified"
 
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=1,
-            num_files=1,
-            validate=False,
         )
 
-        scenarios = processor.load_pickle_files(str(unified_dir))
+        scenarios = load_pickle_files(str(unified_dir))
         return scenarios
 
     def test_soft_validation_waymo(self, waymo_scenarios):
@@ -211,14 +217,12 @@ class TestValidationNuPlan:
         unified_dir = tmpdir / "unified"
 
         pipeline.convert_raw_to_unified(
-            datasets={"nuplan": str(NUPLAN_DATA_DIR)},
+            datasets={"nuplan": {"path": str(NUPLAN_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=1,
-            num_files=1,
-            validate=False,
         )
 
-        scenarios = processor.load_pickle_files(str(unified_dir))
+        scenarios = load_pickle_files(str(unified_dir))
         return scenarios
 
     def test_soft_validation_nuplan(self, nuplan_scenarios):
@@ -282,14 +286,12 @@ class TestScenarioStatistics:
         unified_dir = output_dir / "unified"
 
         pipeline.convert_raw_to_unified(
-            datasets={"waymo": str(WAYMO_DATA_DIR)},
+            datasets={"waymo": {"path": str(WAYMO_DATA_DIR), "num_files": 1}},
             output_path=str(unified_dir),
             num_workers=1,
-            num_files=1,
-            validate=False,
         )
 
-        scenarios = processor.load_pickle_files(str(unified_dir))
+        scenarios = load_pickle_files(str(unified_dir))
         scenario = scenarios[0]
 
         # Get stats

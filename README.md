@@ -140,10 +140,10 @@ Stage 3: Format   - Unified pickles → Target format (waymax/gpudrive/pufferdri
 
 ```bash
 # Stage 1: Convert raw dataset to unified format
-scenariomax command=convert datasets.waymo=/data/waymo output.dst=/output/unified execution.num_workers=16
+scenariomax command=convert datasets.waymo.path=/data/waymo paths.output_dir=/output execution.num_workers=16
 
 # Stage 2: Process unified scenarios (add traffic lights, validate, etc.)
-scenariomax command=process input_path=/output/unified output.dst=/output/processed \
+scenariomax command=process paths.input_dir=/output/unified paths.output_dir=/output \
             processing.processors=[validation,traffic_lights]
 
 # Stage 3: Convert to target format
@@ -209,14 +209,14 @@ scenariomax command=process input_path=/output/unified output.dst=/tmp/validatio
 
 ```bash
 # Stage 1: Convert to unified format
-scenariomax command=convert datasets.waymo=/data/waymo output.dst=/unified \
+scenariomax command=convert datasets.waymo.path=/data/waymo paths.output_dir=/output \
             execution.num_workers=8
 
 # Visualize scenarios
-scenariomax command=viz input_path=/unified output.dst=/viz
+scenariomax command=viz paths.input_dir=/output/unified paths.output_dir=/viz
 
 # Stage 3: Convert to target format
-scenariomax command=format input_path=/unified output.dst=/output output.format=json \
+scenariomax command=format paths.input_dir=/output/unified paths.output_dir=/output formatting.target_format=gpudrive \
             execution.num_workers=8
 ```
 
@@ -285,7 +285,7 @@ formatting.target_format=pufferdrive
 
 ```bash
 # Automatically created during Stage 1 (convert)
-scenariomax convert --waymo_src /data/waymo --dst /output/unified
+scenariomax command=convert datasets.waymo.path=/data/waymo paths.output_dir=/output
 ```
 
 - **Use Case**: Intermediate format for custom processing and debugging
@@ -309,7 +309,6 @@ Raw Data          →  Unified Format     →  Target Format
    - Dataset-specific parsers convert native formats to standardized format
    - Supports multiple datasets simultaneously
    - Output: Pickle files with unified scenario data
-   - Optional: `--validate` for soft validation during conversion
 
 2. **Stage 2 (process)**: Unified → Enhanced (Optional)
    - Apply transformations, filtering, or augmentation
@@ -447,14 +446,13 @@ ScenarioMax provides a two-level validation system for UnifiedScenario objects:
 Fast, lightweight validation that checks data structure:
 
 ```bash
-# During conversion
-scenariomax convert --waymo_src /data/waymo --dst /output --validate
-
 # During processing
-scenariomax process --src /output/unified --dst /output/processed --validate
+scenariomax command=process paths.input_dir=/output/unified paths.output_dir=/output \
+            processing.processors=[validation]
 
-# Validation-only mode (no output)
-scenariomax process --src /output/unified --dst /tmp --validate --no-output
+# In full pipeline
+scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+            formatting.target_format=waymax processing.processors=[validation]
 ```
 
 **Checks performed:**
@@ -468,11 +466,15 @@ scenariomax process --src /output/unified --dst /tmp --validate --no-output
 Comprehensive validation that checks physical consistency:
 
 ```bash
-# During processing
-scenariomax process --src /output/unified --dst /output/processed --validate-strict
+# During processing with strict validation config
+scenariomax command=process paths.input_dir=/output/unified paths.output_dir=/output \
+            processing.processors=[validation] \
+            processing.validation.mode=strict processing.validation.level=3
 
-# In pipeline
-scenariomax pipeline --waymo_src /data/waymo --dst /output --validate-strict
+# In full pipeline
+scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+            formatting.target_format=waymax processing.processors=[validation] \
+            processing.validation.mode=strict
 ```
 
 **Checks performed:**

@@ -81,7 +81,13 @@ def worker_scenario_func(
 
     preprocess_func = getattr(dataset_config, "preprocess_func", None) if dataset_config else None
 
-    list_scenarios = preprocess_func(input_data) if preprocess_func else input_data
+    # Preprocess input data (e.g., batch-read TFRecords for Waymo)
+    try:
+        list_scenarios = preprocess_func(input_data) if preprocess_func else input_data
+    except Exception as e:
+        logger.error(f"Preprocessing failed for batch: {e}")
+        # Return early with all failures
+        return {"successes": 0, "filtered": 0, "failures": len(input_data) if isinstance(input_data, list) else 1}
 
     for scenario in tqdm(list_scenarios, desc=" Processing scenarios", unit=" scenario", leave=False, position=1):
         try:
@@ -120,7 +126,7 @@ def worker_scenario_func(
             logger.exception("Failed to process scenario %s: %s", scenario_info, str(e))
             failures += 1
 
-    return {"successes": successes, "filtedred": filtered, "failures": failures}
+    return {"successes": successes, "filtered": filtered, "failures": failures}
 
 
 def _save_result(
@@ -244,7 +250,7 @@ def convert_raw_to_unified(
 
         # Aggregate statistics
         successes = sum(r["successes"] for r in results)
-        filtered = sum(r["filtedred"] for r in results)
+        filtered = sum(r["filtered"] for r in results)
         failures = sum(r["failures"] for r in results)
 
         total_scenarios += successes
@@ -670,7 +676,7 @@ def run_all_pipeline(
 
         # Aggregate statistics
         successes = sum(r["successes"] for r in results)
-        filtered = sum(r["filtedred"] for r in results)
+        filtered = sum(r["filtered"] for r in results)
         failures = sum(r["failures"] for r in results)
 
         total_scenarios += successes

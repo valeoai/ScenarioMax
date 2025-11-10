@@ -9,6 +9,7 @@ Available processors:
 """
 
 from collections.abc import Callable
+from functools import partial
 
 from scenariomax import logger_utils
 
@@ -44,55 +45,40 @@ def _get_processors(
         if name == "validation":
             from scenariomax.stage2_process.validation.processor import validate_scenario
 
-            # Get validation config
-            validation_config = configs.get("validation", {})
+            # Get validation config and bind it using partial
+            config = configs.get("validation", {})
+            processor_fn = partial(validate_scenario, **config) if config else validate_scenario
+            processors.append(processor_fn)
 
-            # Create processor function with config
-            def validation_processor(scenario):
-                return validate_scenario(scenario, **validation_config)
-
-            processors.append(validation_processor)
         elif name == "polyline_interpolation":
             from scenariomax.stage2_process.polyline_interpolation.processor import interpolate_polylines
 
-            # Get polyline_interpolation config
-            pi_config = configs.get("polyline_interpolation", {})
+            # Get config and bind it using partial
+            config = configs.get("polyline_interpolation", {})
+            processor_fn = partial(interpolate_polylines, **config) if config else interpolate_polylines
+            processors.append(processor_fn)
 
-            # Create processor function
-            def polyline_processor(scenario):
-                return interpolate_polylines(scenario, **pi_config)
-
-            processors.append(polyline_processor)
         elif name == "overpass_filtering":
             from scenariomax.stage2_process.overpass_filtering.processor import detect_overpass_in_scenario
 
-            # Get overpass_filtering config
-            overpass_config = configs.get("overpass_filtering", {})
+            # Get config and bind it using partial
+            config = configs.get("overpass_filtering", {})
+            processor_fn = partial(detect_overpass_in_scenario, **config) if config else detect_overpass_in_scenario
+            processors.append(processor_fn)
 
-            # Create processor function
-            def overpass_filtering_processor(scenario):
-                return detect_overpass_in_scenario(scenario, **overpass_config)
-
-            processors.append(overpass_filtering_processor)
         elif name == "traffic_lights":
             from scenariomax.stage2_process.traffic_lights.processor import add_traffic_lights_to_scenario
 
-            # Get traffic_lights config (currently no options)
-            tl_config = configs.get("traffic_lights", {})
-
-            # Create processor function
-            def traffic_lights_processor(scenario):
-                return add_traffic_lights_to_scenario(scenario, **tl_config)
-
-            processors.append(traffic_lights_processor)
+            # Get config and bind it using partial
+            config = configs.get("traffic_lights", {})
+            processor_fn = (
+                partial(add_traffic_lights_to_scenario, **config) if config else add_traffic_lights_to_scenario
+            )
+            processors.append(processor_fn)
         else:
             raise ValueError(
-                f"Unknown processor: {name}. Available: validation, traffic_lights, polyline_interpolation, overpass_filtering",  # noqa: E501
+                f"Unknown processor: {name}. Available: validation, traffic_lights, polyline_interpolation, overpass_filtering", # noqa: E501
             )
-
-    # Always add validation at the end
-    if "validation" in processor_names:
-        processors.append(validation_processor)
 
     logger.debug(f"Loaded {len(processors)} processors: {processor_names}")
     return processors

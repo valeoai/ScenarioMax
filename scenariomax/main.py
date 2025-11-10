@@ -255,7 +255,7 @@ def handle_pipeline_command(cfg: DictConfig):
     return 0
 
 
-@hydra.main(version_base=None, config_path=_CONFIG_DIR, config_name="config")
+@hydra.main(config_path=_CONFIG_DIR, config_name="config")
 def main(cfg: DictConfig) -> int:
     """
     Main entry point for ScenarioMax with Hydra configuration.
