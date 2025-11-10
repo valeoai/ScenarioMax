@@ -4,12 +4,12 @@ import shutil
 from collections.abc import Callable, Generator, Iterable
 from typing import Any
 
+from scenariomax.stage3_format.json import convert_to_json
 from tqdm import tqdm
 
 from scenariomax import logger_utils
 from scenariomax.core.unified_scenario import UnifiedScenario
 from scenariomax.core.utils import NumpyEncoder
-from scenariomax.stage3_format.json import convert_to_json
 
 
 logger = logger_utils.get_logger(__name__)

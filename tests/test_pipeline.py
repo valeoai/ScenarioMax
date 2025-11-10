@@ -4,7 +4,7 @@ Comprehensive pipeline tests using real scenario data.
 Tests all stages of the pipeline:
 - Stage 1: Raw → Unified conversion
 - Stage 2: Process unified scenarios (optional)
-- Stage 3: Format unified → target format (tfexample/json)
+- Stage 3: Format unified → target format (waymax/gpudrive/pufferdrive)
 - Full pipeline with validation
 - Multi-dataset processing
 
@@ -261,13 +261,13 @@ class TestStage2ProcessUnified:
 class TestStage3FormatToTarget:
     """Test Stage 3: Converting unified to target formats."""
 
-    def test_format_to_tfexample(self, output_dir):
-        """Test converting unified to TFExample format."""
+    def test_format_to_waymax(self, output_dir):
+        """Test converting unified to Waymax format."""
         if not WAYMO_DATA_DIR.exists():
             pytest.skip("Waymo test data not found")
 
         unified_dir = output_dir / "unified"
-        tfrecord_dir = output_dir / "tfrecord"
+        waymax_dir = output_dir / "waymax"
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
@@ -276,32 +276,32 @@ class TestStage3FormatToTarget:
             num_workers=2,
         )
 
-        # Stage 3: Format to TFExample
+        # Stage 3: Format to Waymax
         stats = pipeline.format_unified_to_target(
             input_path=str(unified_dir),
-            output_path=str(tfrecord_dir),
-            format="tfexample",
+            output_path=str(waymax_dir),
+            format="waymax",
             num_workers=2,
             format_config={"base_filename": "test"},
         )
 
         # Verify output
         assert stats["stage"] == "unified_to_target"
-        assert stats["format"] == "tfexample"
+        assert stats["format"] == "waymax"
         assert stats["scenarios_processed"] > 0
 
         # Check that TFRecord file was created
-        tfrecord_file = tfrecord_dir / "test.tfrecord"
+        tfrecord_file = waymax_dir / "test.tfrecord"
         assert tfrecord_file.exists(), "TFRecord file not created"
         assert tfrecord_file.stat().st_size > 0, "TFRecord file is empty"
 
-    def test_format_to_tfexample_with_sharding(self, output_dir):
-        """Test converting unified to TFExample with sharding."""
+    def test_format_to_waymax_with_sharding(self, output_dir):
+        """Test converting unified to Waymax with sharding."""
         if not WAYMO_DATA_DIR.exists():
             pytest.skip("Waymo test data not found")
 
         unified_dir = output_dir / "unified"
-        tfrecord_dir = output_dir / "tfrecord"
+        waymax_dir = output_dir / "waymax"
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
@@ -312,31 +312,31 @@ class TestStage3FormatToTarget:
             validate=False,
         )
 
-        # Stage 3: Format to TFExample with sharding
+        # Stage 3: Format to Waymax with sharding
         stats = pipeline.format_unified_to_target(
             input_path=str(unified_dir),
-            output_path=str(tfrecord_dir),
-            format="tfexample",
+            output_path=str(waymax_dir),
+            format="waymax",
             num_workers=2,
             tfrecord_name="test",
             shard=2,  # Create 2 shards
         )
 
         # Check that sharded files were created
-        shard_files = list(tfrecord_dir.glob("test-*.tfrecord"))
+        shard_files = list(waymax_dir.glob("test-*.tfrecord"))
         assert len(shard_files) == 2, f"Expected 2 shard files, got {len(shard_files)}"
 
         # Verify both shards have data
         for shard_file in shard_files:
             assert shard_file.stat().st_size > 0, f"Shard {shard_file.name} is empty"
 
-    def test_format_to_json(self, output_dir):
-        """Test converting unified to JSON format (GPUDrive)."""
+    def test_format_to_gpudrive(self, output_dir):
+        """Test converting unified to GPUDrive format (JSON)."""
         if not WAYMO_DATA_DIR.exists():
             pytest.skip("Waymo test data not found")
 
         unified_dir = output_dir / "unified"
-        json_dir = output_dir / "json"
+        gpudrive_dir = output_dir / "gpudrive"
 
         # Stage 1: Convert first
         pipeline.convert_raw_to_unified(
@@ -348,18 +348,18 @@ class TestStage3FormatToTarget:
         # Stage 3: Format to JSON
         stats = pipeline.format_unified_to_target(
             input_path=str(unified_dir),
-            output_path=str(json_dir),
-            format="json",
+            output_path=str(gpudrive_dir),
+            format="gpudrive",
             num_workers=2,
         )
 
         # Verify output
         assert stats["stage"] == "unified_to_target"
-        assert stats["format"] == "json"
+        assert stats["format"] == "gpudrive"
         assert stats["scenarios_processed"] > 0
 
         # Check that JSON files were created
-        json_files = list(json_dir.rglob("*.json"))
+        json_files = list(gpudrive_dir.rglob("*.json"))
         assert len(json_files) > 0, "No JSON files created"
 
         # Verify JSON is valid
@@ -378,16 +378,16 @@ class TestStage3FormatToTarget:
 class TestFullPipeline:
     """Test the full 3-stage pipeline."""
 
-    def test_full_pipeline_waymo_tfexample(self, output_dir):
-        """Test full pipeline: Waymo → Unified → Process → TFExample."""
+    def test_full_pipeline_waymo_waymax(self, output_dir):
+        """Test full pipeline: Waymo → Unified → Process → Waymax."""
         if not WAYMO_DATA_DIR.exists():
             pytest.skip("Waymo test data not found")
 
-        # Full pipeline: Raw → Unified → Processed → TFExample
+        # Full pipeline: Raw → Unified → Processed → Waymax
         stats = pipeline.run_all_pipeline(
             datasets={"waymo": str(WAYMO_DATA_DIR)},
             output_path=str(output_dir),
-            format="tfexample",
+            format="waymax",
             processors=None,  # No processing
             num_workers=2,
             validate=False,
@@ -402,8 +402,8 @@ class TestFullPipeline:
         assert stats["stage1"]["total_scenarios"] > 0
 
         # Check output
-        tfrecord_dir = output_dir / "tfexample"
-        tfrecord_file = tfrecord_dir / "training.tfrecord"
+        waymax_dir = output_dir / "waymax"
+        tfrecord_file = waymax_dir / "training.tfrecord"
         assert tfrecord_file.exists(), "TFRecord file not created"
         assert tfrecord_file.stat().st_size > 0, "TFRecord file is empty"
 
@@ -416,7 +416,7 @@ class TestFullPipeline:
         stats = pipeline.run_all_pipeline(
             datasets={"waymo": str(WAYMO_DATA_DIR)},
             output_path=str(output_dir),
-            format="tfexample",
+            format="waymax",
             processors=None,
             num_workers=2,
             validate=True,  # Enable validation
@@ -428,8 +428,8 @@ class TestFullPipeline:
         assert stats["stage1"]["total_scenarios"] >= 0
 
         # Output should still be created
-        tfrecord_dir = output_dir / "tfexample"
-        tfrecord_file = tfrecord_dir / "training.tfrecord"
+        waymax_dir = output_dir / "waymax"
+        tfrecord_file = waymax_dir / "training.tfrecord"
         assert tfrecord_file.exists()
 
     def test_full_pipeline_with_processing(self, output_dir):
@@ -443,7 +443,7 @@ class TestFullPipeline:
         stats = pipeline.run_all_pipeline(
             datasets={"waymo": str(WAYMO_DATA_DIR)},
             output_path=str(output_dir),
-            format="tfexample",
+            format="waymax",
             processors=[enhance_scenarios],  # Add traffic lights
             num_workers=2,
             validate=False,
@@ -464,7 +464,7 @@ class TestFullPipeline:
         stats = pipeline.run_all_pipeline(
             datasets={"waymo": str(WAYMO_DATA_DIR)},
             output_path=str(output_dir),
-            format="json",
+            format="gpudrive",
             processors=None,
             num_workers=2,
             validate=False,
@@ -476,12 +476,12 @@ class TestFullPipeline:
 
         # Note: intermediate directories are cleaned up after pipeline completes
         # So we can't check for them here, but we can verify final output
-        json_dir = output_dir / "json"
-        json_files = list(json_dir.rglob("*.json"))
+        gpudrive_dir = output_dir / "gpudrive"
+        json_files = list(gpudrive_dir.rglob("*.json"))
         assert len(json_files) > 0
 
-    def test_full_pipeline_nuplan_json(self, output_dir, setup_nuplan_env):
-        """Test full pipeline: nuPlan → JSON."""
+    def test_full_pipeline_nuplan_gpudrive(self, output_dir, setup_nuplan_env):
+        """Test full pipeline: nuPlan → GPUDrive."""
         if not NUPLAN_DATA_DIR.exists():
             pytest.skip("nuPlan test data not found")
 
@@ -489,7 +489,7 @@ class TestFullPipeline:
         stats = pipeline.run_all_pipeline(
             datasets={"nuplan": str(NUPLAN_DATA_DIR)},
             output_path=str(output_dir),
-            format="json",
+            format="gpudrive",
             processors=None,
             num_workers=2,
             validate=False,
@@ -499,8 +499,8 @@ class TestFullPipeline:
         # Verify output
         assert stats["stage1"]["datasets_processed"] == 1
 
-        json_dir = output_dir / "json"
-        json_files = list(json_dir.rglob("*.json"))
+        gpudrive_dir = output_dir / "gpudrive"
+        json_files = list(gpudrive_dir.rglob("*.json"))
         assert len(json_files) > 0
 
 
@@ -524,7 +524,7 @@ class TestMultiDataset:
                 "nuplan": str(NUPLAN_DATA_DIR),
             },
             output_path=str(output_dir),
-            format="tfexample",
+            format="waymax",
             processors=None,
             num_workers=2,
             validate=False,
@@ -536,7 +536,7 @@ class TestMultiDataset:
         assert stats["stage1"]["datasets_processed"] == 2
 
         # Check merged output
-        tfrecord_file = output_dir / "tfexample" / "multi.tfrecord"
+        tfrecord_file = output_dir / "waymax" / "multi.tfrecord"
         assert tfrecord_file.exists()
         assert tfrecord_file.stat().st_size > 0
 

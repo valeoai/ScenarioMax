@@ -1,4 +1,3 @@
-from scenariomax import logger_utils
 from scenariomax.stage3_format.tfexample import utils
 from scenariomax.stage3_format.tfexample.converter import (
     path,
@@ -8,6 +7,8 @@ from scenariomax.stage3_format.tfexample.converter import (
     traffic_light,
 )
 from scenariomax.stage3_format.tfexample.converter import utils as converter_utils
+
+from scenariomax import logger_utils
 
 
 logger = logger_utils.get_logger(__name__)

@@ -17,11 +17,11 @@
 #
 #   # Stage 3: Format unified → target
 #   scenariomax command=format paths.input_dir=/output/unified paths.output_dir=/final \
-#               formatting.target_format=puffer
+#               formatting.target_format=pufferdrive
 #
 #   # Full pipeline (all 3 stages)
 #   scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
-#               formatting.target_format=puffer processing.processors=[validation]
+#               formatting.target_format=pufferdrive processing.processors=[validation]
 #
 # ═══════════════════════════════════════════════════════════════════════════
 defaults:
@@ -105,18 +105,18 @@ processing:
 # Stage 3: Formatting
 # ═══════════════════════════════════════════════════════════════════════════
 formatting:
-  target_format: tfexample             # Options: tfexample | json | puffer
+  target_format: waymax               # Options: waymax | gpudrive | pufferdrive
   apply_processors: false              # Run processing.processors during formatting?
 
   # Format-specific options
-  tfexample:
+  waymax:
     num_shards: 1                      # Number of output .tfrecord files
     base_filename: "training"          # Filename prefix for sharded files
 
-  json:
+  gpudrive:
     pretty_print: false                # Human-readable JSON formatting
 
-  puffer:
+  pufferdrive:
     min_route_valid_points: 0          # Min valid trajectory points for route computation (0 = no filtering)
     route_check_timestep: 0            # Timestep where agent must be valid for route computation
 

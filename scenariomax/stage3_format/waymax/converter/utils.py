@@ -1,5 +1,4 @@
 import numpy as np
-
 from scenariomax.stage3_format.tfexample.converter import datatypes
 
 

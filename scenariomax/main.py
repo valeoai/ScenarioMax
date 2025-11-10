@@ -12,7 +12,7 @@ Usage:
     scenariomax command=convert datasets.waymo=/data/waymo
 
     # Full pipeline
-    scenariomax command=pipeline datasets.waymo=/data/waymo format=tfexample
+    scenariomax command=pipeline datasets.waymo=/data/waymo format=waymax
 
     # Multiple processors
     scenariomax command=process processors=[validation,traffic_lights]

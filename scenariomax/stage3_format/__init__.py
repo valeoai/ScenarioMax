@@ -2,12 +2,12 @@
 Stage 3: Format - Convert unified scenarios to target formats.
 
 This module provides format converters for transforming unified scenarios
-into various output formats (TFExample, JSON, Puffer, etc.).
+into various simulator formats (Waymax, GPUDrive, PufferDrive, etc.).
 
 Submodules:
-- tfexample: TensorFlow Example format converter
-- json: JSON format converter (GPUDrive)
-- puffer: Puffer simulator format converter
+- waymax: Waymax/V-Max simulator format converter (TFRecord)
+- gpudrive: GPUDrive simulator format converter (JSON)
+- pufferdrive: PufferDrive simulator format converter (Binary)
 """
 
-__all__ = ["tfexample", "json", "puffer"]
+__all__ = ["waymax", "gpudrive", "pufferdrive"]

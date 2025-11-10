@@ -2,12 +2,12 @@ import warnings
 from typing import Any
 
 import numpy as np
-from scipy.spatial import KDTree
-
-from scenariomax import logger_utils
 from scenariomax.stage3_format.tfexample.constants import DEFAULT_NUM_ROADMAPS, DIST_INTERPOLATION
 from scenariomax.stage3_format.tfexample.converter.datatypes import RoadGraphSamples
 from scenariomax.stage3_format.tfexample.exceptions import OverpassException
+from scipy.spatial import KDTree
+
+from scenariomax import logger_utils
 
 
 logger = logger_utils.get_logger(__name__)

@@ -16,7 +16,7 @@ Autonomous driving scenarios are real-world recordings from the point of view of
 With ScenarioMax, you can:
 
 1. **Convert datasets into specific formats**: Transform one or many dataset sources into your desired format
-   - Single dataset: Convert Waymo → TFRecord/JSON/Puffer
+   - Single dataset: Convert Waymo → Waymax/GPUDrive/PufferDrive
    - Multi-dataset: Combine Waymo + nuPlan → Single unified output
    - Results saved in folders named by dataset combination (e.g., "waymo_nuplan")
 
@@ -35,14 +35,14 @@ With ScenarioMax, you can:
 
 **Supported output formats**:
 - Unified Scenario (intermediate `.pkl` format)
-- TFExample (`.tfrecord` for Waymax/V-Max simulators)
-- JSON (for GPUDrive simulator)
-- Puffer (binary `.bin` format for PufferDrive simulator)
+- Waymax (`.tfrecord` for Waymax/V-Max simulators)
+- GPUDrive (`.json` for GPUDrive simulator)
+- PufferDrive (`.bin` binary format for PufferDrive simulator)
 
 ## 🚀 Key Features
 
 - **Multi-Dataset Support**: Unified interface for Waymo Open Motion Dataset, nuScenes, nuPlan, and OpenScenes
-- **Flexible Output Formats**: Convert to TFExample (Waymax/V-Max), JSON (GPUDrive), Puffer (PufferDrive), or unified pickle format
+- **Flexible Output Formats**: Convert to Waymax (Waymax/V-Max), GPUDrive (GPUDrive), PufferDrive (PufferDrive), or unified pickle format
 - **High Performance**: File-by-file streaming architecture for TB-scale datasets with parallel processing
 - **3-Stage Pipeline Architecture**: Convert → Process → Format for maximum flexibility
 - **Enhanced Scenarios**: Optional scenario enhancement with traffic light inference and validation
@@ -127,7 +127,7 @@ ScenarioMax uses a flexible 3-stage pipeline architecture where each stage is in
 ```
 Stage 1: Convert  - Raw dataset(s) → Unified pickles
 Stage 2: Process  - Unified pickles → Enhanced pickles (optional)
-Stage 3: Format   - Unified pickles → Target format (tfexample/json/puffer)
+Stage 3: Format   - Unified pickles → Target format (waymax/gpudrive/pufferdrive)
 ```
 
 **Key Architecture Principle:**
@@ -147,14 +147,14 @@ scenariomax command=process input_path=/output/unified output.dst=/output/proces
             processing.processors=[validation,traffic_lights]
 
 # Stage 3: Convert to target format
-scenariomax command=format input_path=/output/processed output.dst=/output/tfrecord \
-            output.format=tfexample output.num_shards=10
-scenariomax command=format input_path=/output/processed output.dst=/output/json output.format=json
-scenariomax command=format input_path=/output/processed output.dst=/output/puffer output.format=puffer
+scenariomax command=format paths.input_dir=/output/processed paths.output_dir=/output/waymax \
+            formatting.target_format=waymax formatting.waymax.num_shards=10
+scenariomax command=format paths.input_dir=/output/processed paths.output_dir=/output/gpudrive formatting.target_format=gpudrive
+scenariomax command=format paths.input_dir=/output/processed paths.output_dir=/output/pufferdrive formatting.target_format=pufferdrive
 
 # Or run all 3 stages at once (file-by-file streaming, memory efficient)
-scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
-            output.format=tfexample execution.num_workers=16
+scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+            formatting.target_format=waymax execution.num_workers=16
 
 # Visualize unified scenarios (BEV PNG/video)
 scenariomax command=viz input_path=/output/unified output.dst=/output/viz
@@ -165,17 +165,17 @@ scenariomax command=viz input_path=/output/unified output.dst=/output/viz
 ### Use Case 1: Single Dataset Conversion
 
 ```bash
-# Convert Waymo to TFRecord format (file-by-file streaming)
-scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
-            output.format=tfexample execution.num_workers=8
+# Convert Waymo to Waymax format (file-by-file streaming)
+scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+            formatting.target_format=waymax execution.num_workers=8
 ```
 
 ### Use Case 2: Multi-Dataset Processing
 
 ```bash
 # Combine Waymo and nuPlan datasets into single output
-scenariomax command=pipeline datasets.waymo=/data/waymo datasets.nuplan=/data/nuplan \
-            output.dst=/output output.format=tfexample output.num_shards=10 \
+scenariomax command=pipeline datasets.waymo.path=/data/waymo datasets.nuplan.path=/data/nuplan \
+            paths.output_dir=/output formatting.target_format=waymax formatting.waymax.num_shards=10 \
             execution.num_workers=16
 ```
 
@@ -183,17 +183,17 @@ scenariomax command=pipeline datasets.waymo=/data/waymo datasets.nuplan=/data/nu
 
 ```bash
 # Add traffic light processing with strict validation
-scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
-            output.format=tfexample processing.processors=[validation,traffic_lights] \
-            processing.processor_configs.validation.mode=strict execution.num_workers=8
+scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+            formatting.target_format=waymax processing.processors=[validation,traffic_lights] \
+            processing.validation.mode=strict execution.num_workers=8
 ```
 
-### Use Case 4: Convert to Puffer Format
+### Use Case 4: Convert to PufferDrive Format
 
 ```bash
-# Convert to Puffer simulator format
-scenariomax command=pipeline datasets.waymo=/data/waymo output.dst=/output \
-            output.format=puffer execution.num_workers=16
+# Convert to PufferDrive simulator format
+scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+            formatting.target_format=pufferdrive execution.num_workers=16
 ```
 
 ### Use Case 5: Validation-Only Mode
@@ -234,52 +234,52 @@ scenariomax command=format input_path=/unified output.dst=/output output.format=
 
 ```bash
 # nuScenes with specific split
-scenariomax \
-  --nuscenes_src /data/nuscenes \
-  --split v1.0-trainval \
-  --dst /output \
-  --target_format tfexample
+scenariomax command=pipeline \
+  datasets.nuscenes.path=/data/nuscenes \
+  datasets.nuscenes.split=v1.0-trainval \
+  paths.output_dir=/output \
+  formatting.target_format=waymax
 
 # nuPlan with direct log parsing
-scenariomax \
-  --nuplan_src /data/nuplan \
-  --nuplan_direct_from_logs \
-  --dst /output \
-  --target_format gpudrive
+scenariomax command=pipeline \
+  datasets.nuplan.path=/data/nuplan \
+  datasets.nuplan.direct_from_logs=true \
+  paths.output_dir=/output \
+  formatting.target_format=gpudrive
 ```
 
 ## 📤 Output Formats
 
-### TFRecord (TensorFlow/Waymax/V-Max)
+### Waymax (TensorFlow/Waymax/V-Max)
 
 ```bash
---format tfexample
+formatting.target_format=waymax
 ```
 
 - **Use Case**: Training neural networks with Waymax or V-Max simulators
 - **Output**: `training.tfrecord` files with optional sharding support
 - **Features**: TensorFlow-native format, efficient for ML training pipelines
 
-### JSON (GPUDrive)
+### GPUDrive (JSON)
 
 ```bash
---format json
+formatting.target_format=gpudrive
 ```
 
 - **Use Case**: GPU-accelerated simulation and training with GPUDrive
 - **Output**: JSON files compatible with GPUDrive simulator
 - **Features**: Human-readable format, easy debugging
 
-### Puffer (PufferDrive)
+### PufferDrive (Binary)
 
 ```bash
---format puffer
+formatting.target_format=pufferdrive
 ```
 
 - **Use Case**: Simulation with PufferDrive simulator
-- **Output**: Binary `.bin` files in Puffer format with roadgraph and agent data
+- **Output**: Binary `.bin` files in PufferDrive format with roadgraph and agent data
 - **Features**: In-memory binary conversion, dedicated converters for agents, roadgraph, routes, and traffic lights
-- **Location**: `scenariomax/stage3_format/puffer/`
+- **Location**: `scenariomax/stage3_format/pufferdrive/`
 
 ### Unified Pickle Format
 
@@ -320,11 +320,11 @@ Raw Data          →  Unified Format     →  Target Format
 
 3. **Stage 3 (format)**: Unified → Target format
    - **File-by-file streaming**: Each worker loads one pkl → formats → saves → next file
-   - Converts to training-ready formats (TFRecord, JSON, Puffer)
+   - Converts to training-ready formats (Waymax, GPUDrive, PufferDrive)
    - Auto-detects single vs multi-dataset structure
    - Handles merging, shuffling, and sharding
    - No batch loading - memory efficient
-   - Supported formats: `tfexample`, `json`, `puffer`
+   - Supported formats: `waymax`, `gpudrive`, `pufferdrive`
 
 ### Full Pipeline Mode
 
@@ -364,9 +364,9 @@ The `pipeline` command runs all 3 stages together:
   - `validate.py`: Validation processor
   - `traffic_lights/`: Traffic light inference
 - **`scenariomax/stage3_format/`**: Target format converters
-  - `tfexample/`: TFRecord format
-  - `json/`: JSON format (GPUDrive)
-  - `puffer/`: Puffer format (PufferDrive)
+  - `waymax/`: Waymax format (TFRecord)
+  - `gpudrive/`: GPUDrive format (JSON)
+  - `pufferdrive/`: PufferDrive format (Binary)
 - **`scenariomax/visualization/`**: BEV rendering with matplotlib
 - **`scenariomax/core/unified_scenario.py`**: UnifiedScenario schema definition
 
@@ -510,29 +510,29 @@ except ValidationError as e:
 
 ```bash
 # Enable checkpointing
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format tfexample \
-  --checkpoint
+scenariomax command=pipeline \
+  datasets.waymo.path=/data/waymo \
+  paths.output_dir=/output \
+  formatting.target_format=waymax \
+  execution.checkpoint=true
 
 # If interrupted, re-run the same command - it will resume from checkpoint
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format tfexample \
-  --checkpoint
+scenariomax command=pipeline \
+  datasets.waymo.path=/data/waymo \
+  paths.output_dir=/output \
+  formatting.target_format=waymax \
+  execution.checkpoint=true
 ```
 
 ### Validation Reports - Detailed Error Statistics
 
 ```bash
 # Generate validation_report.json with error statistics
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format tfexample \
-  --validation-report
+scenariomax command=pipeline \
+  datasets.waymo.path=/data/waymo \
+  paths.output_dir=/output \
+  formatting.target_format=waymax \
+  processing.validation_report=true
 ```
 
 **Report includes:**
@@ -545,17 +545,17 @@ scenariomax pipeline \
 
 ```bash
 # Enabled by default - checks if sufficient disk space available
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format tfexample
+scenariomax command=pipeline \
+  datasets.waymo.path=/data/waymo \
+  paths.output_dir=/output \
+  formatting.target_format=waymax
 
 # Skip disk check if needed (not recommended for production)
-scenariomax pipeline \
-  --waymo_src /data/waymo \
-  --dst /output \
-  --format tfexample \
-  --no-disk-check
+scenariomax command=pipeline \
+  datasets.waymo.path=/data/waymo \
+  paths.output_dir=/output \
+  formatting.target_format=waymax \
+  execution.no_disk_check=true
 ```
 
 ### Deterministic Shuffling
@@ -564,7 +564,7 @@ Control shuffle seed for deterministic TFRecord shuffling:
 
 ```bash
 export SCENARIOMAX_SHUFFLE_SEED=42
-scenariomax pipeline --waymo_src /data/waymo --dst /output --format tfexample
+scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output formatting.target_format=waymax
 ```
 ```
 

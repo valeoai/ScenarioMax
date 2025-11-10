@@ -5,7 +5,7 @@ import shutil
 
 import numpy as np
 
-from scenariomax.core.types import FORMAT_JSON, FORMAT_PUFFER, FORMAT_TFEXAMPLE
+from scenariomax.core.types import FORMAT_GPUDRIVE, FORMAT_PUFFERDRIVE, FORMAT_WAYMAX
 
 
 def clean_and_create_output_directory(output_path: str) -> None:
@@ -39,18 +39,18 @@ class NumpyEncoder(json.JSONEncoder):
 
 def get_format_function(format: str):
     # Create format function
-    if format == FORMAT_TFEXAMPLE:
-        from scenariomax.stage3_format.tfexample import convert_to_tfexample
+    if format == FORMAT_WAYMAX:
+        from scenariomax.stage3_format.waymax import convert_to_waymax
 
-        return convert_to_tfexample.convert
-    elif format == FORMAT_JSON:
-        from scenariomax.stage3_format.json import convert_to_json
+        return convert_to_waymax.convert
+    elif format == FORMAT_GPUDRIVE:
+        from scenariomax.stage3_format.gpudrive import convert_to_gpudrive
 
-        return convert_to_json.convert
-    elif format == FORMAT_PUFFER:
-        from scenariomax.stage3_format.puffer import convert_to_puffer
+        return convert_to_gpudrive.convert
+    elif format == FORMAT_PUFFERDRIVE:
+        from scenariomax.stage3_format.pufferdrive import convert_to_pufferdrive
 
-        return convert_to_puffer.convert
+        return convert_to_pufferdrive.convert
 
 
 def load_pickle(file_path):

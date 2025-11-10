@@ -16,7 +16,7 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 from scenariomax import dataset_registry, logger_utils
-from scenariomax.core.types import FORMAT_JSON, FORMAT_PUFFER, FORMAT_TFEXAMPLE, SUPPORTED_FORMATS
+from scenariomax.core.types import FORMAT_GPUDRIVE, FORMAT_PUFFERDRIVE, FORMAT_WAYMAX, SUPPORTED_FORMATS
 from scenariomax.core.utils import (
     NumpyEncoder,
     clean_and_create_output_directory,
@@ -138,8 +138,8 @@ def _save_result(
         save_pickle(scenario, os.path.join(output_path, f"{scenario_id}.pkl"))
         return
 
-    # For TFExample, we need special handling (write to TFRecord)
-    if target_format == FORMAT_TFEXAMPLE:
+    # For Waymax, we need special handling (write to TFRecord)
+    if target_format == FORMAT_WAYMAX:
         # This is a serialized TFExample
         tfrecord_file = os.path.join(output_path, f"{scenario_id}.tfrecord")
         from scenariomax.tf_utils import get_tensorflow
@@ -149,16 +149,16 @@ def _save_result(
 
         with tf.io.TFRecordWriter(tfrecord_file) as writer:
             writer.write(scenario.SerializeToString())
-    elif target_format == FORMAT_JSON:
+    elif target_format == FORMAT_GPUDRIVE:
         # This is JSON format
         import json
 
         json_file = os.path.join(output_path, f"{scenario_id}.json")
         with open(json_file, "w") as f:
             json.dump(scenario, f, indent=2, cls=NumpyEncoder)
-    elif target_format == FORMAT_PUFFER:
+    elif target_format == FORMAT_PUFFERDRIVE:
         # Convert puffer dict to binary format
-        from scenariomax.stage3_format.puffer.binary_converter import puffer_dict_to_binary
+        from scenariomax.stage3_format.pufferdrive.binary_converter import puffer_dict_to_binary
 
         binary_data = puffer_dict_to_binary(scenario)
         binary_file = os.path.join(output_path, f"{scenario_id}.bin")
@@ -402,8 +402,8 @@ def format_unified_to_target(
     # Create format function
     _format_func = get_format_function(format)
 
-    # Wrap format function with format_config for puffer
-    if format == FORMAT_PUFFER:
+    # Wrap format function with format_config for pufferdrive
+    if format == FORMAT_PUFFERDRIVE:
         _format_func = partial(
             _format_func,
             min_route_valid_points=format_config.get("min_route_valid_points", 0),
@@ -440,12 +440,12 @@ def format_unified_to_target(
     failures = sum(r["failures"] for r in results)
 
     # Postprocess if needed (merge workers, shuffle, shard)
-    if format == FORMAT_TFEXAMPLE:
-        _postprocess_tfexample(output_path, format_config)
-    elif format == FORMAT_JSON:
+    if format == FORMAT_WAYMAX:
+        _postprocess_waymax(output_path, format_config)
+    elif format == FORMAT_GPUDRIVE:
         logger.info("✅ JSON files ready")
-    elif format == FORMAT_PUFFER:
-        _postprocess_puffer(output_path)
+    elif format == FORMAT_PUFFERDRIVE:
+        _postprocess_pufferdrive(output_path)
 
     elapsed_time = time.time() - start_time
     logger.info(f"✅ Stage 3 completed in {elapsed_time:.2f}s")
@@ -461,9 +461,9 @@ def format_unified_to_target(
     }
 
 
-def _postprocess_tfexample(output_path: str, format_config: dict) -> None:
+def _postprocess_waymax(output_path: str, format_config: dict) -> None:
     """Merge TFRecord files, shuffle, and optionally shard."""
-    from scenariomax.stage3_format.tfexample import postprocess
+    from scenariomax.stage3_format.waymax import postprocess
 
     logger.info("🔄 Merging TFRecord files")
 
@@ -493,7 +493,7 @@ def _postprocess_tfexample(output_path: str, format_config: dict) -> None:
         # Shard if requested
         num_shards = format_config.get("num_shards", 1)
         if num_shards > 1:
-            from scenariomax.stage3_format.tfexample import shard
+            from scenariomax.stage3_format.waymax import shard
 
             logger.info(f"Sharding into {num_shards} shards")
             shard.shard_tfrecord(
@@ -504,11 +504,11 @@ def _postprocess_tfexample(output_path: str, format_config: dict) -> None:
             )
 
 
-def _postprocess_puffer(output_path: str) -> None:
-    """Merge Puffer binary files from subdirectories and rename sequentially."""
+def _postprocess_pufferdrive(output_path: str) -> None:
+    """Merge PufferDrive binary files from subdirectories and rename sequentially."""
     import shutil
 
-    logger.info("🔄 Merging Puffer binary files")
+    logger.info("🔄 Merging PufferDrive binary files")
 
     # Collect all subdirectories
     subdirs = [d for d in os.listdir(output_path) if os.path.isdir(os.path.join(output_path, d))]
@@ -623,8 +623,8 @@ def run_all_pipeline(
 
     _format_func = get_format_function(format)
 
-    # Wrap format function with format_config for puffer
-    if format == FORMAT_PUFFER:
+    # Wrap format function with format_config for pufferdrive
+    if format == FORMAT_PUFFERDRIVE:
         _format_func = partial(
             _format_func,
             min_route_valid_points=format_config.get("min_route_valid_points", 0),
@@ -680,12 +680,12 @@ def run_all_pipeline(
         logger.info(f"   ✅ Processed: {successes}, 🚫 Filtered: {filtered}, ❌ Errors: {failures}")
 
     # Postprocess based on format
-    if format == FORMAT_TFEXAMPLE:
-        _postprocess_tfexample(output_path, format_config)
-    elif format == FORMAT_JSON:
+    if format == FORMAT_WAYMAX:
+        _postprocess_waymax(output_path, format_config)
+    elif format == FORMAT_GPUDRIVE:
         logger.info("✅ JSON files ready")  # No postprocessing needed for JSON format
-    elif format == FORMAT_PUFFER:
-        _postprocess_puffer(output_path)
+    elif format == FORMAT_PUFFERDRIVE:
+        _postprocess_pufferdrive(output_path)
 
     total_time = time.time() - start_time
     logger.info("=" * 80)

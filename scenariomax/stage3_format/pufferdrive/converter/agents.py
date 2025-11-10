@@ -3,10 +3,10 @@ Convert dynamic agents from unified format to Puffer format.
 """
 
 import numpy as np
+from scenariomax.stage3_format.puffer.converter import routes
 
 from scenariomax import logger_utils
 from scenariomax.core import types
-from scenariomax.stage3_format.puffer.converter import routes
 
 
 logger = logger_utils.get_logger(__name__)

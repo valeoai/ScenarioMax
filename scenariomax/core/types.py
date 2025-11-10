@@ -106,11 +106,11 @@ ALL_TYPES = (
 )
 
 # ===== Output Formats =====
-FORMAT_TFEXAMPLE = "tfexample"  # TFRecord format (Waymax/V-Max simulators)
-FORMAT_JSON = "json"  # JSON format (GPUDrive simulator)
-FORMAT_PUFFER = "puffer"  # Binary format (PufferDrive simulator)
+FORMAT_WAYMAX = "waymax"  # TFRecord format (Waymax/V-Max simulators)
+FORMAT_GPUDRIVE = "gpudrive"  # JSON format (GPUDrive simulator)
+FORMAT_PUFFERDRIVE = "pufferdrive"  # Binary format (PufferDrive simulator)
 
-SUPPORTED_FORMATS = {FORMAT_TFEXAMPLE, FORMAT_JSON, FORMAT_PUFFER}
+SUPPORTED_FORMATS = {FORMAT_WAYMAX, FORMAT_GPUDRIVE, FORMAT_PUFFERDRIVE}
 
 
 # ===== Type Checking Functions =====
