@@ -7,9 +7,9 @@ Output is JSON format with numpy arrays converted to lists.
 """
 
 import numpy as np
-from scenariomax.stage3_format.puffer.converter import agents, roadgraph, traffic_lights
 
 from scenariomax import logger_utils
+from scenariomax.stage3_format.pufferdrive.converter import agents, roadgraph, traffic_lights
 
 
 logger = logger_utils.get_logger(__name__)

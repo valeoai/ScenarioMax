@@ -71,7 +71,7 @@ class UnsupportedFormatError(ConversionError):
     """Raised when an unsupported format is requested."""
 
     def __init__(self, format_name: str, supported_formats: list[str] = None):
-        supported = ", ".join(supported_formats) if supported_formats else "pickle, tfexample, gpudrive"
+        supported = ", ".join(supported_formats) if supported_formats else "pickle, waymax, gpudrive, pufferdrive"
         message = f"Unsupported format: {format_name}. Supported formats: {supported}"
         super().__init__(message, {"format_name": format_name, "supported_formats": supported_formats})
 

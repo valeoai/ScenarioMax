@@ -99,7 +99,7 @@ scenariomax command=process input_path=/data/debug/womd/unified output.dst=/data
 
 ```bash
 # Basic Waymax conversion
-scenariomax command=format input_path=/data/debug/womd/unified output.dst=/data/debug/womd/tfexample formatting.target_format=waymax execution.num_workers=1
+scenariomax command=format input_path=/data/debug/womd/unified output.dst=/data/debug/womd/waymax formatting.target_format=waymax execution.num_workers=1
 
 # Waymax with sharding (2 shards)
 scenariomax command=format input_path=/data/debug/womd/unified output.dst=/data/debug/womd/tfexample_sharded formatting.target_format=waymax output.num_shards=2 execution.num_workers=4
@@ -306,7 +306,7 @@ scenariomax command=pipeline datasets.waymo=/data/datasets/womd/training/ output
 find /data/debug/womd/unified -name "*.pkl" | wc -l
 
 # Count TFExample files
-find /data/debug/womd/tfexample -name "*.tfrecord" | wc -l
+find /data/debug/womd/waymax -name "*.tfrecord" | wc -l
 
 # Count JSON files
 find /data/debug/womd/json -name "*.json" | wc -l
@@ -344,7 +344,7 @@ python3 << EOF
 import tensorflow as tf
 import glob
 
-files = glob.glob("/data/debug/womd/tfexample/*.tfrecord")
+files = glob.glob("/data/debug/womd/waymax/*.tfrecord")
 print(f"Found {len(files)} TFRecord files")
 
 for f in files[:3]:
@@ -367,7 +367,7 @@ scenariomax command=convert datasets.waymo=/data/datasets/womd/training/ output.
 scenariomax command=process input_path=/data/debug/test/unified output.dst=/data/debug/test/processed processing.processors=[validation,traffic_lights,polyline_interpolation] execution.num_workers=1
 
 # 3. Stage 3: Format to all targets
-scenariomax command=format input_path=/data/debug/test/processed output.dst=/data/debug/test/tfexample formatting.target_format=waymax execution.num_workers=1
+scenariomax command=format input_path=/data/debug/test/processed output.dst=/data/debug/test/waymax formatting.target_format=waymax execution.num_workers=1
 scenariomax command=format input_path=/data/debug/test/processed output.dst=/data/debug/test/json formatting.target_format=gpudrive execution.num_workers=1
 scenariomax command=format input_path=/data/debug/test/processed output.dst=/data/debug/test/puffer formatting.target_format=pufferdrive execution.num_workers=1
 

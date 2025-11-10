@@ -1,5 +1,6 @@
 import numpy as np
-from scenariomax.stage3_format.tfexample.converter import datatypes
+
+from scenariomax.stage3_format.waymax.converter import datatypes
 
 
 def get_object_trajectory(state: datatypes.State, index: int = 0):

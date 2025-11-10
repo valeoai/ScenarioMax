@@ -69,7 +69,7 @@ def worker_scenario_func(
         process_func: Optional processor (unified → unified)
         format_func: Optional formatter (unified → target)
         output_path: Optional path to save results
-        target_format: Optional target format string (tfexample, json, puffer)
+        target_format: Optional target format string (waymax, gpudrive, pufferdrive)
         dataset_config: Dataset configuration (enables dataset-specific optimizations)
 
     Returns:
@@ -374,7 +374,7 @@ def format_unified_to_target(
     Args:
         input_path: Directory containing unified pickles
         output_path: Output directory
-        format: Target format (tfexample, json, puffer)
+        format: Target format (waymax, gpudrive, pufferdrive)
         num_workers: Number of parallel workers
         batch_size: Number of files per worker batch (default: 10)
         processors: Optional processors to apply before formatting
@@ -583,7 +583,7 @@ def run_all_pipeline(
         datasets: Dict mapping dataset names to config dicts (with 'path' and options)
                   OR single path string (auto-detected dataset)
         output_path: Output directory
-        format: Target format (tfexample, json, puffer)
+        format: Target format (waymax, gpudrive, pufferdrive)
         processors: Optional processors to apply (e.g., validation, traffic_lights)
         processor_configs: Processor configurations
         num_workers: Number of parallel workers

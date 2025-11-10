@@ -1,7 +1,8 @@
 import numpy as np
 import trimesh
-from scenariomax.stage3_format.json import utils as gpudrive_utils
-from scenariomax.stage3_format.json.converter import roadgraph, state, traffic_light
+
+from scenariomax.stage3_format.gpudrive import utils as gpudrive_utils
+from scenariomax.stage3_format.gpudrive.converter import roadgraph, state, traffic_light
 
 
 def convert(unified_scenario):

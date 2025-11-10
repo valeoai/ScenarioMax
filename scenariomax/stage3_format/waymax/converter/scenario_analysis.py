@@ -1,5 +1,6 @@
 import numpy as np
-from scenariomax.stage3_format.tfexample.converter.datatypes import State
+
+from scenariomax.stage3_format.waymax.converter.datatypes import State
 
 
 def compute_variations(state: State):

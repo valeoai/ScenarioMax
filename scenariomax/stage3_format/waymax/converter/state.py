@@ -1,6 +1,7 @@
 import numpy as np
-from scenariomax.stage3_format.tfexample import constants, exceptions
-from scenariomax.stage3_format.tfexample.converter import datatypes
+
+from scenariomax.stage3_format.waymax import constants, exceptions
+from scenariomax.stage3_format.waymax.converter import datatypes
 
 
 def get_distance(sdc_track, other_track):

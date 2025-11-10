@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 
 import numpy as np
-from scenariomax.stage3_format.tfexample import constants
+
+from scenariomax.stage3_format.waymax import constants
 
 
 @dataclass

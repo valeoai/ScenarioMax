@@ -1,7 +1,8 @@
 import numpy as np
 import trimesh
-from scenariomax.stage3_format.json import constants
-from scenariomax.stage3_format.json import utils as gpudrive_utils
+
+from scenariomax.stage3_format.gpudrive import constants
+from scenariomax.stage3_format.gpudrive import utils as gpudrive_utils
 
 
 FILTERED_ELEMENT_TYPES = ["TRAFFIC_CONE", "TRAFFIC_BARRIER"]

@@ -4,12 +4,12 @@ import shutil
 from collections.abc import Callable, Generator, Iterable
 from typing import Any
 
-from scenariomax.stage3_format.json import convert_to_json
 from tqdm import tqdm
 
 from scenariomax import logger_utils
 from scenariomax.core.unified_scenario import UnifiedScenario
 from scenariomax.core.utils import NumpyEncoder
+from scenariomax.stage3_format.gpudrive import convert_to_gpudrive
 
 
 logger = logger_utils.get_logger(__name__)
@@ -55,7 +55,7 @@ def postprocess_gpudrive(
             if not isinstance(unified_scenario, UnifiedScenario):
                 unified_scenario = UnifiedScenario.from_dict(unified_scenario)
 
-            scenario_json = convert_to_json.convert(unified_scenario)
+            scenario_json = convert_to_gpudrive.convert(unified_scenario)
 
             if scenario_json is not None:
                 # Save each scenario as individual JSON file

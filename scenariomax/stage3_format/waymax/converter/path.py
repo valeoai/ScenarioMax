@@ -1,6 +1,7 @@
 import numpy as np
-from scenariomax.stage3_format.tfexample import constants
-from scenariomax.stage3_format.tfexample.converter import datatypes, utils
+
+from scenariomax.stage3_format.waymax import constants
+from scenariomax.stage3_format.waymax.converter import datatypes, utils
 
 
 LANE_WIDTH = 2.5

@@ -1,6 +1,7 @@
 import numpy as np
-from scenariomax.stage3_format.tfexample import constants
-from scenariomax.stage3_format.tfexample.converter import datatypes
+
+from scenariomax.stage3_format.waymax import constants
+from scenariomax.stage3_format.waymax.converter import datatypes
 
 
 TRAFFIC_LIGHT_OFFSET = 25
