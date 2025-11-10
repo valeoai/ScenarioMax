@@ -28,9 +28,9 @@ For each DynamicAgent:
         - height[trajectory_length] (float32[])
         - log_valid[trajectory_length] (int32[])
     - num_route_ints (int32) - total number of route integers
-    - routes (int32[]) - flattened: [route1_len, id1, id2, ..., route2_len, id1, ...]
+    - routes (int32[]) - flattened: [id1, id2, ...] # Only first route for now
     - goal_position_x, y, z (float32, float32, float32)
-    - mark_as_expert (int32)
+    - mark_as_expert (int32) - 1 if no routes (expert/uncontrollable), 0 if routes exist (controllable)
 
 For each RoadMapElement:
     - id (int32)
@@ -158,14 +158,20 @@ def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
         # Write routes (flatten all routes into single array)
         routes = agent.get("routes", [])
         if routes:
-            # Flatten routes: [[1,2,3], [4,5]] -> [3, 1,2,3, 2, 4,5]
-            # Format: for each route, write length then route IDs
-            flattened = []
-            for route in routes:
-                flattened.append(len(route))  # route length
-                flattened.extend(route)  # route IDs
+            # Option 1: First route only
+            first_route = routes[0]
+            flattened = first_route
+            total_route_ints = len(first_route)
 
-            total_route_ints = len(flattened)
+            # Option 2: All route IDs flattened
+            # # Flatten routes: [[1,2,3], [4,5]] -> [3, 1,2,3, 2, 4,5]
+            # # Format: for each route, write length then route IDs
+            # flattened = []
+            # for route in routes:
+            #     flattened.append(len(route))  # route length
+            #     flattened.extend(route)  # route IDs
+
+            # total_route_ints = len(flattened)
         else:
             total_route_ints = 0
             flattened = []
@@ -186,7 +192,7 @@ def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
 
         buffer.extend(struct.pack("fff", goal_x, goal_y, goal_z))
 
-        # Write mark_as_expert: 1 if routes defined, 0 otherwise
+        # Write mark_as_expert: 1 if NO routes (expert/uncontrollable), 0 if routes exist (controllable)
         mark_as_expert = 0 if (routes and len(routes) > 0) else 1
         buffer.extend(struct.pack("i", mark_as_expert))
 
