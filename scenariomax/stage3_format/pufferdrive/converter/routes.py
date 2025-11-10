@@ -6,20 +6,27 @@ and explore different possible paths through the road network.
 
 Algorithm Overview:
 ------------------
-The route computation uses a 4-step graph-based approach:
+The route computation uses a 3-step graph-based approach:
 
 1. Validation: Check if agent has sufficient trajectory points and is on lanes (not parked)
-2. Root Lane Selection: Find the current lane using the first N trajectory points
+2. Root Lane Selection: Find the current lane using sample trajectory points
 3. Graph Building: Build full reachability graph from root lane (no pruning)
-4. Metadata Computation: Score each edge against ground truth trajectory
-5. Path Extraction: Extract top N paths using GT coverage metric
+4. Path Extraction: Enumerate all paths, score each using geometric distance to GT trajectory
 
 Multiple route paths are generated to represent different possible paths through
-exit lanes (e.g., at highway interchanges or intersections). This graph-based
-approach enables flexible path selection with pluggable metrics.
+exit lanes (e.g., at highway interchanges or intersections).
 
-The algorithm uses vectorized operations for performance and scores lane matches
-based on both spatial proximity (distance) and directional alignment (heading).
+Geometric Scoring:
+-----------------
+Each route path is scored by:
+1. Concatenating lane polylines into a single route polyline
+2. Computing distance from each GT trajectory point to the route polyline
+3. Calculating coverage (% of trajectory within LANE_WIDTH_THRESHOLD)
+4. Calculating distance_score (1 / (1 + avg_distance) for covered points)
+5. Final score = coverage × distance_score
+
+Routes are ranked by score (higher is better), with an optional heading alignment
+filter to reject routes where the agent travels in the wrong direction.
 """
 
 from collections import deque
@@ -47,13 +54,14 @@ ROOT_LANE_POINTS = 3  # Number of initial trajectory points used to determine cu
 MAX_PATH_LENGTH = 10  # Maximum number of lanes per route path
 MAX_ROUTES = 10  # Maximum number of route paths to generate per agent
 
-# Score calculation weights
-# These weights determine the relative importance of direction vs. distance in lane matching
+# Root lane selection weights
+# These weights are used only for finding the initial root lane (current lane)
 # The scoring formula is: score = ALIGNMENT_WEIGHT * alignment + DISTANCE_WEIGHT * distance_score
 # where alignment ∈ [-1, 1] and distance_score = 1/(1+distance) ∈ (0, 1]
 ALIGNMENT_WEIGHT = 0.7  # Weight for directional alignment (heading match)
 DISTANCE_WEIGHT = 0.3  # Weight for spatial proximity
 # Combined weights sum to 1.0 for interpretable normalized scoring
+# Note: Route scoring uses geometric distance (coverage × distance_score), not these weights
 
 
 def compute_agent_route(
@@ -70,10 +78,9 @@ def compute_agent_route(
     Compute routes (lists of lane IDs) for an agent based on ground truth trajectory.
 
     Algorithm:
-    1. Find root lane using first N trajectory points
+    1. Find root lane using sample trajectory points
     2. Build full reachability graph from root (no pruning)
-    3. Compute GT matching metadata for each edge
-    4. Extract top N paths using GT coverage metric
+    3. Enumerate all paths and score each using geometric distance to GT trajectory
 
     Multiple route paths are generated to explore different exit lane possibilities.
 
@@ -136,11 +143,8 @@ def compute_agent_route(
         logger.debug(f"{agent_str}: No reachable lanes from root {root_lane}")
         return [[root_lane]]
 
-    # Step 3: Compute GT matching metadata for graph edges
-    metadata = _compute_gt_metadata(graph, root_lane, valid_trajectory, valid_heading, lane_data)
-
-    # Step 4: Extract top N paths using GT coverage metric
-    routes = extract_top_n_paths(graph, root_lane, metadata, n=max_routes)
+    # Step 3: Extract top N paths using geometric GT coverage metric
+    routes = extract_top_n_paths(graph, root_lane, lane_data, valid_trajectory, valid_heading, n=max_routes)
 
     return routes
 
@@ -197,6 +201,159 @@ def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, d
     return lane_ids, lane_polylines, lane_metadata
 
 
+def _build_route_polyline(route_path: list, lane_data: tuple) -> np.ndarray:
+    """
+    Build a single continuous polyline from a route path by concatenating lane polylines.
+
+    Args:
+        route_path: List of lane IDs forming the route
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
+
+    Returns:
+        Concatenated polyline array (N_points, 2) representing the full route
+    """
+    lane_ids, lane_polylines, _ = lane_data
+    lane_id_to_idx = {lane_id: idx for idx, lane_id in enumerate(lane_ids)}
+
+    route_polyline_segments = []
+    for lane_id in route_path:
+        if lane_id not in lane_id_to_idx:
+            continue
+
+        idx = lane_id_to_idx[lane_id]
+        polyline = lane_polylines[idx]  # (max_points, 2)
+
+        # Remove padding (zero points)
+        valid_mask = np.any(polyline != 0, axis=1)
+        polyline_valid = polyline[valid_mask]
+
+        if len(polyline_valid) > 0:
+            route_polyline_segments.append(polyline_valid)
+
+    if not route_polyline_segments:
+        return np.array([]).reshape(0, 2)
+
+    # Concatenate all segments into single polyline
+    route_polyline = np.vstack(route_polyline_segments)
+
+    return route_polyline
+
+
+def _check_route_heading_alignment(
+    route_polyline: np.ndarray,
+    trajectory: np.ndarray,
+    heading: np.ndarray,
+    min_alignment_ratio: float = 0.7,
+) -> bool:
+    """
+    Check if trajectory heading generally aligns with route direction (binary filter).
+
+    Samples points from trajectory and checks if agent is traveling in the same
+    direction as the closest route segment.
+
+    Args:
+        route_polyline: Route polyline (N_points, 2)
+        trajectory: Trajectory points (M, 2)
+        heading: Trajectory headings (M,)
+        min_alignment_ratio: Minimum fraction of samples that must align (default 0.7)
+
+    Returns:
+        True if route direction generally matches trajectory heading, False otherwise
+    """
+    if len(route_polyline) < 2 or len(trajectory) == 0:
+        return False
+
+    # Sample 10 points evenly from trajectory
+    n_samples = min(10, len(trajectory))
+    sample_indices = np.linspace(0, len(trajectory) - 1, n_samples, dtype=int)
+    sample_positions = trajectory[sample_indices]
+    sample_headings = heading[sample_indices]
+
+    # Reshape route polyline for distance calculation
+    route_polyline_batch = route_polyline[np.newaxis, :, :]  # (1, N_points, 2)
+
+    # Find closest route segment for each sample
+    _, closest_indices = _points_to_polylines_distance(sample_positions, route_polyline_batch)
+    closest_indices = closest_indices[:, 0]  # Squeeze to 1D
+
+    # Get route directions at closest segments
+    route_directions = _get_lane_directions_at_indices_batch(route_polyline_batch, closest_indices.reshape(-1, 1))[
+        :, 0, :
+    ]  # (n_samples, 2)
+
+    # Calculate agent directions
+    agent_dirs = np.stack([np.cos(sample_headings), np.sin(sample_headings)], axis=1)
+
+    # Calculate alignment (dot product)
+    alignments = np.sum(route_directions * agent_dirs, axis=1)
+
+    # Check if enough samples are aligned
+    aligned_count = np.sum(alignments > ALIGNMENT_THRESHOLD)
+    alignment_ratio = aligned_count / n_samples
+
+    return alignment_ratio >= min_alignment_ratio
+
+
+def _score_route_geometric(
+    route_path: list,
+    lane_data: tuple,
+    trajectory: np.ndarray,
+    heading: np.ndarray,
+) -> float:
+    """
+    Score route using geometric distance from trajectory to full route polyline.
+
+    Uses multiplicative scoring: coverage × distance_score, where:
+    - coverage: Percentage of trajectory points within LANE_WIDTH_THRESHOLD of route
+    - distance_score: 1 / (1 + avg_distance) for covered points
+
+    Args:
+        route_path: List of lane IDs forming the route
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
+        trajectory: Trajectory points (M, 2/3)
+        heading: Trajectory headings (M,)
+
+    Returns:
+        Score value where higher is better (0.0 if route doesn't match trajectory)
+    """
+    # Ensure trajectory is 2D
+    trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
+
+    # Build route polyline
+    route_polyline = _build_route_polyline(route_path, lane_data)
+
+    if len(route_polyline) < 2:
+        return 0.0
+
+    # Apply heading alignment filter
+    if not _check_route_heading_alignment(route_polyline, trajectory_2d, heading):
+        return 0.0
+
+    # Reshape route polyline for distance calculation
+    route_polyline_batch = route_polyline[np.newaxis, :, :]  # (1, N_points, 2)
+
+    # Compute distances from all trajectory points to route polyline
+    min_distances = _points_to_polylines_distance(trajectory_2d, route_polyline_batch, return_indices=False)
+    min_distances = min_distances[:, 0]  # Squeeze to 1D (N_traj_points,)
+
+    # Compute coverage: percentage of trajectory within threshold
+    coverage_mask = min_distances < LANE_WIDTH_THRESHOLD
+    coverage_ratio = np.sum(coverage_mask) / len(trajectory_2d)
+
+    if coverage_ratio == 0:
+        return 0.0
+
+    # Compute average distance for covered points only
+    covered_distances = min_distances[coverage_mask]
+    avg_distance = np.mean(covered_distances)
+    distance_score = 1.0 / (1.0 + avg_distance)
+
+    # Multiplicative score: coverage × distance_score
+    final_score = coverage_ratio * distance_score
+
+    return final_score
+
+
 def _build_graph(
     root_lane: int | str,
     static_map_elements: dict,
@@ -243,101 +400,51 @@ def _build_graph(
     return graph
 
 
-def _compute_gt_metadata(
-    graph: dict,
-    root_lane: int | str,
+def _gt_coverage_metric(
+    path: list,
+    lane_data: tuple,
     trajectory: np.ndarray,
     heading: np.ndarray,
-    lane_data: tuple,
-    max_depth: int = MAX_GRAPH_DEPTH,
-) -> dict[tuple, tuple]:
+) -> float:
     """
-    Compute GT trajectory matching metadata for each edge in the graph.
+    Calculate GT coverage score for a path using geometric distance.
 
-    For each edge (from_lane, to_lane), calculates how well the to_lane
-    matches the remaining ground truth trajectory.
-
-    Args:
-        graph: Adjacency list from _build_graph
-        root_lane: Starting lane ID
-        trajectory: Valid trajectory points (M, 2/3)
-        heading: Valid headings (M,)
-        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
-        max_depth: Maximum depth to compute metadata for
-
-    Returns:
-        Dict mapping (from_lane, to_lane) to (score, next_traj_idx, traj_start_idx)
-    """
-    lane_ids, lane_polylines, _ = lane_data
-    lane_id_to_idx = {lane_id: idx for idx, lane_id in enumerate(lane_ids)}
-
-    trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
-
-    metadata = {}
-    queue = deque([(root_lane, 0, 0)])
-    visited_states = set()
-
-    while queue:
-        lane_id, depth, traj_idx = queue.popleft()
-
-        if (lane_id, traj_idx) in visited_states or depth >= max_depth:
-            continue
-        visited_states.add((lane_id, traj_idx))
-
-        for exit_id in graph.get(lane_id, []):
-            score, next_traj_idx = _score_lane_against_trajectory(
-                exit_id,
-                lane_id_to_idx,
-                lane_polylines,
-                trajectory_2d,
-                heading,
-                traj_idx,
-            )
-            metadata[(lane_id, exit_id)] = (score, next_traj_idx, traj_idx)
-            queue.append((exit_id, depth + 1, next_traj_idx))
-
-    return metadata
-
-
-def _gt_coverage_metric(path: list, metadata: dict) -> float:
-    """
-    Calculate GT coverage score for a path.
-
-    Sums the GT matching scores along all edges in the path.
+    Delegates to _score_route_geometric which computes coverage × distance_score.
 
     Args:
         path: List of lane IDs
-        metadata: Edge metadata from _compute_gt_metadata
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
+        trajectory: Valid trajectory points (M, 2/3)
+        heading: Valid headings (M,)
 
     Returns:
-        Total score (sum of edge scores)
+        Score value where higher is better (0.0 if route doesn't match trajectory)
     """
-    total_score = 0.0
-    for i in range(len(path) - 1):
-        edge = (path[i], path[i + 1])
-        if edge in metadata:
-            score, _, _ = metadata[edge]
-            total_score += score
-    return total_score
+    return _score_route_geometric(path, lane_data, trajectory, heading)
 
 
 def extract_top_n_paths(
     graph: dict,
     root_lane: int | str,
-    metadata: dict,
+    lane_data: tuple,
+    trajectory: np.ndarray,
+    heading: np.ndarray,
     n: int = MAX_ROUTES,
     max_length: int = MAX_PATH_LENGTH,
 ) -> list[list]:
     """
-    Extract top N paths from graph using GT coverage metric.
+    Extract top N paths from graph using geometric GT coverage metric.
 
     Enumerates paths via DFS with per-path cycle detection, scores each
-    path using _gt_coverage_metric, and returns the best N paths.
+    path using geometric distance from trajectory to route polyline, and
+    returns the best N paths.
 
     Args:
         graph: Adjacency list from _build_graph
         root_lane: Starting lane ID
-        metadata: Edge metadata from _compute_gt_metadata
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
+        trajectory: Valid trajectory points (M, 2/3)
+        heading: Valid headings (M,)
         n: Number of top paths to return
         max_length: Maximum path length in number of lanes
 
@@ -372,7 +479,7 @@ def extract_top_n_paths(
     if not complete_paths:
         return [[root_lane]]
 
-    scored_paths = [(_gt_coverage_metric(path, metadata), path) for path in complete_paths]
+    scored_paths = [(_gt_coverage_metric(path, lane_data, trajectory, heading), path) for path in complete_paths]
     scored_paths.sort(reverse=True)
 
     return [path for _, path in scored_paths[:n]]
@@ -487,85 +594,6 @@ def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tupl
 
     best_lane_idx = np.argmax(lane_total_scores)
     return lane_ids[best_lane_idx]
-
-
-def _score_lane_against_trajectory(
-    lane_id: int,
-    lane_id_to_idx: dict,
-    lane_polylines: np.ndarray,
-    trajectory: np.ndarray,
-    heading: np.ndarray,
-    start_traj_idx: int,
-) -> tuple[float, int]:
-    """
-    Score how well a lane matches the remaining ground truth trajectory.
-
-    Args:
-        lane_id: Lane ID to score (integer)
-        lane_id_to_idx: Mapping from lane_id to lane_idx
-        lane_polylines: Array of lane polylines (N_lanes, max_points, 2)
-        trajectory: Trajectory points (M, 2)
-        heading: Headings (M,)
-        start_traj_idx: Index in trajectory to start matching from
-
-    Returns:
-        Tuple of (score, next_trajectory_idx) where score > 0 means lane follows GT
-    """
-    if lane_id not in lane_id_to_idx:
-        return 0.0, start_traj_idx
-
-    lane_idx = lane_id_to_idx[lane_id]
-    lane_polyline = lane_polylines[lane_idx : lane_idx + 1]  # Keep as (1, max_points, 2) for vectorization
-
-    # Get remaining trajectory points
-    remaining_trajectory = trajectory[start_traj_idx:]
-    remaining_heading = heading[start_traj_idx:]
-
-    if len(remaining_trajectory) == 0:
-        return 0.0, start_traj_idx
-
-    # Vectorized: Calculate distances for all remaining trajectory points at once
-    min_distances, closest_indices = _points_to_polylines_distance(remaining_trajectory, lane_polyline)
-    # Squeeze to 1D since we only have 1 lane
-    min_distances = min_distances[:, 0]
-    closest_indices = closest_indices[:, 0]
-
-    # Vectorized: Calculate lane directions for all points
-    lane_directions = _get_lane_directions_at_indices_batch(lane_polyline, closest_indices.reshape(-1, 1))[
-        :,
-        0,
-        :,
-    ]  # Shape: (N_points, 2)
-
-    # Vectorized: Calculate agent directions
-    agent_dirs = np.stack([np.cos(remaining_heading), np.sin(remaining_heading)], axis=1)
-
-    # Vectorized: Calculate alignments
-    alignments = np.sum(lane_directions * agent_dirs, axis=1)
-
-    # Find first point that violates constraints
-    distance_valid = min_distances <= LANE_WIDTH_THRESHOLD
-    alignment_valid = alignments >= ALIGNMENT_THRESHOLD
-    valid_mask = distance_valid & alignment_valid
-
-    # Find the first invalid point (if any)
-    if not np.any(valid_mask):
-        return 0.0, start_traj_idx
-
-    # Find where validity breaks (first False)
-    valid_until = np.argmax(~valid_mask) if not np.all(valid_mask) else len(valid_mask)
-    if valid_until == 0:
-        return 0.0, start_traj_idx
-
-    # Calculate scores for valid points only
-    distance_scores = 1.0 / (1.0 + min_distances[:valid_until])
-    point_scores = ALIGNMENT_WEIGHT * alignments[:valid_until] + DISTANCE_WEIGHT * distance_scores
-
-    # Calculate average score
-    avg_score = np.mean(point_scores)
-    next_traj_idx = start_traj_idx + valid_until
-
-    return float(avg_score), next_traj_idx
 
 
 def _points_to_polylines_distance(
