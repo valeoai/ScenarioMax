@@ -18,6 +18,7 @@ def convert_dynamic_agents(
     length: int,
     min_route_valid_points: int = 0,
     route_check_timestep: int = 0,
+    max_routes: int = 10,
 ) -> list[dict]:
     """
     Convert dynamic agents from unified format to Puffer format.
@@ -29,6 +30,7 @@ def convert_dynamic_agents(
         ego_id: ID of ego vehicle
         min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
         route_check_timestep: Timestep at which agent must be valid for route computation (default: 0)
+        max_routes: Number of route paths to generate per agent (default: 10)
 
     Returns:
         List of dynamic agent dictionaries in Puffer format
@@ -80,6 +82,7 @@ def convert_dynamic_agents(
                 lane_data,
                 agent_id,
                 min_route_valid_points,
+                max_routes,
             )
         else:
             agent_routes = []
@@ -131,6 +134,7 @@ def _compute_routes(
     lane_data: tuple,
     agent_id: int | str,
     min_route_valid_points: int = 0,
+    max_routes: int = 10,
 ) -> list:
     """
     Compute routes an agent follows based on ground truth trajectory.
@@ -148,6 +152,7 @@ def _compute_routes(
         lane_data: Precomputed lane data (lane_ids, lane_polylines, lane_metadata)
         agent_id: Agent identifier for debugging
         min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
+        max_routes: Number of route paths to generate per agent (default: 10)
 
     Returns:
         List of route paths, where each path is a list of lane IDs
@@ -162,6 +167,7 @@ def _compute_routes(
         lane_data=lane_data,
         agent_id=agent_id,
         min_route_valid_points=min_route_valid_points,
+        max_routes=max_routes,
     )
 
     # Return list of route paths

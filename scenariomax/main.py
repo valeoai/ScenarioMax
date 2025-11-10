@@ -181,7 +181,8 @@ def handle_format_command(cfg: DictConfig):
 
     # Get format-specific configs
     target_format = cfg.formatting.target_format
-    format_config = OmegaConf.to_container(cfg.formatting.get(target_format, {}), resolve=True)
+    format_config_omegaconf = cfg.formatting.get(target_format, None)
+    format_config = OmegaConf.to_container(format_config_omegaconf, resolve=True) if format_config_omegaconf else {}
 
     stats = pipeline.format_unified_to_target(
         input_path=input_path,
@@ -236,7 +237,8 @@ def handle_pipeline_command(cfg: DictConfig):
 
     # Get format-specific configs
     target_format = cfg.formatting.target_format
-    format_config = OmegaConf.to_container(cfg.formatting.get(target_format, {}), resolve=True)
+    format_config_omegaconf = cfg.formatting.get(target_format, None)
+    format_config = OmegaConf.to_container(format_config_omegaconf, resolve=True) if format_config_omegaconf else {}
 
     stats = pipeline.run_all_pipeline(
         datasets=datasets,

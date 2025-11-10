@@ -118,6 +118,7 @@ formatting:
   pufferdrive:
     min_route_valid_points: 0          # Min valid trajectory points for route computation (0 = no filtering)
     route_check_timestep: 0            # Timestep where agent must be valid for route computation
+    max_routes: 10                     # Number of route paths to generate per agent
 
 
 # ═══════════════════════════════════════════════════════════════════════════

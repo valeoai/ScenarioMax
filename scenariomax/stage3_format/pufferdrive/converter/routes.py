@@ -64,6 +64,7 @@ def compute_agent_route(
     lane_data: tuple,
     agent_id: int | str = None,
     min_route_valid_points: int = 0,
+    max_routes: int = 10,
 ) -> list[list[int]]:
     """
     Compute routes (lists of lane IDs) for an agent based on ground truth trajectory.
@@ -85,6 +86,7 @@ def compute_agent_route(
                    Must be provided - use extract_lane_centers() to generate.
         agent_id: Optional agent identifier for debugging logs
         min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
+        max_routes: Number of route paths to generate per agent (default: 10)
 
     Returns:
         List of routes, where each route is a list of lane center IDs
@@ -138,7 +140,7 @@ def compute_agent_route(
     metadata = _compute_gt_metadata(graph, root_lane, valid_trajectory, valid_heading, lane_data)
 
     # Step 4: Extract top N paths using GT coverage metric
-    routes = extract_top_n_paths(graph, root_lane, metadata, n=MAX_ROUTES)
+    routes = extract_top_n_paths(graph, root_lane, metadata, n=max_routes)
 
     return routes
 
@@ -420,7 +422,9 @@ def _is_agent_on_lanes(trajectory: np.ndarray, lane_polylines: np.ndarray) -> bo
 
 def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tuple) -> int | None:
     """
-    Find the current lane where the agent is located using the first N trajectory points.
+    Find the current lane where the agent is located using strategic sample points.
+
+    Uses 1st, 3rd, 5th, middle, and last valid points for better direction estimation.
 
     Args:
         trajectory: Valid trajectory points (M, 2/3)
@@ -435,10 +439,20 @@ def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tupl
     # Extract 2D positions
     trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
 
-    # Use only the first N points to determine current lane
-    num_points_for_current_lane = min(ROOT_LANE_POINTS, len(trajectory_2d))
-    first_points = trajectory_2d[:num_points_for_current_lane]
-    first_headings = heading[:num_points_for_current_lane]
+    # Use strategic sample points: 1st, 3rd, 5th, middle, last
+    traj_len = len(trajectory_2d)
+    sample_indices = []
+
+    # Add indices if they exist and are unique
+    for idx in [0, 2, 4, traj_len // 2, -1]:
+        # Normalize negative indices
+        actual_idx = idx if idx >= 0 else traj_len + idx
+        if 0 <= actual_idx < traj_len and actual_idx not in sample_indices:
+            sample_indices.append(actual_idx)
+
+    # Extract sample points and headings
+    first_points = trajectory_2d[sample_indices]
+    first_headings = heading[sample_indices]
 
     # Vectorized: Calculate distances and directions for all points at once
     # Shape: (num_points, num_lanes)
