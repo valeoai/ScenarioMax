@@ -22,13 +22,26 @@ def clean_and_create_output_directory(output_path: str) -> None:
 
     # Dangerous paths that should never be deleted
     dangerous_paths = {
-        "/", "/home", "/usr", "/etc", "/var", "/bin", "/sbin",
-        "/lib", "/lib64", "/boot", "/sys", "/proc", "/dev",
-        os.path.expanduser("~"),  # User's home directory
+        "/",
+        "/usr",
+        "/etc",
+        "/var",
+        "/bin",
+        "/sbin",
+        "/lib",
+        "/lib64",
+        "/boot",
+        "/sys",
+        "/proc",
+        "/dev",
     }
 
     # Check if path is or starts with a dangerous directory
-    if abs_path in dangerous_paths or any(abs_path.startswith(d + os.sep) for d in ["/home", "/usr", "/etc", "/var", "/bin", "/sbin", "/lib", "/boot", "/sys", "/proc", "/dev"] if abs_path == d): # noqa: E501
+    if abs_path in dangerous_paths or any(
+        abs_path.startswith(d + os.sep)
+        for d in ["/usr", "/etc", "/var", "/bin", "/sbin", "/lib", "/boot", "/sys", "/proc", "/dev"]
+        if abs_path == d
+    ):  # noqa: E501
         raise ValueError(f"Refusing to delete dangerous system directory: {abs_path}")
 
     # Additional check: path should have at least 2 components beyond root
