@@ -28,7 +28,7 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, length: int) ->
         element_type = element_data.get("type", types.TRAFFIC_LIGHT_UNKNOWN)
         position = element_data.get("position", np.zeros(3))
         states = element_data.get("states", [types.TRAFFIC_LIGHT_UNKNOWN] * length)
-        controlled_lane = element_data.get("lane", None)
+        controlled_lane = element_data.get("controlled_lane", None)
 
         # Convert traffic light type to int
         element_type_int = _convert_traffic_light_type_to_int(element_type)

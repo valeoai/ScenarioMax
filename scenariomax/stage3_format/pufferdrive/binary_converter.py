@@ -27,7 +27,7 @@ For each DynamicAgent:
         - width[trajectory_length] (float32[])
         - height[trajectory_length] (float32[])
         - log_valid[trajectory_length] (int32[])
-    - num_route_ints (int32) - total number of route integers
+    - routes_length (int32) - total number of route integers
     - routes (int32[]) - flattened: [id1, id2, ...] # Only first route for now
     - goal_position_x, y, z (float32, float32, float32)
     - mark_as_expert (int32) - 1 if no routes (expert/uncontrollable), 0 if routes exist (controllable)

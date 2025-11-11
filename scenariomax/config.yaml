@@ -139,7 +139,7 @@ visualization:
 # ═══════════════════════════════════════════════════════════════════════════
 execution:
   num_workers: 8                       # Number of parallel workers
-  batch_size: 10                       # Files per worker batch
+  batch_size: 1                        # Files per worker batch
                                        # Higher = better DB reuse (nuPlan)
                                        # Lower = better load balancing (Waymo)
                                        # Recommended: 5-10 for Waymo, 20-50 for nuPlan
