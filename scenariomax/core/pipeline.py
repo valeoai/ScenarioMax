@@ -337,7 +337,7 @@ def process_unified_scenarios(
 
     # Aggregate statistics
     successes = sum(r["successes"] for r in results)
-    filtered = sum(r["filtedred"] for r in results)
+    filtered = sum(r["filtered"] for r in results)
     failures = sum(r["failures"] for r in results)
 
     elapsed_time = time.time() - start_time
@@ -442,7 +442,7 @@ def format_unified_to_target(
 
     # Aggregate statistics
     successes = sum(r["successes"] for r in results)
-    filtered = sum(r["filtedred"] for r in results)
+    filtered = sum(r["filtered"] for r in results)
     failures = sum(r["failures"] for r in results)
 
     # Postprocess if needed (merge workers, shuffle, shard)
