@@ -137,14 +137,6 @@ class InvalidAgentTypeError(ValidationError):
 # TFExample-specific Errors (maintain compatibility)
 # ═══════════════════════════════════════════════════════
 
-
-class OverpassException(ValidationError):
-    """Exception raised when an overpass is detected in the input data."""
-
-    def __init__(self, scenario_id: str = None, message: str = "Overpass detected in the roadgraph. Skip scenario."):
-        super().__init__(message, {"scenario_id": scenario_id})
-
-
 class NotEnoughValidObjectsException(ValidationError):
     """Exception raised when there are not enough valid objects in the input data."""
 
