@@ -2,12 +2,10 @@ import warnings
 from typing import Any
 
 import numpy as np
-from scipy.spatial import KDTree
 
 from scenariomax import logger_utils
 from scenariomax.stage3_format.waymax.constants import DEFAULT_NUM_ROADMAPS, DIST_INTERPOLATION
 from scenariomax.stage3_format.waymax.converter.datatypes import RoadGraphSamples
-from scenariomax.stage3_format.waymax.exceptions import OverpassException
 
 
 logger = logger_utils.get_logger(__name__)
@@ -151,9 +149,6 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
 
     roadgraph_samples.valid[:num_points] = 1
 
-    if _detect_overpass(roadgraph_samples.xyz[:num_points], roadgraph_samples.type[:num_points]):
-        raise OverpassException()
-
     return roadgraph_samples, num_points, cropped
 
 
@@ -257,44 +252,6 @@ def _compute_dir_points(points: np.ndarray) -> np.ndarray:
     dir_points = np.vstack([dir_points, dir_points[-1]])
 
     return dir_points
-
-
-def _detect_overpass(xyz: np.ndarray, type: np.ndarray) -> bool:
-    """
-    Detect if the points form an overpass using KD-tree for efficient neighbor search.
-
-    Args:
-        xyz: A NumPy array of points, where each point is a 3D coordinate (x, y, z)
-        type: A NumPy array of road types
-
-    Returns:
-        Boolean indicating if the points form an overpass
-    """
-    # Get road edge points
-    road_edge_points = xyz[type == 15]
-
-    # If not enough points, return False
-    if len(road_edge_points) < 2:
-        return False
-
-    # Build KD-tree on XY coordinates for efficient nearest neighbor search
-    tree = KDTree(road_edge_points[:, :2])
-
-    # For each point, find all neighbors within 0.8 distance in XY plane
-    for i, point in enumerate(road_edge_points):
-        # Get indices of neighbors (excluding the point itself)
-        neighbors = tree.query_ball_point(point[:2], 0.8)
-        neighbors = [idx for idx in neighbors if idx > i]  # Only check each pair once
-
-        if not neighbors:
-            continue
-
-        # Check Z differences
-        z_differences = np.abs(point[2] - road_edge_points[neighbors, 2])
-        if np.any(z_differences > 4.0):
-            return True
-
-    return False
 
 
 def _add_interpolated_roadgraph_samples(points: np.ndarray, target_distance: float = DIST_INTERPOLATION) -> np.ndarray:

@@ -218,7 +218,9 @@ def extract_dynamic_map_elements(waymo_scenario: Any) -> dict[str, dict]:
             state = waymo_types.get_traffic_light_state(traffic_light_states.state)
             dynamic_map_elements[traffic_light_id]["states"][i] = state
 
-    assert i == len(waymo_scenario.timestamps_seconds) - 1, "Mismatch in number of time steps"
+    # Validate timestep consistency (only if we processed any traffic lights)
+    if waymo_scenario.dynamic_map_states:
+        assert i == len(waymo_scenario.timestamps_seconds) - 1, "Mismatch in number of time steps"
 
     return dynamic_map_elements
 

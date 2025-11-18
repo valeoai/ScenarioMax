@@ -35,30 +35,33 @@ def convert_dynamic_agents(
     Returns:
         List of dynamic agent dictionaries in Puffer format
     """
+    if dynamic_map_elements is None:
+        dynamic_map_elements = {}
+
     puffer_agents = []
 
     # Extract lane centers once for all agents (optimization)
     lane_data = routes.extract_lane_centers(road_map_elements)
 
     for idx, (agent_id, agent_data) in enumerate(dynamic_agents.items()):
-        states = agent_data.get("states", {})
+        states = agent_data["states"]
 
         # Get position data (x, y, z)
-        position = states.get("position", np.zeros((length, 3)))
+        position = states["position"]
         if position.shape[1] == 2:
             # Add z=0 if only x,y provided
             position = np.column_stack([position, np.zeros(len(position))])
 
         # Get heading, velocity, dimensions
-        heading = states.get("heading", np.zeros(length))
-        velocity = states.get("velocity", np.zeros((length, 2)))
-        agent_length = states.get("length", np.zeros(length))
-        width = states.get("width", np.zeros(length))
-        height = states.get("height", np.zeros(length))
-        valid = states.get("valid", np.ones(length, dtype=bool))
+        heading = states["heading"]
+        velocity = states["velocity"]
+        agent_length = states["length"]
+        width = states["width"]
+        height = states["height"]
+        valid = states["valid"]
 
         # Convert agent type to int
-        agent_type_int = _convert_agent_type_to_int(agent_data.get("type", "TYPE_UNSET"))
+        agent_type_int = _convert_agent_type_to_int(agent_data["type"])
 
         # Routes are computed only for:
         # 1. VEHICLE type (type == 1)

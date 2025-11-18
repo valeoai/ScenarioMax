@@ -1,8 +1,5 @@
 # Legacy compatibility imports - use scenariomax.core.exceptions instead
-from scenariomax.core.exceptions import (
-    NotEnoughValidObjectsException,
-    OverpassException,
-)
+from scenariomax.core.exceptions import NotEnoughValidObjectsException
 
 
-__all__ = ["OverpassException", "NotEnoughValidObjectsException"]
+__all__ = ["NotEnoughValidObjectsException"]

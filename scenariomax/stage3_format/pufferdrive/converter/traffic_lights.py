@@ -25,13 +25,13 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, length: int) ->
     puffer_elements = []
 
     for element_id, element_data in dynamic_map_elements.items():
-        element_type = element_data.get("type", types.TRAFFIC_LIGHT_UNKNOWN)
-        position = element_data.get("position", np.zeros(3))
-        states = element_data.get("states", [types.TRAFFIC_LIGHT_UNKNOWN] * length)
-        controlled_lane = element_data.get("controlled_lane", None)
+        element_type = element_data["type"]
+        position = element_data["position"]
+        states = element_data["states"]
+        controlled_lane = element_data["controlled_lane"]
 
         # Convert traffic light type to int
-        element_type_int = _convert_traffic_light_type_to_int(element_type)
+        element_type_int = _convert_traffic_control_type_to_int(element_type)
 
         # Convert states to int array
         # States might be a list or numpy array
@@ -56,7 +56,7 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, length: int) ->
     return puffer_elements
 
 
-def _convert_traffic_light_type_to_int(traffic_light_type: str) -> int:
+def _convert_traffic_control_type_to_int(element_type: str) -> int:
     """
     Convert traffic light type string to integer.
 
@@ -68,18 +68,14 @@ def _convert_traffic_light_type_to_int(traffic_light_type: str) -> int:
     """
     # Map traffic light states to types
     type_map = {
-        types.TRAFFIC_LIGHT: 0,  # Generic traffic light
-        types.TRAFFIC_LIGHT_UNKNOWN: 0,
-        types.TRAFFIC_LIGHT_ARROW_RED: 1,
-        types.TRAFFIC_LIGHT_ARROW_YELLOW: 2,
-        types.TRAFFIC_LIGHT_ARROW_GREEN: 3,
-        types.TRAFFIC_LIGHT_RED: 4,
-        types.TRAFFIC_LIGHT_YELLOW: 5,
-        types.TRAFFIC_LIGHT_GREEN: 6,
-        types.TRAFFIC_LIGHT_FLASHING_RED: 7,
-        types.TRAFFIC_LIGHT_FLASHING_YELLOW: 8,
+        types.TRAFFIC_LIGHT: 1,
+        types.STOP_SIGN: 2,
+        types.YIELD_SIGN: 3,
+        types.TRAFFIC_CONE: 4,
+        types.TRAFFIC_BARRIER: 5,
+        types.GUARDRAIL: 6,
     }
-    return type_map.get(traffic_light_type, 0)
+    return type_map.get(element_type, 0)
 
 
 def _convert_traffic_light_state_to_int(state: str) -> int:

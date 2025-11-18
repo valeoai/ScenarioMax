@@ -74,11 +74,10 @@ def validate_config(cfg: DictConfig) -> None:
                 "  etc.",
             )
 
-    if command in ["process", "format", "viz"] and not cfg.paths.input_dir and not cfg.paths.output_dir:
-        # These commands need input path
-        raise ValueError(
-            f"Command '{command}' requires paths.input_dir or paths.output_dir to be set",
-        )
+    if command in ["process", "format", "viz"]:  # noqa: SIM102
+        # These commands require input_dir to read scenarios from
+        if not cfg.paths.input_dir:
+            raise ValueError(f"Command '{command}' requires paths.input_dir to be set")
 
     # OpenScenes requires metadata_dir
     if cfg.datasets.openscenes.path and not cfg.datasets.openscenes.metadata_dir:

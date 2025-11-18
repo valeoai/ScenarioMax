@@ -6,8 +6,6 @@ dynamic agents, road map elements, and traffic control elements.
 Output is JSON format with numpy arrays converted to lists.
 """
 
-import numpy as np
-
 from scenariomax import logger_utils
 from scenariomax.stage3_format.pufferdrive.converter import agents, roadgraph, traffic_lights
 
@@ -47,23 +45,24 @@ def convert(
     if missing_fields:
         raise ValueError(f"unified_scenario missing required fields: {missing_fields}")
 
-    scenario_id = unified_scenario.get("id", "")
+    scenario_id = unified_scenario["id"]
     if not scenario_id:
         logger.warning("Scenario has empty ID")
 
-    scenario_metadata = unified_scenario.get("metadata", {})
+    scenario_metadata = unified_scenario["metadata"]
 
     # Convert static map elements to road_map_elements
     road_map_elements = roadgraph.convert_road_map_elements(
-        unified_scenario.get("static_map_elements", {}),
+        unified_scenario["static_map_elements"],
         polyline_reduction_threshold,
     )
 
     # Convert dynamic agents
     dynamic_agents = agents.convert_dynamic_agents(
-        unified_scenario.get("dynamic_agents", {}),
-        unified_scenario.get("static_map_elements", {}),
-        scenario_metadata.get("length", 0),
+        unified_scenario["dynamic_agents"],
+        unified_scenario["static_map_elements"],
+        scenario_metadata["scenario_length"],
+        dynamic_map_elements=unified_scenario["dynamic_map_elements"],
         min_route_valid_points=min_route_valid_points,
         route_check_timestep=route_check_timestep,
         max_routes=max_routes,
@@ -71,26 +70,30 @@ def convert(
 
     # Convert dynamic map elements to traffic_control_elements
     traffic_control_elements = traffic_lights.convert_traffic_control_elements(
-        unified_scenario.get("dynamic_map_elements", {}),
-        scenario_metadata.get("length", 0),
+        unified_scenario["dynamic_map_elements"],
+        unified_scenario["static_map_elements"],
+        scenario_metadata["scenario_length"],
     )
 
     # Convert metadata
-    metadata = unified_scenario.get("metadata", {})
+    metadata = unified_scenario["metadata"]
     puffer_metadata = {
-        "dataset_name": metadata.get("dataset_name", ""),
-        "length": metadata.get("length", 0),
-        "timesteps": metadata.get("timesteps", np.array([])),
-        "ego_id": metadata.get("ego_id", ""),
+        "dataset_name": metadata["dataset_name"],
+        "scenario_length": metadata["scenario_length"],
+        "timesteps": metadata["timesteps"],
+        "sdc_index": metadata["sdc_index"],
     }
 
     # Add Waymo-specific metadata if available
-    if metadata.get("dataset_name") == "waymo":
+    if metadata["dataset_name"] == "waymo":
         objects_of_interest = metadata.get("objects_of_interest", [])
         tracks_to_predict = metadata.get("tracks_to_predict", [])
 
         puffer_metadata["objects_of_interests"] = [int(oi) for oi in objects_of_interest]
         puffer_metadata["tracks_to_predict"] = [t.get("track_index") for t in tracks_to_predict]
+    else:
+        puffer_metadata["objects_of_interests"] = []
+        puffer_metadata["tracks_to_predict"] = []
 
     puffer_scenario = {
         "scenario_id": scenario_id,
