@@ -161,7 +161,7 @@ def extract_static_map_elements(waymo_scenario: Any) -> dict[str, dict]:
 
             static_map_elements[element_id] = {
                 "type": types.STOP_SIGN,
-                "lane": [x for x in _stop_sign.lane],
+                "lanes": [x for x in _stop_sign.lane],
                 "position": np.array(
                     [_stop_sign.position.x, _stop_sign.position.y, _stop_sign.position.z],
                     dtype="float32",

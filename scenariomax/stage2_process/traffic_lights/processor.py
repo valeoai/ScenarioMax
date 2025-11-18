@@ -12,6 +12,14 @@ class ScenarioProcessor(Waymonizer, WaymonicTLSGenerator):
 
 
 def add_traffic_lights_to_scenario(unified_scenario: dict[str, Any]) -> dict[str, Any]:
+    # Validate required fields
+    if "static_map_elements" not in unified_scenario:
+        raise ValueError("Scenario missing 'static_map_elements' - cannot generate traffic lights")
+    if "metadata" not in unified_scenario or "scenario_length" not in unified_scenario["metadata"]:
+        raise ValueError("Scenario missing 'metadata.scenario_length' - cannot generate traffic lights")
+    if "dynamic_agents" not in unified_scenario:
+        raise ValueError("Scenario missing 'dynamic_agents' - cannot infer traffic light states")
+
     sp = ScenarioProcessor(unified_scenario)
 
     dynamic_map_states = sp.generate_waymonic_tls(

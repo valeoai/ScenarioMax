@@ -47,6 +47,10 @@ class UnifiedScenario(dict):
                 "right_boundaries": list[int],  # Extracted right boundaries
                 "left_neighbor": list[int],     # IDs of left neighbor lanes
                 "right_neighbor": list[int],    # IDs of right neighbor lanes
+
+                # STOP_LINE:
+                "lanes": list[int],   # IDs of connected lanes # stop line only
+                "position": np.ndarray,        # (3,) - x, y, z position # stop line only
             },
         },
 

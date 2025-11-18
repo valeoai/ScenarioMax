@@ -169,11 +169,11 @@ def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, d
 
     # First pass: collect lanes and find max polyline length
     for element_id, element_data in static_map_elements.items():
-        element_type = element_data.get("type", "")
+        element_type = element_data["type"]
 
         # Only process lane centers
         if element_type == types.LANE_SURFACE_STREET or element_type == types.LANE_FREEWAY:
-            polyline = element_data.get("polyline")
+            polyline = element_data["polyline"]
 
             if len(polyline) > 0:
                 # Convert to 2D if needed
@@ -184,8 +184,8 @@ def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, d
                 max_points = max(max_points, len(polyline_2d))
 
                 lane_metadata[element_id] = {
-                    "entry_lanes": element_data.get("entry_lanes", []),
-                    "exit_lanes": element_data.get("exit_lanes", []),
+                    "entry_lanes": element_data["entry_lanes"],
+                    "exit_lanes": element_data["exit_lanes"],
                 }
 
     if not lane_ids:
@@ -386,7 +386,7 @@ def _build_graph(
         if lane_id not in static_map_elements:
             continue
 
-        exit_lanes = static_map_elements[lane_id].get("exit_lanes", [])
+        exit_lanes = static_map_elements[lane_id]["exit_lanes"]
         graph[lane_id] = []
 
         for exit_id in exit_lanes:

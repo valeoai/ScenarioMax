@@ -102,7 +102,7 @@ class Waymonizer:
         for _id, feature in scenario["static_map_elements"].items():
             _id = int(_id)
             if feature["type"] == types.STOP_SIGN:
-                for id in feature["lane"]:
+                for id in feature["lanes"]:
                     if id in self.lanecenters:
                         self.lanecenters[id].needs_stop = True
                 self.stop_signs.add(Pt(feature["position"][0], feature["position"][1]))

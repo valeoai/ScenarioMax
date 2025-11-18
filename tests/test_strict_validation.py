@@ -388,7 +388,7 @@ class TestStrictValidator:
             "type": types.TRAFFIC_LIGHT,
             "position": np.array([5.0, 0.0, 3.0]),
             "states": [types.TRAFFIC_LIGHT_RED] * 10,
-            "controlled_lanes": ["lane_1"],
+            "controlled_lane": "lane_1",  # Schema uses singular for dynamic elements
         }
 
         is_valid, errors, warnings = strict_validate(scenario)
@@ -427,7 +427,7 @@ class TestStrictValidator:
             "type": types.TRAFFIC_LIGHT,
             "position": np.array([5.0, 0.0, 3.0]),
             "states": states,
-            "lane": "lane_1",
+            "controlled_lane": "lane_1",
         }
 
         is_valid, errors, warnings = strict_validate(scenario, validation_level=2)
@@ -449,7 +449,7 @@ class TestStrictValidator:
             "type": types.TRAFFIC_LIGHT,
             "position": np.array([5.0, 0.0, 3.0]),
             "states": [types.TRAFFIC_LIGHT_RED] * 5,  # Wrong length (expected 10)
-            "lane": "lane_1",
+            "controlled_lane": "lane_1",
         }
 
         is_valid, errors, warnings = strict_validate(scenario)
