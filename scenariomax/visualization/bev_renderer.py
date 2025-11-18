@@ -254,7 +254,7 @@ def _render_dynamic_agents(
 ) -> None:
     """Render dynamic agents (vehicles, pedestrians, cyclists)."""
     dynamic_agents = scenario.get("dynamic_agents", {})
-    ego_id = scenario.get("metadata", {}).get("ego_id")
+    sdc_index = scenario.get("metadata", {}).get("sdc_index")
 
     for agent_id, agent in dynamic_agents.items():
         agent_type = agent.get("type", 1)
@@ -270,7 +270,7 @@ def _render_dynamic_agents(
         if timestep >= len(positions) or not valids[timestep]:
             continue
 
-        is_ego = agent_id == ego_id
+        is_ego = agent_id == sdc_index
         color = COLORS["ego"] if is_ego else COLORS.get(AGENT_TYPE_NAMES.get(agent_type, "vehicle"), "#000000")
 
         # Current position and heading
@@ -441,7 +441,7 @@ def render_scenario_video(
     metadata = scenario.get("metadata", {})
     scenario_id = metadata.get("scenario_id", "unknown")
     dataset_name = metadata.get("dataset_name", "unknown")
-    scenario_length = metadata.get("length", 0)
+    scenario_length = metadata.get("scenario_length", 0)
 
     if scenario_length == 0:
         logger.warning(f"Scenario {scenario_id} has no timesteps, skipping video")
@@ -569,15 +569,15 @@ def _get_ego_position(scenario: dict[str, Any], timestep: int) -> tuple | None:
         (x, y) position tuple, or None if ego not found
     """
     metadata = scenario.get("metadata", {})
-    ego_id = metadata.get("ego_id")
+    sdc_index = metadata.get("sdc_index")
 
-    if ego_id is None:
+    if sdc_index is None:
         return None
 
     dynamic_agents = scenario.get("dynamic_agents", {})
 
-    if ego_id in dynamic_agents:
-        agent = dynamic_agents[ego_id]
+    if sdc_index in dynamic_agents:
+        agent = dynamic_agents[sdc_index]
         states = agent.get("states", {})
         positions = np.array(states.get("position", []))
         valid = np.array(states.get("valid", []))

@@ -59,7 +59,7 @@ def postprocess_gpudrive(
 
             if scenario_json is not None:
                 # Save each scenario as individual JSON file
-                scenario_id = unified_scenario.get("id", f"scenario_{processed_count}")
+                scenario_id = unified_scenario["scenario_id"]
                 json_file_path = os.path.join(output_path, f"{scenario_id}.json")
 
                 with open(json_file_path, "w") as f:

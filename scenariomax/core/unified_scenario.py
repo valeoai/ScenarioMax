@@ -62,9 +62,9 @@ class UnifiedScenario(dict):
         "metadata": {                 # Additional scenario information
             "dataset_name": str,          # Source dataset name
             "scenario_id": str,           # Original scenario identifier
-            "length": int,                # Number of timesteps
+            "scenario_length": int,       # Number of timesteps
             "timesteps": np.ndarray,      # Timestamp array (length,)
-            "ego_id": int,                # Self-driving car ID
+            "sdc_index": int,             # Self-driving car index
             # Waymo-specific
             "current_frame_index": int,       # Current frame index
             "sdc_track_index": int,           # SDC track index
@@ -96,8 +96,8 @@ class UnifiedScenario(dict):
         self["dynamic_map_elements"] = {}
         self["metadata"] = {
             "dataset_name": dataset_name,
-            "length": 0,
-            "ego_id": "",
+            "scenario_length": 0,
+            "sdc_index": "",
             "timesteps": [],
         }
 
@@ -121,13 +121,13 @@ class UnifiedScenario(dict):
                 raise ValueError(f"Missing required field: {field}")
 
         # Check required metadata fields
-        metadata_fields = ["dataset_name", "length", "timesteps"]
+        metadata_fields = ["dataset_name", "scenario_length", "timesteps"]
         for field in metadata_fields:
             if field not in self["metadata"]:
                 raise ValueError(f"Missing required metadata field: {field}")
 
         # Check timesteps consistency
-        length = self["metadata"]["length"]
+        length = self["metadata"]["scenario_length"]
         timesteps = self["metadata"]["timesteps"]
         if len(timesteps) != length:
             raise ValueError(f"Timesteps array length ({len(timesteps)}) doesn't match scenario length ({length})")
@@ -156,7 +156,7 @@ class UnifiedScenario(dict):
             "num_dynamic_agents": len(self["dynamic_agents"]),
             "num_static_map_elements": len(self["static_map_elements"]),
             "num_dynamic_map_elements": len(self["dynamic_map_elements"]),
-            "duration_steps": self["metadata"].get("length", 0),
+            "duration_steps": self["metadata"].get("scenario_length", 0),
             "dynamic_agent_types": {},
             "static_map_element_types": {},
         }

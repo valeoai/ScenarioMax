@@ -18,9 +18,9 @@ class TestStrictValidator:
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Add basic metadata
-        scenario["metadata"]["length"] = 10
+        scenario["metadata"]["scenario_length"] = 10
         scenario["metadata"]["timesteps"] = np.linspace(0, 0.9, 10)
-        scenario["metadata"]["ego_id"] = "ego"
+        scenario["metadata"]["sdc_index"] = 0
 
         return scenario
 
@@ -370,6 +370,9 @@ class TestStrictValidator:
                 "position": np.zeros((num_steps, 3)),
                 "heading": np.zeros(num_steps),
                 "velocity": np.zeros((num_steps, 2)),
+                "length": np.ones(num_steps) * 4.5,
+                "width": np.ones(num_steps) * 2.0,
+                "height": np.ones(num_steps) * 1.5,
                 "valid": np.ones(num_steps, dtype=bool),
             },
         }
@@ -385,7 +388,7 @@ class TestStrictValidator:
             "type": types.TRAFFIC_LIGHT,
             "position": np.array([5.0, 0.0, 3.0]),
             "states": [types.TRAFFIC_LIGHT_RED] * 10,
-            "lane": "lane_1",
+            "controlled_lanes": ["lane_1"],
         }
 
         is_valid, errors, warnings = strict_validate(scenario)
@@ -400,7 +403,7 @@ class TestStrictValidator:
             "type": types.TRAFFIC_LIGHT,
             "position": np.array([5.0, 0.0, 3.0]),
             "states": [types.TRAFFIC_LIGHT_RED] * 10,
-            "lane": "nonexistent_lane",
+            "controlled_lane": "nonexistent_lane",
         }
 
         is_valid, errors, warnings = strict_validate(scenario)
@@ -461,12 +464,12 @@ class TestStrictValidator:
     def test_nonexistent_ego_agent(self):
         """Test that non-existent ego agent is caught."""
         scenario = self.create_basic_scenario()
-        scenario["metadata"]["ego_id"] = "nonexistent_ego"
+        scenario["metadata"]["sdc_index"] = 999  # Index out of range
 
         is_valid, errors, warnings = strict_validate(scenario)
 
         assert not is_valid
-        assert any("ego agent" in err.lower() and "not found" in err.lower() for err in errors)
+        assert any("ego agent" in err.lower() and "not in" in err.lower() for err in errors)
 
     def test_nonexistent_object_of_interest(self):
         """Test that non-existent object of interest is caught."""

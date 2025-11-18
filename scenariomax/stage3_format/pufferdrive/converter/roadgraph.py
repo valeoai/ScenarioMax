@@ -90,7 +90,7 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
     puffer_elements = []
 
     for element_id, element_data in static_map_elements.items():
-        element_type = element_data.get("type")
+        element_type = element_data["type"]
 
         if element_type in ["DRIVEWAY", "SPEED_BUMP", "STOP_SIGN", "CROSSWALK"]:
             # Skip driveways as they are not supported in Puffer format
@@ -100,7 +100,7 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
             logger.warning(f"Skipping map element with unset type: {element_id}")
             continue
 
-        polyline = element_data.get("polyline", np.zeros((0, 3)))
+        polyline = element_data["polyline"]
 
         # Ensure polyline has 3D coordinates
         if polyline.shape[1] == 2:
@@ -114,9 +114,6 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
             # Convert back to numpy array
             polyline = np.array([[p["x"], p["y"], p["z"]] for p in simplified_geometry])
 
-        # Calculate direction vectors
-        dir_xyz = _calculate_direction_vectors(polyline)
-
         # Convert element type to int
         element_type_int = _convert_map_element_type_to_int(element_type)
 
@@ -124,24 +121,21 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
             "id": element_id,
             "type": element_type_int,
             "xyz": polyline,
-            "dir_xyz": dir_xyz,
         }
 
         # Add lane-specific attributes if this is a lane
         if types.is_lane(element_type):
             # Convert speed limit from km/h to m/s
-            speed_limit_kmh = element_data.get("speed_limit_kmh", 0.0)
+            speed_limit_kmh = element_data["speed_limit_kmh"]
             puffer_element["speed_limit"] = speed_limit_kmh / 3.6  # m/s
 
             # Convert lane connectivity (entry/exit/neighbors)
-            entry_lanes = element_data.get("entry_lanes", [])
-            exit_lanes = element_data.get("exit_lanes", [])
-            left_neighbor = element_data.get("left_neighbor", [])
-            right_neighbor = element_data.get("right_neighbor", [])
+            left_neighbor = element_data["left_neighbor"]
+            right_neighbor = element_data["right_neighbor"]
 
             # Use int IDs directly
-            puffer_element["entry"] = list(entry_lanes) if entry_lanes else []
-            puffer_element["exit"] = list(exit_lanes) if exit_lanes else []
+            puffer_element["entry_lanes"] = element_data["entry_lanes"]
+            puffer_element["exit_lanes"] = element_data["exit_lanes"]
 
             # Combine left and right neighbors
             neighbors = []
@@ -154,33 +148,6 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
         puffer_elements.append(puffer_element)
 
     return puffer_elements
-
-
-def _calculate_direction_vectors(polyline: np.ndarray) -> np.ndarray:
-    """
-    Calculate direction vectors for a polyline.
-
-    Args:
-        polyline: (N, 3) array of 3D points
-
-    Returns:
-        (N, 3) array of direction vectors (normalized)
-    """
-    if len(polyline) < 2:
-        return np.zeros_like(polyline)
-
-    # Calculate differences between consecutive points
-    directions = np.diff(polyline, axis=0)
-
-    # Normalize directions
-    norms = np.linalg.norm(directions, axis=1, keepdims=True)
-    norms = np.where(norms > 0, norms, 1.0)  # Avoid division by zero
-    directions = directions / norms
-
-    # Duplicate last direction for last point
-    directions = np.vstack([directions, directions[-1]])
-
-    return directions
 
 
 def _convert_map_element_type_to_int(element_type: str) -> int:

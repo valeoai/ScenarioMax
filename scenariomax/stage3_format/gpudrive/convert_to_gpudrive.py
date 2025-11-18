@@ -68,11 +68,11 @@ def convert(unified_scenario):
         }
     else:
         metadata = {
-            "dataset_name": metadata.get("dataset_name", ""),
-            "scenario_id": metadata.get("scenario_id", scenario_id),
-            "length": metadata.get("length", 0),
-            "timesteps": metadata.get("timesteps", []),
-            "ego_id": metadata.get("ego_id", ""),
+            "dataset_name": metadata["dataset_name"],
+            "scenario_id": metadata["scenario_id"],
+            "scenario_length": metadata["scenario_length"],
+            "timesteps": metadata["timesteps"],
+            "sdc_index": metadata["sdc_index"],
         }
 
     scenario_dict = {

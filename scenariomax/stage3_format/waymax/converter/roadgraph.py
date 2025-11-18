@@ -115,7 +115,7 @@ def get_scenario_map_points(scenario: dict[str, Any], debug: bool = False) -> tu
             break
 
         dir_points_to_add = _compute_dir_points(points_to_add)
-        speed_limit = map_element.get("speed_limit_kmh", -1)
+        speed_limit = map_element.get("speed_limit_kmh", 0.0)
 
         if debug:
             _plot_debug_info(points_to_add, dir_points_to_add, speed_limit, points_type_to_add)

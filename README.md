@@ -401,7 +401,7 @@ UnifiedScenario (dict subclass):
       dataset_name,                              # Source dataset
       length,                                    # Duration (seconds)
       timesteps,                                 # Number of timesteps
-      ego_id...                                  # Ego vehicle ID
+      sdc_index...                                  # Ego vehicle ID
     }
 ```
 

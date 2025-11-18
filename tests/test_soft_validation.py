@@ -54,8 +54,8 @@ class TestSoftValidator:
         }
 
         # Update metadata
-        scenario["metadata"]["ego_id"] = 1
-        scenario["metadata"]["length"] = 2
+        scenario["metadata"]["sdc_index"] = 1
+        scenario["metadata"]["scenario_length"] = 2
         scenario["metadata"]["timesteps"] = np.array([0.0, 0.1])
 
         is_valid, errors, warnings = soft_validate(scenario)
@@ -129,12 +129,12 @@ class TestSoftValidator:
         """Test that wrong datatypes are caught."""
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
-        scenario["metadata"]["length"] = "not_an_int"  # Should be int
+        scenario["metadata"]["scenario_length"] = "not_an_int"  # Should be int
 
         is_valid, errors, warnings = soft_validate(scenario)
 
         assert not is_valid
-        assert any("length" in err and "must be an int" in err for err in errors)
+        assert any("scenario_length" in err and "must be an int" in err for err in errors)
 
     def test_missing_metadata_keys(self):
         """Test that missing metadata keys are caught."""
@@ -145,21 +145,21 @@ class TestSoftValidator:
             "dynamic_map_elements": {},
             "metadata": {
                 "dataset_name": "test",
-                # Missing: length, timesteps, ego_id
+                # Missing: length, timesteps, sdc_index
             },
         }
 
         is_valid, errors, warnings = soft_validate(scenario)
 
         assert not is_valid
-        assert any("length" in err for err in errors)
+        assert any("scenario_length" in err for err in errors)
         assert any("timesteps" in err for err in errors)
-        assert any("ego_id" in err for err in errors)
+        assert any("sdc_index" in err for err in errors)
 
     def test_strict_keys_mode(self):
         """Test that strict_keys mode catches unexpected keys."""
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
-        scenario["metadata"]["ego_id"] = 1
+        scenario["metadata"]["sdc_index"] = 1
 
         scenario["unexpected_key"] = "some_value"
 
@@ -179,8 +179,8 @@ class TestSoftValidator:
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
 
         # Valid scenario
-        scenario["metadata"]["ego_id"] = 1
-        scenario["metadata"]["length"] = 0
+        scenario["metadata"]["sdc_index"] = 1
+        scenario["metadata"]["scenario_length"] = 0
         scenario["metadata"]["timesteps"] = np.array([])
 
         is_valid, errors, warnings = soft_validate(scenario, strict_keys=False)
@@ -253,7 +253,7 @@ class TestSoftValidator:
     def test_map_element_with_polygon(self):
         """Test that map elements can have polygon instead of polyline."""
         scenario = UnifiedScenario(scenario_id="test_001", dataset_name="test_dataset")
-        scenario["metadata"]["ego_id"] = 1
+        scenario["metadata"]["sdc_index"] = 1
 
         # Map element with polygon (e.g., crosswalk)
         scenario["static_map_elements"][300] = {

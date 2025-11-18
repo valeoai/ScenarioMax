@@ -22,7 +22,7 @@ def convert_waymo_scenario(data: Any) -> UnifiedScenario:
     scenario = UnifiedScenario(scenario_id=scenario_id, dataset_name="waymo")
 
     # Convert data
-    dynamic_agents, ego_id = extract_dynamic_agents(waymo_scenario)
+    dynamic_agents = extract_dynamic_agents(waymo_scenario)
     static_map_elements = extract_static_map_elements(waymo_scenario)
     dynamic_map_elements = extract_dynamic_map_elements(waymo_scenario)
 
@@ -36,8 +36,8 @@ def convert_waymo_scenario(data: Any) -> UnifiedScenario:
         {
             # General metadata
             "scenario_id": scenario_id,
-            "length": len(waymo_scenario.timestamps_seconds),
-            "ego_id": ego_id,
+            "scenario_length": len(waymo_scenario.timestamps_seconds),
+            "sdc_index": waymo_scenario.sdc_track_index,
             "timesteps": np.array(waymo_scenario.timestamps_seconds, dtype=np.float32),
             # Waymo-specific metadata
             "objects_of_interest": [int(obj) for obj in waymo_scenario.objects_of_interest],
@@ -103,9 +103,7 @@ def extract_dynamic_agents(waymo_scenario: Any) -> dict[str, dict]:
             },
         }
 
-    ego_id = waymo_scenario.tracks[waymo_scenario.sdc_track_index].id
-
-    return dynamic_agents, ego_id
+    return dynamic_agents
 
 
 def extract_static_map_elements(waymo_scenario: Any) -> dict[str, dict]:

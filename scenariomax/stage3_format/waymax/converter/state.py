@@ -16,7 +16,13 @@ def get_distance(sdc_track, other_track):
 
 def get_state(scenario, multiagent, roadgraph_samples, debug):
     state = datatypes.State()
-    sdc_id = scenario.metadata["ego_id"]
+    sdc_index = scenario.metadata["sdc_index"]
+
+    # Get SDC ID from index (sdc_index is position in agent list, not the actual ID)
+    agent_ids = list(scenario.dynamic_agents.keys())
+    if sdc_index >= len(agent_ids):
+        raise ValueError(f"sdc_index {sdc_index} out of range (only {len(agent_ids)} agents)")
+    sdc_id = agent_ids[sdc_index]
 
     swing_index = constants.NUM_TS_PAST
     scenario_length = constants.NUM_TS_ALL
@@ -32,6 +38,8 @@ def get_state(scenario, multiagent, roadgraph_samples, debug):
         ),
     )
 
+    # After reordering, SDC is always at position 0
+    sdc_index = 0
     state.is_sdc[0] = 1
 
     if debug:

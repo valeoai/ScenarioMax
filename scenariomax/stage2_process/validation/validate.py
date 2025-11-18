@@ -25,7 +25,7 @@ class ValidationError(Exception):
 
 # Expected keys
 _REQUIRED_TOP_LEVEL_KEYS = {"id", "dynamic_agents", "static_map_elements", "dynamic_map_elements", "metadata"}
-_REQUIRED_METADATA_KEYS = {"dataset_name", "length", "timesteps", "ego_id"}
+_REQUIRED_METADATA_KEYS = {"dataset_name", "scenario_length", "timesteps", "sdc_index"}
 _OPTIONAL_METADATA_KEYS = {
     "scenario_id",
     "current_frame_index",
@@ -114,11 +114,11 @@ def _validate_metadata(metadata: dict, errors: list, warnings: list, strict_keys
     if "dataset_name" in metadata and not isinstance(metadata["dataset_name"], str):
         errors.append(f"metadata['dataset_name'] must be a string, got {type(metadata['dataset_name']).__name__}")
 
-    if "length" in metadata and not isinstance(metadata["length"], int):
-        errors.append(f"metadata['length'] must be an int, got {type(metadata['length']).__name__}")
+    if "scenario_length" in metadata and not isinstance(metadata["scenario_length"], int):
+        errors.append(f"metadata['scenario_length'] must be an int, got {type(metadata['scenario_length']).__name__}")
 
-    if "ego_id" in metadata and not isinstance(metadata["ego_id"], int):
-        errors.append(f"metadata['ego_id'] must be an int, got {type(metadata['ego_id']).__name__}")
+    if "sdc_index" in metadata and not isinstance(metadata["sdc_index"], int):
+        errors.append(f"metadata['sdc_index'] must be an int, got {type(metadata['sdc_index']).__name__}")
 
     if "timesteps" in metadata and not isinstance(metadata["timesteps"], (list, np.ndarray)):
         errors.append(f"metadata['timesteps'] must be a list or ndarray, got {type(metadata['timesteps']).__name__}")
@@ -625,7 +625,7 @@ def _validate_strict_agents(
     warnings: list,
 ) -> None:
     """Validate dynamic agents with strict checks."""
-    length = metadata.get("length", 0)
+    length = metadata.get("scenario_length", 0)
     timesteps = metadata.get("timesteps", [])
     dt = _compute_timestep(timesteps)
 
@@ -854,7 +854,7 @@ def _validate_strict_traffic_lights(
     warnings: list,
 ) -> None:
     """Validate traffic lights with strict checks."""
-    length = metadata.get("length", 0)
+    length = metadata.get("scenario_length", 0)
     all_lane_ids = {eid for eid, elem in static_map_elements.items() if types.is_lane(elem.get("type", ""))}
 
     for element_id, element in dynamic_map_elements.items():
@@ -931,16 +931,16 @@ def _validate_scenario_coherence(scenario: dict, validation_level: int, errors: 
     metadata = scenario.get("metadata", {})
     dynamic_agents = scenario.get("dynamic_agents", {})
 
-    ego_id = metadata.get("ego_id", "")
-    if ego_id:
-        if ego_id not in dynamic_agents:
-            errors.append(f"Ego agent '{ego_id}' not found in dynamic_agents")
+    sdc_index = metadata.get("sdc_index", "")
+    if sdc_index:
+        if sdc_index not in range(len(dynamic_agents)):
+            errors.append(f"Ego agent '{sdc_index}' not in dynamic_agents")
         else:
-            ego_agent = dynamic_agents[ego_id]
+            sdc_agent = list(dynamic_agents.values())[sdc_index]
             required_states = ["position", "heading", "velocity", "valid"]
-            missing_states = [s for s in required_states if s not in ego_agent.get("states", {})]
+            missing_states = [s for s in required_states if s not in sdc_agent.get("states", {})]
             if missing_states:
-                warnings.append(f"Ego agent '{ego_id}' missing critical states: {missing_states}")
+                warnings.append(f"Ego agent '{sdc_agent}' missing critical states: {missing_states}")
 
     if "objects_of_interest" in metadata:
         for obj_id in metadata["objects_of_interest"]:

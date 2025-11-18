@@ -346,7 +346,7 @@ def process_unified_scenarios(
 
     return {
         "stage": "process_unified",
-        "scenarios_processed": successes,
+        "total_scenarios": successes,
         "errors": failures,
         "filtered": filtered,
         "elapsed_time": elapsed_time,

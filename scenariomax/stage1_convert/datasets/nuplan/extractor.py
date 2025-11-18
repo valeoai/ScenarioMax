@@ -60,8 +60,8 @@ def convert_nuplan_scenario(nuplan_scenario: NuPlanScenario) -> UnifiedScenario:
         {
             # General metadata
             "scenario_id": scenario_id,
-            "length": nuplan_scenario.get_number_of_iterations(),
-            "ego_id": EGO_ID,
+            "scenario_length": nuplan_scenario.get_number_of_iterations(),
+            "sdc_index": EGO_ID,
             "timesteps": np.array(
                 [i * scenario_log_interval for i in range(nuplan_scenario.get_number_of_iterations())],
                 dtype=np.float32,
