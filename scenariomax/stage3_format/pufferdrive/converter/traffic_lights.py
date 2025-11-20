@@ -40,12 +40,20 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, static_map_elem
         states_int = [_convert_traffic_light_state_to_int(s) if isinstance(s, str) else int(s) for s in states_list]
         states_int = np.array(states_int, dtype=np.int32)
 
+        # Normalize controlled_lane to list (PufferDrive expects list)
+        if isinstance(controlled_lane, int):
+            controlled_lanes = [controlled_lane]
+        elif isinstance(controlled_lane, list):
+            controlled_lanes = controlled_lane
+        else:
+            raise TypeError(f"controlled_lane must be int or list[int], got {type(controlled_lane).__name__}")
+
         puffer_element = {
             "id": int(element_id),
             "type": element_type_int,
             "xyz": position,
             "states": states_int,
-            "controlled_lanes": [controlled_lane],
+            "controlled_lanes": controlled_lanes,
         }
 
         puffer_elements.append(puffer_element)
@@ -53,7 +61,7 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, static_map_elem
     for element_id, element_data in static_map_elements.items():
         element_type = element_data["type"]
         position = element_data["position"]
-        controlled_lane = element_data["lanes"]
+        lanes = element_data["lanes"]
 
         # Convert traffic light type to int
         element_type_int = _convert_traffic_control_type_to_int(element_type)
@@ -61,12 +69,20 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, static_map_elem
         if element_type_int == 0:
             continue
 
+        # Normalize lanes to list (PufferDrive expects list)
+        if isinstance(lanes, int):
+            controlled_lanes = [lanes]
+        elif isinstance(lanes, list):
+            controlled_lanes = lanes
+        else:
+            raise TypeError(f"lanes must be int or list[int], got {type(lanes).__name__}")
+
         puffer_element = {
             "id": int(element_id),
             "type": element_type_int,
             "xyz": position,
             "states": [],
-            "controlled_lanes": controlled_lane,
+            "controlled_lanes": controlled_lanes,
         }
 
         puffer_elements.append(puffer_element)

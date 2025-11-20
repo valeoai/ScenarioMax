@@ -40,14 +40,8 @@ def clean_and_create_output_directory(output_path: str) -> None:
     if abs_path in dangerous_paths or any(
         abs_path.startswith(d + os.sep)
         for d in ["/usr", "/etc", "/var", "/bin", "/sbin", "/lib", "/boot", "/sys", "/proc", "/dev"]
-        if abs_path == d
-    ):  # noqa: E501
+    ):
         raise ValueError(f"Refusing to delete dangerous system directory: {abs_path}")
-
-    # Additional check: path should have at least 2 components beyond root
-    path_parts = abs_path.split(os.sep)
-    if len([p for p in path_parts if p]) < 2:
-        raise ValueError(f"Output path too close to root directory: {abs_path}")
 
     if os.path.exists(abs_path):
         shutil.rmtree(abs_path)

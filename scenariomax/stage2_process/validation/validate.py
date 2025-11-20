@@ -932,15 +932,18 @@ def _validate_scenario_coherence(scenario: dict, validation_level: int, errors: 
     dynamic_agents = scenario.get("dynamic_agents", {})
 
     sdc_index = metadata.get("sdc_index", "")
-    if sdc_index:
-        if sdc_index not in range(len(dynamic_agents)):
-            errors.append(f"Ego agent '{sdc_index}' not in dynamic_agents")
+    if sdc_index != "":  # Check for empty string explicitly
+        # sdc_index is an array index, not an agent ID
+        agent_ids = list(dynamic_agents.keys())
+        if sdc_index >= len(agent_ids):
+            errors.append(f"sdc_index {sdc_index} out of range (have {len(agent_ids)} agents)")
         else:
-            sdc_agent = list(dynamic_agents.values())[sdc_index]
+            sdc_id = agent_ids[sdc_index]
+            sdc_agent = dynamic_agents[sdc_id]
             required_states = ["position", "heading", "velocity", "valid"]
             missing_states = [s for s in required_states if s not in sdc_agent.get("states", {})]
             if missing_states:
-                warnings.append(f"Ego agent '{sdc_agent}' missing critical states: {missing_states}")
+                warnings.append(f"Ego agent (ID {sdc_id}) missing critical states: {missing_states}")
 
     if "objects_of_interest" in metadata:
         for obj_id in metadata["objects_of_interest"]:
