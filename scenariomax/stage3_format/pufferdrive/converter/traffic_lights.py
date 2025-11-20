@@ -60,8 +60,6 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, static_map_elem
 
     for element_id, element_data in static_map_elements.items():
         element_type = element_data["type"]
-        position = element_data["position"]
-        lanes = element_data["lanes"]
 
         # Convert traffic light type to int
         element_type_int = _convert_traffic_control_type_to_int(element_type)
