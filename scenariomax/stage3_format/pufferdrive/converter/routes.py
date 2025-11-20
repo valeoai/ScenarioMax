@@ -63,6 +63,15 @@ DISTANCE_WEIGHT = 0.3  # Weight for spatial proximity
 # Combined weights sum to 1.0 for interpretable normalized scoring
 # Note: Route scoring uses geometric distance (coverage × distance_score), not these weights
 
+# Controllable vehicle filtering constants
+OFFROAD_DISTANCE_THRESHOLD = 5.0  # Meters - max distance from closest lane to be considered on-road
+ROAD_EDGE_TYPES = {
+    types.ROAD_EDGE_BOUNDARY,
+    types.ROAD_EDGE_MEDIAN,
+    types.ROAD_EDGE_SIDEWALK,
+}
+
+
 
 def compute_agent_route(
     agent_data: tuple,
@@ -248,13 +257,15 @@ def _check_route_heading_alignment(
     Check if trajectory heading generally aligns with route direction (binary filter).
 
     Samples points from trajectory and checks if agent is traveling in the same
-    direction as the closest route segment.
+    direction as the closest route segment. Uses two thresholds:
+    - ALIGNMENT_THRESHOLD (0.3 cosine similarity): Per-point heading alignment check
+    - min_alignment_ratio (0.7 default): Fraction of points that must pass alignment check
 
     Args:
         route_polyline: Route polyline (N_points, 2)
         trajectory: Trajectory points (M, 2)
         heading: Trajectory headings (M,)
-        min_alignment_ratio: Minimum fraction of samples that must align (default 0.7)
+        min_alignment_ratio: Minimum fraction of trajectory samples that must align with route direction (default 0.7 = 70% of points)
 
     Returns:
         True if route direction generally matches trajectory heading, False otherwise
@@ -277,7 +288,9 @@ def _check_route_heading_alignment(
 
     # Get route directions at closest segments
     route_directions = _get_lane_directions_at_indices_batch(route_polyline_batch, closest_indices.reshape(-1, 1))[
-        :, 0, :
+        :,
+        0,
+        :,
     ]  # (n_samples, 2)
 
     # Calculate agent directions
@@ -345,6 +358,14 @@ def _score_route_geometric(
     # Compute average distance for covered points only
     covered_distances = min_distances[coverage_mask]
     avg_distance = np.mean(covered_distances)
+
+    # Fail fast if invalid data (e.g., degenerate polylines producing NaN/Inf)
+    if not np.isfinite(avg_distance):
+        raise ValueError(
+            f"Invalid route distance: {avg_distance}. "
+            "This may indicate degenerate polylines (zero-length segments) in the route."
+        )
+
     distance_score = 1.0 / (1.0 + avg_distance)
 
     # Multiplicative score: coverage × distance_score
@@ -666,3 +687,161 @@ def _get_lane_directions_at_indices_batch(polylines: np.ndarray, indices: np.nda
     directions = directions / (norms + 1e-6)
 
     return directions
+
+
+def _is_offroad_at_init(
+    agent_data: tuple,
+    static_map_elements: dict,
+    lane_polylines: np.ndarray,
+    route_check_timestep: int = 0,
+) -> bool:
+    """
+    Check if vehicle is offroad at specified timestep.
+
+    Offroad = bounding box crosses road edge OR center >5m from closest lane.
+
+    Args:
+        agent_data: Tuple of (agent_id, position, heading, valid, length, width)
+        static_map_elements: Dict of static map elements (lanes, boundaries, road edges)
+        lane_polylines: Precomputed lane polylines array (N_lanes, max_points, 2)
+        route_check_timestep: Timestep to check (default: 0)
+
+    Returns:
+        True if vehicle is offroad, False otherwise
+    """
+    _, positions, headings, valid, lengths, widths = agent_data
+
+    if route_check_timestep >= len(positions) or not valid[route_check_timestep]:
+        return True
+
+    position = positions[route_check_timestep, :2]  # (2,) xy
+    heading = headings[route_check_timestep]
+    length = lengths[route_check_timestep]
+    width = widths[route_check_timestep]
+
+    # Check 1: Distance from closest lane > threshold
+    if len(lane_polylines) > 0:
+        position_2d = position.reshape(1, 2)
+        min_distances = _points_to_polylines_distance(position_2d, lane_polylines, return_indices=False)
+        min_dist_to_lane = np.min(min_distances)
+        if min_dist_to_lane > OFFROAD_DISTANCE_THRESHOLD:
+            return True
+
+    # Check 2: Bounding box crosses road edges
+    cos_h = np.cos(heading)
+    sin_h = np.sin(heading)
+    half_len = length / 2
+    half_width = width / 2
+
+    # Corners in local frame (front-right, front-left, rear-left, rear-right)
+    local_corners = np.array([
+        [half_len, -half_width],
+        [half_len, half_width],
+        [-half_len, half_width],
+        [-half_len, -half_width],
+    ])
+
+    # Rotate and translate to global frame
+    rotation_matrix = np.array([[cos_h, -sin_h], [sin_h, cos_h]])
+    corners = local_corners @ rotation_matrix.T + position  # (4, 2)
+
+    # Compute bounding box for filtering (min/max of corners)
+    bbox_min = np.min(corners, axis=0)
+    bbox_max = np.max(corners, axis=0)
+    # Expand bbox slightly for edge detection
+    bbox_margin = max(half_len, half_width)
+    bbox_min -= bbox_margin
+    bbox_max += bbox_margin
+
+    # Check road edges with spatial filtering
+    for element_id, element in static_map_elements.items():
+        element_type = element["type"]
+        if element_type not in ROAD_EDGE_TYPES:
+            continue
+
+        polyline = element["polyline"]
+        if polyline is None or len(polyline) < 2:
+            continue
+
+        polyline_2d = polyline[:, :2]
+
+        # Quick bbox filter: skip edges entirely outside vehicle bbox
+        edge_min = np.min(polyline_2d, axis=0)
+        edge_max = np.max(polyline_2d, axis=0)
+        if edge_max[0] < bbox_min[0] or edge_min[0] > bbox_max[0]:
+            continue
+        if edge_max[1] < bbox_min[1] or edge_min[1] > bbox_max[1]:
+            continue
+
+        # Check segments within this edge
+        for i in range(len(polyline_2d) - 1):
+            seg_start = polyline_2d[i]
+            seg_end = polyline_2d[i + 1]
+
+            # Skip segments entirely outside bbox
+            seg_min = np.minimum(seg_start, seg_end)
+            seg_max = np.maximum(seg_start, seg_end)
+            if seg_max[0] < bbox_min[0] or seg_min[0] > bbox_max[0]:
+                continue
+            if seg_max[1] < bbox_min[1] or seg_min[1] > bbox_max[1]:
+                continue
+
+            if _segment_intersects_polygon(seg_start, seg_end, corners):
+                return True
+
+    return False
+
+
+def _segment_intersects_polygon(seg_start: np.ndarray, seg_end: np.ndarray, polygon: np.ndarray) -> bool:
+    """
+    Check if line segment intersects with polygon edges.
+
+    Args:
+        seg_start: Segment start point (2,)
+        seg_end: Segment end point (2,)
+        polygon: Polygon vertices (N, 2)
+
+    Returns:
+        True if segment intersects polygon, False otherwise
+    """
+    # Check each edge of polygon
+    n_vertices = len(polygon)
+    for i in range(n_vertices):
+        poly_start = polygon[i]
+        poly_end = polygon[(i + 1) % n_vertices]
+
+        if _segments_intersect(seg_start, seg_end, poly_start, poly_end):
+            return True
+
+    return False
+
+
+def _segments_intersect(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray, p4: np.ndarray) -> bool:
+    """
+    Check if two line segments intersect using cross product method.
+
+    Args:
+        p1, p2: First segment endpoints (2,)
+        p3, p4: Second segment endpoints (2,)
+
+    Returns:
+        True if segments intersect, False otherwise
+    """
+    d1 = p2 - p1
+    d2 = p4 - p3
+
+    # Cross product to determine orientation
+    def cross_2d(v1, v2):
+        return v1[0] * v2[1] - v1[1] * v2[0]
+
+    denom = cross_2d(d1, d2)
+
+    # Parallel segments (no intersection)
+    if abs(denom) < 1e-10:
+        return False
+
+    t = cross_2d(p3 - p1, d2) / denom
+    u = cross_2d(p3 - p1, d1) / denom
+
+    # Check if intersection point is within both segments
+    return 0 <= t <= 1 and 0 <= u <= 1
