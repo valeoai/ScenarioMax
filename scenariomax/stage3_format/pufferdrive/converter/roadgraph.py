@@ -92,8 +92,7 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
     for element_id, element_data in static_map_elements.items():
         element_type = element_data["type"]
 
-        if element_type in ["DRIVEWAY"]:
-            # Skip driveways as they are not supported in Puffer format
+        if element_type in [types.DRIVEWAY, types.STOP_SIGN, types.YIELD_SIGN, types.TRAFFIC_CONE]:
             continue
 
         if not element_type:
@@ -106,24 +105,26 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
         if element_type_int == 0:
             continue
 
-        polyline = element_data["polyline"]
+        if element_type_int <= 30:
+            xyz = element_data["polyline"]
+            # Ensure polyline has 3D coordinates
+            if xyz.shape[1] == 2:
+                xyz = np.column_stack([xyz, np.zeros(len(xyz))])
 
-        # Ensure polyline has 3D coordinates
-        if polyline.shape[1] == 2:
-            polyline = np.column_stack([polyline, np.zeros(len(polyline))])
-
-        # Apply polyline reduction if threshold is set
-        if polyline_reduction_threshold > 0.0 and len(polyline) >= 3:
-            # Convert numpy array to list of dicts for simplification algorithm
-            geometry = [{"x": float(p[0]), "y": float(p[1]), "z": float(p[2])} for p in polyline]
-            simplified_geometry = simplify_polyline(geometry, polyline_reduction_threshold)
-            # Convert back to numpy array
-            polyline = np.array([[p["x"], p["y"], p["z"]] for p in simplified_geometry])
+            # Apply polyline reduction if threshold is set
+            if polyline_reduction_threshold > 0.0 and len(xyz) >= 3:
+                # Convert numpy array to list of dicts for simplification algorithm
+                geometry = [{"x": float(p[0]), "y": float(p[1]), "z": float(p[2])} for p in xyz]
+                simplified_geometry = simplify_polyline(geometry, polyline_reduction_threshold)
+                # Convert back to numpy array
+                xyz = np.array([[p["x"], p["y"], p["z"]] for p in simplified_geometry])
+        else:
+            xyz = element_data["polygon"]
 
         puffer_element = {
             "id": element_id,
             "type": element_type_int,
-            "xyz": polyline,
+            "xyz": xyz,
         }
 
         # Add lane-specific attributes if this is a lane
@@ -173,7 +174,7 @@ def _convert_map_element_type_to_int(element_type: str) -> int:
 
     # Road line types (11-20)
     road_line_type_map = {
-        types.ROAD_LINE_UNKNOWN: 10,
+        types.ROAD_LINE_UNKNOWN: 0,
         types.ROAD_LINE_BROKEN_SINGLE_WHITE: 11,
         types.ROAD_LINE_SOLID_SINGLE_WHITE: 12,
         types.ROAD_LINE_SOLID_DOUBLE_WHITE: 13,
@@ -186,7 +187,7 @@ def _convert_map_element_type_to_int(element_type: str) -> int:
 
     # Road edge types (21-30)
     road_edge_type_map = {
-        types.ROAD_EDGE_UNKNOWN: 20,
+        types.ROAD_EDGE_UNKNOWN: 0,
         types.ROAD_EDGE_BOUNDARY: 21,
         types.ROAD_EDGE_MEDIAN: 22,
         types.ROAD_EDGE_SIDEWALK: 23,
