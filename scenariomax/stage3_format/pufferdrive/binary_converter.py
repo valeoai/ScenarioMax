@@ -16,7 +16,7 @@ For each DynamicAgent:
     - id (int32)
     - type (int32)
     - trajectory_length (int32)
-    - Arrays (transposed for cache efficiency):
+    - Arrays:
         - log_trajectory_x[trajectory_length] (float32[])
         - log_trajectory_y[trajectory_length] (float32[])
         - log_trajectory_z[trajectory_length] (float32[])

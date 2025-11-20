@@ -92,12 +92,18 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
     for element_id, element_data in static_map_elements.items():
         element_type = element_data["type"]
 
-        if element_type in ["DRIVEWAY", "SPEED_BUMP", "STOP_SIGN", "CROSSWALK"]:
+        if element_type in ["DRIVEWAY"]:
             # Skip driveways as they are not supported in Puffer format
             continue
 
         if not element_type:
             logger.warning(f"Skipping map element with unset type: {element_id}")
+            continue
+
+        # Convert element type to int
+        element_type_int = _convert_map_element_type_to_int(element_type)
+
+        if element_type_int == 0:
             continue
 
         polyline = element_data["polyline"]
@@ -113,9 +119,6 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
             simplified_geometry = simplify_polyline(geometry, polyline_reduction_threshold)
             # Convert back to numpy array
             polyline = np.array([[p["x"], p["y"], p["z"]] for p in simplified_geometry])
-
-        # Convert element type to int
-        element_type_int = _convert_map_element_type_to_int(element_type)
 
         puffer_element = {
             "id": element_id,
