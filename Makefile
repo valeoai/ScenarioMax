@@ -1,63 +1,74 @@
-# ScenarioMax Makefile for uv-based installation and management
+# ScenarioMax Makefile - Modern uv workflow
+#
+# This Makefile uses uv's native sync command which:
+# - Automatically creates/updates the virtual environment
+# - Installs dependencies with proper resolution
+# - Uses uv.lock for reproducible builds
 
-.PHONY: help setup waymo nuplan nuscenes all dev clean
+.PHONY: help waymo nuplan nuscenes all dev clean lock status
 
 # Default target
 help:
-	@echo "ScenarioMax - uv-based installation and management"
-	@echo "================================================="
+	@echo "ScenarioMax - Modern uv Installation"
+	@echo "====================================="
 	@echo ""
-	@echo "Quick installation targets:"
+	@echo "Quick installation (auto-creates venv):"
 	@echo "  make waymo          Install with Waymo dataset support"
-	@echo "  make nuplan        Install with nuPlan dataset support"
-	@echo "  make nuscenes      Install with nuScenes dataset support"
-	@echo "  make all           Install every datasets"
-	@echo "  make dev           Install development environment"
+	@echo "  make nuplan         Install with nuPlan dataset support"
+	@echo "  make all            Install all datasets (Waymo + nuPlan)"
+	@echo "  make dev            Install development environment"
 	@echo ""
 	@echo "Utility commands:"
-	@echo "  make clean         Remove virtual environment"
-	@echo "  make lock          Generate lock file"
+	@echo "  make lock           Generate/update uv.lock file"
+	@echo "  make status         Show installation status"
+	@echo "  make clean          Remove virtual environment and artifacts"
+	@echo ""
+	@echo "Note: Commands use 'uv sync' which handles venv creation automatically"
 
+# Dataset installations using uv sync
+waymo:
+	uv sync --extra waymo
 
+nuplan:
+	uv sync --extra nuplan
 
-# Create virtual environment
-.venv/pyvenv.cfg:
-	uv venv --python 3.10
+all:
+	uv sync --extra all
 
+dev:
+	uv sync --extra dev
 
-waymo: .venv/pyvenv.cfg
-	uv pip install -e ".[waymo]"
+# Lock file generation using uv's native locking
+lock:
+	uv lock
 
-nuplan: .venv/pyvenv.cfg
-	uv pip install -e ".[nuplan]"
-
-nuscenes: .venv/pyvenv.cfg
-	uv pip install -e ".[nuscenes]"
-
-all: .venv/pyvenv.cfg
-	uv pip install -e ".[all]"
-
-dev: .venv/pyvenv.cfg
-	uv pip install -e ".[dev]"
-
-
-# Utility commands
-clean:
-	rm -rf .venv
-	rm -rf *.egg-info
-	find . -name "__pycache__" -exec rm -rf {} +
-	find . -name "*.pyc" -delete
-
-lock: .venv/pyvenv.cfg
-	uv pip compile pyproject.toml -o requirements.lock
-
-# Show current installation
+# Status check
 status:
 	@echo "Current installation status:"
-	@echo "=========================="
+	@echo "============================"
+	@if [ -f uv.lock ]; then \
+		echo "✅ uv.lock file exists"; \
+	else \
+		echo "⚠️  No uv.lock file (run 'make lock')"; \
+	fi
 	@if [ -d .venv ]; then \
 		echo "✅ Virtual environment exists"; \
-		.venv/bin/python -c "import scenariomax; print(f'ScenarioMax version: {scenariomax.__version__ if hasattr(scenariomax, \"__version__\") else \"dev\"}')" 2>/dev/null || echo "❌ ScenarioMax not installed"; \
+		.venv/bin/python -c "import scenariomax; print(f'   ScenarioMax version: {scenariomax.__version__ if hasattr(scenariomax, \"__version__\") else \"dev\"}')" 2>/dev/null || echo "❌ ScenarioMax not installed in venv"; \
 	else \
 		echo "❌ No virtual environment found"; \
 	fi
+	@echo ""
+	@echo "Installed extras:"
+	@if [ -d .venv ]; then \
+		.venv/bin/python -c "try:\n    import waymo_open_dataset; print('  ✅ waymo')\nexcept: print('  ❌ waymo')" 2>/dev/null || true; \
+		.venv/bin/python -c "try:\n    import nuplan; print('  ✅ nuplan')\nexcept: print('  ❌ nuplan')" 2>/dev/null || true; \
+	fi
+
+# Clean up
+clean:
+	rm -rf .venv
+	rm -rf *.egg-info
+	rm -rf .ruff_cache
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	@echo "✅ Cleaned up virtual environment and artifacts"

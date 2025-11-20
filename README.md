@@ -68,39 +68,37 @@ With ScenarioMax, you can:
 
 ### Prerequisites
 
-- Python 3.10
+- Python 3.10 (strict requirement)
 - [uv](https://docs.astral.sh/uv/) for fast dependency management
 - Access to at least one supported dataset (Waymo, nuPlan, or nuScenes)
 - Sufficient disk space for dataset processing
 
-### Basic Installation
+### Quick Start (Recommended)
+
+ScenarioMax uses modern `uv` workflow that handles everything automatically:
 
 ```bash
 # Clone the repository
 git clone https://github.com/valeoai/ScenarioMax.git
 cd ScenarioMax
 
-# Create and activate virtual environment
-uv venv -p 3.10
-source .venv/bin/activate
-
-# Install ScenarioMax with dataset support
+# Install with your dataset of choice (auto-creates venv)
 make waymo         # Waymo Open Motion Dataset
 make nuplan        # nuPlan dataset
-make nuscenes      # nuScenes dataset (WIP)
-make all           # All datasets
+make all           # All datasets (Waymo + nuPlan)
 make dev           # Development environment
 ```
 
-### Manual Installation
+### Alternative: Direct uv Commands
 
 ```bash
-# For specific datasets
-uv pip install -e ".[waymo]"      # Waymo Open Motion Dataset
-uv pip install -e ".[nuplan]"     # nuPlan support
-uv pip install -e ".[nuscenes]"   # nuScenes support (WIP)
-uv pip install -e ".[dev]"        # Development tools
-uv pip install -e ".[all]"        # All datasets support
+# Install with specific dataset support
+uv sync --extra waymo      # Waymo Open Motion Dataset
+uv sync --extra nuplan     # nuPlan support
+uv sync --extra all        # All datasets
+uv sync --extra dev        # Development tools
+
+# Note: uv sync automatically creates/updates .venv
 ```
 
 ### Environment Setup

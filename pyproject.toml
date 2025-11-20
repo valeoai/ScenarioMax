@@ -6,20 +6,19 @@ build-backend = "setuptools.build_meta"
 name = "scenariomax"
 version = "0.1.0"
 description = "A toolkit for scenario-based autonomous vehicle testing"
-requires-python = ">=3.10"
+requires-python = "==3.10.*"
 dependencies = [
     "absl-py",
     "psutil",
     "joblib",
     "pandas",
-    "numpy<2",
+    "numpy==1.23.4",  # Pinned to match nuPlan requirement
     "tqdm",
     "matplotlib",
     "scipy",
     "trimesh",
-    "python-fcl",
     "tensorflow==2.11.1",
-    "hydra-core>=1.1.1",
+    "hydra-core==1.1.1",  # Pinned to match nuPlan requirement
     "omegaconf>=2.1.0",
 ]
 
@@ -29,7 +28,7 @@ waymo = [
     "protobuf<3.20",
 ]
 
-# nuPlan dataset support - installs the devkit with all its dependencies
+# nuPlan dataset support
 nuplan = [
     "nuplan-devkit",
     # Core nuPlan dependencies from their requirements.txt
@@ -81,20 +80,7 @@ nuplan = [
     "pytorch-lightning",
 ]
 
-# nuScenes dataset support - installs the devkit
-nuscenes = [
-    "nuscenes-devkit",
-    # Core nuScenes dependencies
-    "pyquaternion",
-    "shapely",
-    "descartes",
-    "opencv-python",
-    "plotly",
-    "Pillow",
-]
-
-
-# All dataset
+# All supported datasets
 all = [
     "scenariomax[waymo,nuplan]"
 ]
@@ -104,10 +90,6 @@ dev = [
     "scenariomax[all]",
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "black>=23.0",
-    "isort>=5.0",
-    "flake8>=6.0",
-    "mypy>=1.0",
     "pre-commit>=3.0",
     "ruff>=0.1.0",
 ]
@@ -122,7 +104,6 @@ include = ["scenariomax*"]
 # uv sources for local packages
 [tool.uv.sources]
 nuplan-devkit = { path = "devkit/nuplan-devkit", editable = true }
-nuscenes-devkit = { path = "devkit/nuscenes-devkit/setup", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = "tests"
