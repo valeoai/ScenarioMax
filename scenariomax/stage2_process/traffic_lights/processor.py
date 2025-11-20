@@ -24,7 +24,7 @@ def add_traffic_lights_to_scenario(unified_scenario: dict[str, Any]) -> dict[str
 
     dynamic_map_states = sp.generate_waymonic_tls(
         return_data="dynamic_states",
-        end_step=unified_scenario["metadata"]["length"],
+        end_step=unified_scenario["metadata"]["scenario_length"],
     )
 
     # Replace dynamic_map_elements with generated traffic lights

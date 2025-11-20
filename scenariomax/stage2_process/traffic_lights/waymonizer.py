@@ -463,8 +463,8 @@ class Waymonizer:
                     polyline1 = boundary.polyline[boundary_start_idx:]
                     polyline2 = boundary.polyline[: boundary_end_idx + 1]
 
-                    max_closeset_idx = find_polyline_nearest_point(feature.lane.polyline, boundary.polyline[-1])
-                    zero_closest_idx = find_polyline_nearest_point(feature.lane.polyline, boundary.polyline[0])
+                    # max_closeset_idx = find_polyline_nearest_point(feature.lane.polyline, boundary.polyline[-1])
+                    # zero_closest_idx = find_polyline_nearest_point(feature.lane.polyline, boundary.polyline[0])
 
                     boundary1 = Boundary(
                         # zero_closest_idx,
