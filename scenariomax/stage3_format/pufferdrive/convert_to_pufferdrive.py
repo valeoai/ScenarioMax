@@ -59,7 +59,6 @@ def convert(
     dynamic_agents = agents.convert_dynamic_agents(
         unified_scenario["dynamic_agents"],
         unified_scenario["static_map_elements"],
-        dynamic_map_elements=unified_scenario["dynamic_map_elements"],
         min_route_valid_points=min_route_valid_points,
         route_check_timestep=route_check_timestep,
         max_routes=max_routes,
