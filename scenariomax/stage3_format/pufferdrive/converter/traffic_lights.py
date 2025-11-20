@@ -67,6 +67,9 @@ def convert_traffic_control_elements(dynamic_map_elements: dict, static_map_elem
         if element_type_int == 0:
             continue
 
+        position = element_data["position"]
+        lanes = element_data["lanes"]
+
         # Normalize lanes to list (PufferDrive expects list)
         if isinstance(lanes, int):
             controlled_lanes = [lanes]
