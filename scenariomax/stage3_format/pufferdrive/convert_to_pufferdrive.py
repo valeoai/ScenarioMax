@@ -49,8 +49,6 @@ def convert(
     if not scenario_id:
         logger.warning("Scenario has empty ID")
 
-    scenario_metadata = unified_scenario["metadata"]
-
     # Convert static map elements to road_map_elements
     road_map_elements = roadgraph.convert_road_map_elements(
         unified_scenario["static_map_elements"],
@@ -61,7 +59,6 @@ def convert(
     dynamic_agents = agents.convert_dynamic_agents(
         unified_scenario["dynamic_agents"],
         unified_scenario["static_map_elements"],
-        scenario_metadata["scenario_length"],
         dynamic_map_elements=unified_scenario["dynamic_map_elements"],
         min_route_valid_points=min_route_valid_points,
         route_check_timestep=route_check_timestep,
@@ -72,7 +69,6 @@ def convert(
     traffic_control_elements = traffic_lights.convert_traffic_control_elements(
         unified_scenario["dynamic_map_elements"],
         unified_scenario["static_map_elements"],
-        scenario_metadata["scenario_length"],
     )
 
     # Convert metadata

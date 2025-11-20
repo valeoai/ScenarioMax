@@ -40,26 +40,27 @@ For each RoadMapElement:
         - x[segment_length] (float32[])
         - y[segment_length] (float32[])
         - z[segment_length] (float32[])
-        - dir_x[segment_length] (float32[])
-        - dir_y[segment_length] (float32[])
-        - dir_z[segment_length] (float32[])
-    - entry (int32) - first entry lane or -1
-    - exit (int32) - first exit lane or -1
+    - num_entry (int32) - number of entry lanes
+    - entry_lanes (int32[]) - list of entry lane IDs
+    - num_exit (int32) - number of exit lanes
+    - exit_lanes (int32) - list of exit lane IDs
     - speed_limit (float32) - in m/s
 
 For each TrafficControlElement:
     - id (int32)
     - type (int32)
-    - state_length (int32)
     - x, y, z (float32, float32, float32)
+    - state_length (int32)
     - states[state_length] (int32[])
-    - controlled_lane (int32)
+    - num_controlled_lanes (int32)
+    - controlled_lanes[num_controlled_lanes] (int32[])
 
 Metadata (variable length):
     - scenario_id (char[128]) - null-padded UTF-8 string
+    - map_id (int32) - map identifier assigned during postprocessing
     - dataset_name (char[64]) - null-padded UTF-8 string
     - length (int32) - number of timesteps
-    - ego_id (int32) - ego vehicle ID
+    - sdc_index (int32) - ego vehicle ID
     - num_objects_of_interest (int32)
     - objects_of_interest[num_objects_of_interest] (int32[])
     - num_tracks_to_predict (int32)
@@ -71,7 +72,7 @@ import struct
 import numpy as np
 
 
-def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
+def puffer_dict_to_binary(puffer_dict: dict, map_id: int = 0) -> bytes:  # noqa: C901
     """
     Convert Puffer dict to binary format matching datatypes.h.
 
@@ -80,14 +81,15 @@ def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
             - dynamic_agents: list of agent dicts
             - road_map_elements: list of road dicts
             - traffic_control_elements: list of traffic dicts
+        map_id: Map identifier (e.g., 0, 1, 125786) assigned during postprocessing
 
     Returns:
         Binary data as bytes
     """
     # Extract data
-    dynamic_agents = puffer_dict.get("dynamic_agents", [])
-    road_map_elements = puffer_dict.get("road_map_elements", [])
-    traffic_control_elements = puffer_dict.get("traffic_control_elements", [])
+    dynamic_agents = puffer_dict["dynamic_agents"]
+    road_map_elements = puffer_dict["road_map_elements"]
+    traffic_control_elements = puffer_dict["traffic_control_elements"]
 
     num_agents = len(dynamic_agents)
     num_roads = len(road_map_elements)
@@ -104,19 +106,19 @@ def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
     # ========================================================================
     for agent in dynamic_agents:
         # ID and type
-        agent_id = int(agent.get("id", 0))
-        agent_type = int(agent.get("type", 1))
+        agent_id = int(agent["id"])
+        agent_type = int(agent["type"])
         buffer.extend(struct.pack("ii", agent_id, agent_type))
 
         # Get states
-        states = agent.get("states", {})
-        xyz = np.array(states.get("xyz", []))
-        velocity = np.array(states.get("velocity", []))
-        heading = np.array(states.get("heading", []))
-        valid = np.array(states.get("valid", []))
-        width = np.array(states.get("width", []))
-        length = np.array(states.get("length", []))
-        height = np.array(states.get("height", []))
+        states = agent["states"]
+        xyz = np.array(states["xyz"])
+        velocity = np.array(states["velocity"])
+        heading = np.array(states["heading"])
+        valid = np.array(states["valid"])
+        width = np.array(states["width"])
+        length = np.array(states["length"])
+        height = np.array(states["height"])
 
         trajectory_length = len(xyz)
         buffer.extend(struct.pack("i", trajectory_length))
@@ -144,19 +146,36 @@ def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
         if isinstance(height, (int, float)):
             height = np.full(trajectory_length, float(height))
 
+        # Validate array lengths match trajectory_length
+        if len(length) != trajectory_length:
+            raise ValueError(
+                f"Agent {agent_id}: length array has {len(length)} elements "
+                f"but trajectory has {trajectory_length} timesteps"
+            )
+        if len(width) != trajectory_length:
+            raise ValueError(
+                f"Agent {agent_id}: width array has {len(width)} elements "
+                f"but trajectory has {trajectory_length} timesteps"
+            )
+        if len(height) != trajectory_length:
+            raise ValueError(
+                f"Agent {agent_id}: height array has {len(height)} elements "
+                f"but trajectory has {trajectory_length} timesteps"
+            )
+
         for j in range(trajectory_length):
-            buffer.extend(struct.pack("f", float(length[j]) if j < len(length) else 0.0))
+            buffer.extend(struct.pack("f", float(length[j])))
         for j in range(trajectory_length):
-            buffer.extend(struct.pack("f", float(width[j]) if j < len(width) else 0.0))
+            buffer.extend(struct.pack("f", float(width[j])))
         for j in range(trajectory_length):
-            buffer.extend(struct.pack("f", float(height[j]) if j < len(height) else 0.0))
+            buffer.extend(struct.pack("f", float(height[j])))
 
         # Write valid array
         for j in range(trajectory_length):
             buffer.extend(struct.pack("i", int(valid[j])))
 
         # Write routes (flatten all routes into single array)
-        routes = agent.get("routes", [])
+        routes = agent["routes"]
         if routes:
             # Option 1: First route only
             first_route = routes[0]
@@ -201,13 +220,12 @@ def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
     # ========================================================================
     for road in road_map_elements:
         # ID and type
-        road_id = int(road.get("id", 0))
-        road_type = int(road.get("type", 0))
+        road_id = int(road["id"])
+        road_type = int(road["type"])
         buffer.extend(struct.pack("ii", road_id, road_type))
 
         # Get geometry
-        xyz = np.array(road.get("xyz", []))
-        dir_xyz = np.array(road.get("dir_xyz", []))
+        xyz = np.array(road["xyz"])
 
         segment_length = len(xyz)
         buffer.extend(struct.pack("i", segment_length))
@@ -217,40 +235,38 @@ def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
             for j in range(segment_length):
                 buffer.extend(struct.pack("f", float(xyz[j, i])))
 
-        # Write direction arrays - TRANSPOSED
-        for i in range(3):  # x, y, z
-            for j in range(segment_length):
-                buffer.extend(struct.pack("f", float(dir_xyz[j, i])))
+        # If lane type (0-10 range), write entry/exit lanes and speed limit
+        # Lane types: 0=unknown, 1=freeway, 2=surface_street, 3=bike_lane
+        if road_type <= 10:  # All lane types are in range 0-10
+            entry_lanes = road["entry_lanes"]
+            exit_lanes = road["exit_lanes"]
 
-        # Entry and exit (take first element or -1)
-        entry_lanes = road.get("entry", [])
-        exit_lanes = road.get("exit", [])
+            num_entry = len(entry_lanes)
+            num_exit = len(exit_lanes)
 
-        entry = int(entry_lanes[0]) if entry_lanes and len(entry_lanes) > 0 else -1
-        exit_val = int(exit_lanes[0]) if exit_lanes and len(exit_lanes) > 0 else -1
+            buffer.extend(struct.pack("i", num_entry))
+            for lane_id in entry_lanes:
+                buffer.extend(struct.pack("i", int(lane_id)))
 
-        buffer.extend(struct.pack("ii", entry, exit_val))
+            buffer.extend(struct.pack("i", num_exit))
+            for lane_id in exit_lanes:
+                buffer.extend(struct.pack("i", int(lane_id)))
 
-        # Speed limit (convert from mph to m/s if available)
-        speed_limit = road.get("speed_limit", 0.0)
-        buffer.extend(struct.pack("f", speed_limit))
+            # Speed limit (convert from mph to m/s if available)
+            speed_limit = road["speed_limit"]
+            buffer.extend(struct.pack("f", speed_limit))
 
     # ========================================================================
     # Write TrafficControlElements
     # ========================================================================
-    for traffic in traffic_control_elements:
+    for element in traffic_control_elements:
         # ID and type
-        traffic_id = int(traffic.get("id", 0))
-        traffic_type = int(traffic.get("type", 11))
+        traffic_id = int(element["id"])
+        traffic_type = int(element["type"])
         buffer.extend(struct.pack("ii", traffic_id, traffic_type))
 
-        # State length
-        states = traffic.get("states", [])
-        state_length = len(states)
-        buffer.extend(struct.pack("i", state_length))
-
         # Position
-        xyz = traffic.get("xyz", [0.0, 0.0, 0.0])
+        xyz = element["xyz"]
         if isinstance(xyz, list):
             xyz = np.array(xyz)
 
@@ -260,46 +276,55 @@ def puffer_dict_to_binary(puffer_dict: dict) -> bytes:
 
         buffer.extend(struct.pack("fff", x, y, z))
 
-        # States array
+        # States
+        states = element["states"]
+        state_length = len(states)
+        buffer.extend(struct.pack("i", state_length))
         for state in states:
             buffer.extend(struct.pack("i", int(state)))
 
-        # Controlled lane
-        controlled_lane = int(traffic.get("controlled_lane", -1))
-        buffer.extend(struct.pack("i", controlled_lane))
+        # Controlled lanes
+        controlled_lanes = element["controlled_lanes"]
+        controlled_lanes_length = len(controlled_lanes)
+        buffer.extend(struct.pack("i", controlled_lanes_length))
+        for lane in controlled_lanes:
+            buffer.extend(struct.pack("i", int(lane)))
 
     # ========================================================================
     # Write Metadata
     # ========================================================================
-    metadata = puffer_dict.get("metadata", {})
+    metadata = puffer_dict["metadata"]
 
     # scenario_id (fixed 128 bytes, null-padded)
-    scenario_id = puffer_dict.get("scenario_id", "")[:128]
+    scenario_id = puffer_dict["scenario_id"][:128]
     scenario_id_bytes = scenario_id.encode("utf-8").ljust(128, b"\0")
     buffer.extend(scenario_id_bytes)
 
+    # map_id (int32)
+    buffer.extend(struct.pack("i", int(map_id)))
+
     # dataset_name (fixed 64 bytes, null-padded)
-    dataset_name = metadata.get("dataset_name", "")[:64]
+    dataset_name = metadata["dataset_name"][:64]
     dataset_name_bytes = dataset_name.encode("utf-8").ljust(64, b"\0")
     buffer.extend(dataset_name_bytes)
 
     # length (int - number of timesteps)
-    length = int(metadata.get("length", 0))
+    length = int(metadata["scenario_length"])
     buffer.extend(struct.pack("i", length))
 
-    # ego_id (int)
-    ego_id = int(metadata.get("ego_id", -1))
-    buffer.extend(struct.pack("i", ego_id))
+    # sdc_index (int)
+    sdc_index = int(metadata["sdc_index"])
+    buffer.extend(struct.pack("i", sdc_index))
 
     # objects_of_interest
-    objects_of_interest = metadata.get("objects_of_interests", [])
+    objects_of_interest = metadata["objects_of_interests"]
     num_oi = len(objects_of_interest)
     buffer.extend(struct.pack("i", num_oi))
     for oi in objects_of_interest:
         buffer.extend(struct.pack("i", int(oi)))
 
     # tracks_to_predict
-    tracks_to_predict = metadata.get("tracks_to_predict", [])
+    tracks_to_predict = metadata["tracks_to_predict"]
     num_ttp = len(tracks_to_predict)
     buffer.extend(struct.pack("i", num_ttp))
     for ttp in tracks_to_predict:

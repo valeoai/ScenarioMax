@@ -15,7 +15,6 @@ logger = logger_utils.get_logger(__name__)
 def convert_dynamic_agents(
     dynamic_agents: dict,
     road_map_elements: dict,
-    length: int,
     min_route_valid_points: int = 0,
     route_check_timestep: int = 0,
     max_routes: int = 10,
@@ -26,8 +25,6 @@ def convert_dynamic_agents(
     Args:
         dynamic_agents: Dict of dynamic agents from unified scenario
         road_map_elements: Dict of static map elements (for reference)
-        length: Number of timesteps
-        ego_id: ID of ego vehicle
         min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
         route_check_timestep: Timestep at which agent must be valid for route computation (default: 0)
         max_routes: Number of route paths to generate per agent (default: 10)
@@ -35,9 +32,6 @@ def convert_dynamic_agents(
     Returns:
         List of dynamic agent dictionaries in Puffer format
     """
-    if dynamic_map_elements is None:
-        dynamic_map_elements = {}
-
     puffer_agents = []
 
     # Extract lane centers once for all agents (optimization)
@@ -67,8 +61,7 @@ def convert_dynamic_agents(
         # 1. VEHICLE type (type == 1)
         # 2. Agents valid at route_check_timestep (configurable, default: 0)
         # 3. Agents with sufficient valid trajectory points (configurable, default: 0)
-        # 4. Agents close to lanes (within 2m) - checked inside compute_agent_route()
-        # 5. Agents not off-map/parked (≥50% of trajectory near lanes) - checked inside compute_agent_route()
+        # 4. Agents not offroad (bbox crosses road edge OR >5m from lane) - checked inside compute_agent_route()
         should_compute_routes = (
             agent_type_int == 1
             and route_check_timestep < len(valid)
@@ -78,14 +71,12 @@ def convert_dynamic_agents(
 
         if should_compute_routes:
             agent_routes = _compute_routes(
-                position,
-                heading,
-                valid,
+                (agent_id, position, heading, valid, agent_length, width),
                 road_map_elements,
                 lane_data,
-                agent_id,
                 min_route_valid_points,
                 max_routes,
+                route_check_timestep,
             )
         else:
             agent_routes = []
@@ -130,14 +121,12 @@ def _convert_agent_type_to_int(agent_type: str) -> int:
 
 
 def _compute_routes(
-    position: np.ndarray,
-    heading: np.ndarray,
-    valid: np.ndarray,
+    agent_data: tuple,
     road_map_elements: dict,
     lane_data: tuple,
-    agent_id: int | str,
     min_route_valid_points: int = 0,
     max_routes: int = 10,
+    route_check_timestep: int = 0,
 ) -> list:
     """
     Compute routes an agent follows based on ground truth trajectory.
@@ -148,14 +137,12 @@ def _compute_routes(
     3. Explore multiple possible paths through exit lanes
 
     Args:
-        position: Agent position trajectory (N, 3) array
-        heading: Agent heading at each timestep (N,) array
-        valid: Validity mask for trajectory (N,) array
+        agent_data: Tuple of (agent_id, position, heading, valid, length, width)
         road_map_elements: Dict of static map elements (for reference)
-        lane_data: Precomputed lane data (lane_ids, lane_polylines, lane_metadata)
-        agent_id: Agent identifier for debugging
-        min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
-        max_routes: Number of route paths to generate per agent (default: 10)
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths)
+        min_route_valid_points: Minimum valid trajectory points required (0 = no filtering)
+        max_routes: Number of route paths to generate (default: 10)
+        route_check_timestep: Timestep to check if agent is offroad (default: 0)
 
     Returns:
         List of route paths, where each path is a list of lane IDs
@@ -163,14 +150,12 @@ def _compute_routes(
     # Compute routes using the new route computation algorithm
     # Returns list of route paths: [[lane1, lane2, ...], [lane1, lane3, ...], ...]
     route_paths = routes.compute_agent_route(
-        agent_trajectory=position,
-        agent_heading=heading,
-        agent_valid=valid,
+        agent_data=agent_data,
         static_map_elements=road_map_elements,
         lane_data=lane_data,
-        agent_id=agent_id,
         min_route_valid_points=min_route_valid_points,
         max_routes=max_routes,
+        route_check_timestep=route_check_timestep,
     )
 
     # Return list of route paths

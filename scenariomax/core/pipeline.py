@@ -163,13 +163,12 @@ def _save_result(
         with open(json_file, "w") as f:
             json.dump(scenario, f, indent=2, cls=NumpyEncoder)
     elif target_format == FORMAT_PUFFERDRIVE:
-        # Convert puffer dict to binary format
-        from scenariomax.stage3_format.pufferdrive.binary_converter import puffer_dict_to_binary
+        # Save as JSON - binary conversion happens in postprocessing when map_id is known
+        import json
 
-        binary_data = puffer_dict_to_binary(scenario)
-        binary_file = os.path.join(output_path, f"{scenario_id}.bin")
-        with open(binary_file, "wb") as f:
-            f.write(binary_data)
+        json_file = os.path.join(output_path, f"{scenario_id}.json")
+        with open(json_file, "w") as f:
+            json.dump(scenario, f, cls=NumpyEncoder)
     else:
         # Fallback to pickle
         save_pickle(scenario, os.path.join(output_path, f"{scenario_id}.pkl"))
@@ -511,10 +510,12 @@ def _postprocess_waymax(output_path: str, format_config: dict) -> None:
 
 
 def _postprocess_pufferdrive(output_path: str) -> None:
-    """Merge PufferDrive binary files from subdirectories and rename sequentially."""
-    import shutil
+    """Convert PufferDrive JSON files to binary format with map_id and rename sequentially."""
+    import json
 
-    logger.info("🔄 Merging PufferDrive binary files")
+    from scenariomax.stage3_format.pufferdrive.binary_converter import puffer_dict_to_binary
+
+    logger.info("🔄 Converting PufferDrive JSON files to binary")
 
     # Collect all subdirectories
     subdirs = [d for d in os.listdir(output_path) if os.path.isdir(os.path.join(output_path, d))]
@@ -522,31 +523,42 @@ def _postprocess_pufferdrive(output_path: str) -> None:
     if subdirs:
         # Collect from subdirectories (full pipeline case)
         logger.info(f"Found {len(subdirs)} dataset subdirectories: {subdirs}")
-        all_binary_files = []
+        all_json_files = []
         for subdir in subdirs:
             subdir_path = os.path.join(output_path, subdir)
-            binary_files = [os.path.join(subdir_path, f) for f in os.listdir(subdir_path) if f.endswith(".bin")]
-            all_binary_files.extend(binary_files)
-            logger.info(f"  {subdir}: {len(binary_files)} binary files")
+            json_files = [os.path.join(subdir_path, f) for f in os.listdir(subdir_path) if f.endswith(".json")]
+            all_json_files.extend(json_files)
+            logger.info(f"  {subdir}: {len(json_files)} JSON files")
     else:
         # Collect from output root (Stage 3 alone case)
-        logger.info("No subdirectories found, processing binaries in output root")
-        all_binary_files = [os.path.join(output_path, f) for f in os.listdir(output_path) if f.endswith(".bin")]
+        logger.info("No subdirectories found, processing JSON files in output root")
+        all_json_files = [os.path.join(output_path, f) for f in os.listdir(output_path) if f.endswith(".json")]
 
-    if not all_binary_files:
-        logger.info("⚠️  No binary files found")
+    if not all_json_files:
+        logger.info("⚠️  No JSON files found")
         return
 
     # Sort files to ensure consistent ordering
-    all_binary_files.sort()
+    all_json_files.sort()
 
-    logger.info(f"Renaming {'and moving ' if subdirs else ''}{len(all_binary_files)} files to output root")
+    logger.info(f"Converting {len(all_json_files)} JSON files to binary")
 
-    # Rename and move files to output root
-    for idx, src_file in enumerate(all_binary_files):
+    # Convert each JSON to binary with map_id
+    for idx, json_file in enumerate(all_json_files):
+        # Load JSON
+        with open(json_file, "r") as f:
+            puffer_dict = json.load(f)
+
+        # Convert to binary with map_id
+        binary_data = puffer_dict_to_binary(puffer_dict, map_id=idx)
+
+        # Save binary
         dst_file = os.path.join(output_path, f"map_{idx:03d}.bin")
-        if src_file != dst_file:  # Avoid self-rename
-            shutil.move(src_file, dst_file)
+        with open(dst_file, "wb") as f:
+            f.write(binary_data)
+
+        # Delete JSON file
+        os.remove(json_file)
 
     # Clean up empty subdirectories
     if subdirs:
@@ -556,7 +568,7 @@ def _postprocess_pufferdrive(output_path: str) -> None:
                 os.rmdir(subdir_path)
                 logger.info(f"  Removed empty directory: {subdir}")
 
-    logger.info(f"✅ Puffer binaries ready: map_000.bin to map_{len(all_binary_files) - 1:03d}.bin")
+    logger.info(f"✅ Puffer binaries ready: map_000.bin to map_{len(all_json_files) - 1:03d}.bin")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

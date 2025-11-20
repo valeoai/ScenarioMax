@@ -65,14 +65,12 @@ DISTANCE_WEIGHT = 0.3  # Weight for spatial proximity
 
 
 def compute_agent_route(
-    agent_trajectory: np.ndarray,
-    agent_heading: np.ndarray,
-    agent_valid: np.ndarray,
+    agent_data: tuple,
     static_map_elements: dict,
     lane_data: tuple,
-    agent_id: int | str = None,
     min_route_valid_points: int = 0,
     max_routes: int = 10,
+    route_check_timestep: int = 0,
 ) -> list[list[int]]:
     """
     Compute routes (lists of lane IDs) for an agent based on ground truth trajectory.
@@ -85,19 +83,18 @@ def compute_agent_route(
     Multiple route paths are generated to explore different exit lane possibilities.
 
     Args:
-        agent_trajectory: Agent position trajectory (N, 2) or (N, 3) array
-        agent_heading: Agent heading at each timestep (N,) array
-        agent_valid: Validity mask for trajectory (N,) array
+        agent_data: Tuple of (agent_id, position, heading, valid, length, width)
         static_map_elements: Dict of static map elements (lanes, boundaries, etc.)
-        lane_data: Precomputed lane data (lane_ids, lane_polylines, lane_metadata).
-                   Must be provided - use extract_lane_centers() to generate.
-        agent_id: Optional agent identifier for debugging logs
-        min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
-        max_routes: Number of route paths to generate per agent (default: 10)
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths)
+        min_route_valid_points: Minimum valid trajectory points required (0 = no filtering)
+        max_routes: Maximum number of route paths to generate (default: 10)
+        route_check_timestep: Timestep to check if agent is offroad (default: 0)
 
     Returns:
         List of routes, where each route is a list of lane center IDs
     """
+    agent_id, agent_trajectory, agent_heading, agent_valid, agent_length, agent_width = agent_data
+
     if len(agent_trajectory) == 0 or not np.any(agent_valid):
         return []
 
@@ -118,15 +115,16 @@ def compute_agent_route(
         )
         return []
 
-    lane_ids, lane_polylines, _ = lane_data
+    lane_ids, lane_polylines, _, _ = lane_data
 
     if len(lane_ids) == 0:
         logger.debug(f"{agent_str}: No lane centers found in map")
         return []
 
-    # Check if agent is mostly on lanes (not parked/off-map)
-    if not _is_agent_on_lanes(valid_trajectory, lane_polylines):
-        logger.debug(f"{agent_str}: Off-map or parked (not close enough to lanes)")
+    # Check if agent is offroad at check timestep (bbox crosses road edge OR >5m from lane)
+    offroad_agent_data = (agent_id, agent_trajectory, agent_heading, agent_valid, agent_length, agent_width)
+    if _is_offroad_at_init(offroad_agent_data, static_map_elements, lane_polylines, route_check_timestep):
+        logger.debug(f"{agent_str}: Off-road at timestep {route_check_timestep}")
         return []
 
     # Step 1: Find current lane (root)
@@ -149,7 +147,7 @@ def compute_agent_route(
     return routes
 
 
-def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, dict]:
+def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, dict, np.ndarray]:
     """
     Extract lane center information as numpy arrays for vectorized operations.
 
@@ -161,9 +159,11 @@ def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, d
         - lane_ids: List of lane IDs (strings)
         - lane_polylines: Array of lane polylines, padded to max length (N_lanes, max_points, 2)
         - lane_metadata: Dict mapping lane_id to connectivity info
+        - lane_lengths: Array of actual polyline lengths (N_lanes,) for each lane
     """
     lane_ids = []
     lane_polylines_list = []
+    lane_lengths_list = []
     lane_metadata = {}
     max_points = 0
 
@@ -181,6 +181,7 @@ def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, d
 
                 lane_ids.append(element_id)
                 lane_polylines_list.append(polyline_2d)
+                lane_lengths_list.append(len(polyline_2d))
                 max_points = max(max_points, len(polyline_2d))
 
                 lane_metadata[element_id] = {
@@ -189,16 +190,17 @@ def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, d
                 }
 
     if not lane_ids:
-        return [], np.array([]), {}
+        return [], np.array([]), {}, np.array([])
 
     # Second pass: create padded array
     n_lanes = len(lane_ids)
     lane_polylines = np.zeros((n_lanes, max_points, 2), dtype=np.float32)
+    lane_lengths = np.array(lane_lengths_list, dtype=np.int32)
 
     for i, polyline_2d in enumerate(lane_polylines_list):
         lane_polylines[i, : len(polyline_2d), :] = polyline_2d
 
-    return lane_ids, lane_polylines, lane_metadata
+    return lane_ids, lane_polylines, lane_metadata, lane_lengths
 
 
 def _build_route_polyline(route_path: list, lane_data: tuple) -> np.ndarray:
@@ -207,12 +209,12 @@ def _build_route_polyline(route_path: list, lane_data: tuple) -> np.ndarray:
 
     Args:
         route_path: List of lane IDs forming the route
-        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths)
 
     Returns:
         Concatenated polyline array (N_points, 2) representing the full route
     """
-    lane_ids, lane_polylines, _ = lane_data
+    lane_ids, lane_polylines, _, lane_lengths = lane_data
     lane_id_to_idx = {lane_id: idx for idx, lane_id in enumerate(lane_ids)}
 
     route_polyline_segments = []
@@ -221,13 +223,10 @@ def _build_route_polyline(route_path: list, lane_data: tuple) -> np.ndarray:
             continue
 
         idx = lane_id_to_idx[lane_id]
-        polyline = lane_polylines[idx]  # (max_points, 2)
+        length = lane_lengths[idx]
+        polyline_valid = lane_polylines[idx, :length, :]  # (length, 2)
 
-        # Remove padding (zero points)
-        valid_mask = np.any(polyline != 0, axis=1)
-        polyline_valid = polyline[valid_mask]
-
-        if len(polyline_valid) > 0:
+        if length > 0:
             route_polyline_segments.append(polyline_valid)
 
     if not route_polyline_segments:
@@ -309,7 +308,7 @@ def _score_route_geometric(
 
     Args:
         route_path: List of lane IDs forming the route
-        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths)
         trajectory: Trajectory points (M, 2/3)
         heading: Trajectory headings (M,)
 
@@ -442,7 +441,7 @@ def extract_top_n_paths(
     Args:
         graph: Adjacency list from _build_graph
         root_lane: Starting lane ID
-        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths)
         trajectory: Valid trajectory points (M, 2/3)
         heading: Valid headings (M,)
         n: Number of top paths to return
@@ -485,48 +484,6 @@ def extract_top_n_paths(
     return [path for _, path in scored_paths[:n]]
 
 
-def _is_agent_on_lanes(trajectory: np.ndarray, lane_polylines: np.ndarray) -> bool:
-    """
-    Check if an agent's trajectory is mostly on lanes (not parked or off-map).
-
-    Args:
-        trajectory: Agent trajectory points (M, 2/3)
-        lane_polylines: Array of lane polylines (N_lanes, max_points, 2)
-
-    Returns:
-        True if agent is mostly on lanes, False if parked or off-map
-    """
-    if len(trajectory) == 0 or len(lane_polylines) == 0:
-        return False
-
-    # Extract 2D positions
-    trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
-
-    # Check if agent has meaningful trajectory (not stationary)
-    # Use displacement between first and last point
-    trajectory_displacement = np.linalg.norm(trajectory_2d[-1] - trajectory_2d[0])
-
-    # Stationary threshold: 0.1 meters (10 cm)
-    # This accounts for GPS/sensor noise and small movements (e.g., rolling at stop sign)
-    # Agents moving less than 10cm over their entire trajectory are considered stationary
-    STATIONARY_THRESHOLD = 0.1  # meters
-
-    if trajectory_displacement < STATIONARY_THRESHOLD:
-        # Agent is stationary (parked, waiting at light, etc.), only check start position
-        trajectory_sample = trajectory_2d[:1]
-        _lane_width_threshold = 1.0  # Tighter threshold for parked agents
-    else:
-        # Agent is moving, check start and end positions to verify on-lane status
-        trajectory_sample = np.array([trajectory_2d[0], trajectory_2d[-1]])
-        _lane_width_threshold = LANE_WIDTH_THRESHOLD
-
-    # Vectorized: Calculate distances for all sample points at once
-    min_distances = _points_to_polylines_distance(trajectory_sample, lane_polylines, return_indices=False)
-
-    # Check if any sampled point is near any lane
-    return np.any(min_distances < _lane_width_threshold)
-
-
 def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tuple) -> int | None:
     """
     Find the current lane where the agent is located using strategic sample points.
@@ -536,12 +493,12 @@ def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tupl
     Args:
         trajectory: Valid trajectory points (M, 2/3)
         heading: Valid headings (M,)
-        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata) from extract_lane_centers
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths) from extract_lane_centers
 
     Returns:
         The current lane ID (root lane) or None if no lane is found
     """
-    lane_ids, lane_polylines, _ = lane_data
+    lane_ids, lane_polylines, _, _ = lane_data
 
     # Extract 2D positions
     trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory

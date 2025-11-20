@@ -11,7 +11,7 @@ from scenariomax.core import types
 logger = logger_utils.get_logger(__name__)
 
 
-def convert_traffic_control_elements(dynamic_map_elements: dict, length: int) -> list[dict]:
+def convert_traffic_control_elements(dynamic_map_elements: dict, static_map_elements: dict) -> list[dict]:
     """
     Convert dynamic map elements to Puffer traffic_control_elements.
 
