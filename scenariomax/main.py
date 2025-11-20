@@ -48,8 +48,8 @@ from scenariomax.core import pipeline  # noqa: E402
 
 logger = logger_utils.get_logger(__name__)
 
-# Get config directory dynamically for Hydra
-_CONFIG_DIR = str(Path(__file__).parent)
+# Get config directory for Hydra
+_CONFIG_DIR = "."
 
 
 def validate_config(cfg: DictConfig) -> None:
