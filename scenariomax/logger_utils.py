@@ -4,18 +4,47 @@ import os
 import absl.logging
 
 
-def get_logger(name: str = "scenariomax") -> logging.Logger:
+class Logger(logging.Logger):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.__initialized = False
+        return cls._instance
+
+    def __init__(self, name: str, level=logging.NOTSET):
+        if self.__initialized:
+            return
+        super().__init__(name, level)
+        self.__initialized = True
+
+    def debug(self, msg, *args, **kwargs):
+        super().debug(msg, *args, **kwargs)
+
+    def info(self, msg, *args, **kwargs):
+        super().info(msg, *args, **kwargs)
+
+    def warning(self, msg, *args, **kwargs):
+        super().warning(msg, *args, **kwargs)
+
+    def error(self, msg, *args, **kwargs):
+        super().error(msg, *args, **kwargs)
+
+    def critical(self, msg, *args, **kwargs):
+        super().critical(msg, *args, **kwargs)
+
+
+def get_logger(name: str = "scenariomax") -> Logger:
     """Get a configured logger instance.
 
-    Uses standard Python logging with per-module loggers for better control.
-
     Args:
-        name: The name for the logger (typically __name__ from calling module)
+        name: The name for the logger
 
     Returns:
-        Configured Logger instance with appropriate handlers
+        Configured Logger instance
     """
-    return logging.getLogger(name)
+    return Logger(name)
 
 
 def setup_logger(log_level: int | None = None, log_file: str | None = None):
