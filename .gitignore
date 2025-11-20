@@ -21,3 +21,7 @@ __pycache__/
 *.json
 *.db
 *.bin
+
+# Allow test data for CI
+!tests/data/**/*.tfrecord
+!tests/data/**/*.db
