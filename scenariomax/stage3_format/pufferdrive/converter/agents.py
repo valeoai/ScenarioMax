@@ -17,7 +17,6 @@ def convert_dynamic_agents(
     road_map_elements: dict,
     min_route_valid_points: int = 0,
     route_check_timestep: int = 0,
-    max_routes: int = 10,
 ) -> list[dict]:
     """
     Convert dynamic agents from unified format to Puffer format.
@@ -27,7 +26,6 @@ def convert_dynamic_agents(
         road_map_elements: Dict of static map elements (for reference)
         min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
         route_check_timestep: Timestep at which agent must be valid for route computation (default: 0)
-        max_routes: Number of route paths to generate per agent (default: 10)
 
     Returns:
         List of dynamic agent dictionaries in Puffer format
@@ -75,7 +73,6 @@ def convert_dynamic_agents(
                 road_map_elements,
                 lane_data,
                 min_route_valid_points,
-                max_routes,
                 route_check_timestep,
             )
         else:
@@ -125,36 +122,31 @@ def _compute_routes(
     road_map_elements: dict,
     lane_data: tuple,
     min_route_valid_points: int = 0,
-    max_routes: int = 10,
     route_check_timestep: int = 0,
 ) -> list:
     """
-    Compute routes an agent follows based on ground truth trajectory.
+    Compute route an agent follows based on ground truth trajectory.
 
-    Routes are lists of lane center IDs that:
-    1. Cover the ground truth trajectory
-    2. Extend beyond the trajectory using lane connectivity
-    3. Explore multiple possible paths through exit lanes
+    Route is a list of lane center IDs that covers the ground truth trajectory
+    and extends beyond using greedy lane selection.
 
     Args:
         agent_data: Tuple of (agent_id, position, heading, valid, length, width)
         road_map_elements: Dict of static map elements (for reference)
         lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths)
         min_route_valid_points: Minimum valid trajectory points required (0 = no filtering)
-        max_routes: Number of route paths to generate (default: 10)
         route_check_timestep: Timestep to check if agent is offroad (default: 0)
 
     Returns:
-        List of route paths, where each path is a list of lane IDs
+        List containing single route, where route is a list of lane IDs
     """
-    # Compute routes using the new route computation algorithm
-    # Returns list of route paths: [[lane1, lane2, ...], [lane1, lane3, ...], ...]
+    # Compute single route using greedy algorithm
+    # Returns list with one route: [[lane1, lane2, ...]]
     route_paths = routes.compute_agent_route(
         agent_data=agent_data,
         static_map_elements=road_map_elements,
         lane_data=lane_data,
         min_route_valid_points=min_route_valid_points,
-        max_routes=max_routes,
         route_check_timestep=route_check_timestep,
     )
 

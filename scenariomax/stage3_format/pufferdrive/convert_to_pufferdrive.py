@@ -18,7 +18,6 @@ def convert(
     polyline_reduction_threshold: float = 0.1,
     min_route_valid_points: int = 0,
     route_check_timestep: int = 0,
-    max_routes: int = 10,
 ) -> dict:
     """
     Convert a UnifiedScenario to Puffer format.
@@ -29,7 +28,6 @@ def convert(
                                        If 0.0 (default), no simplification is applied.
         min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
         route_check_timestep: Timestep at which agent must be valid for route computation (default: 0)
-        max_routes: Number of route paths to generate per agent (default: 10)
 
     Returns:
         Dictionary in Puffer format with dynamic_agents, road_map_elements,
@@ -61,7 +59,6 @@ def convert(
         unified_scenario["static_map_elements"],
         min_route_valid_points=min_route_valid_points,
         route_check_timestep=route_check_timestep,
-        max_routes=max_routes,
     )
 
     # Convert dynamic map elements to traffic_control_elements

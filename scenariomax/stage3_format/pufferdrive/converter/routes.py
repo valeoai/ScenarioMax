@@ -2,34 +2,30 @@
 Compute agent routes for Puffer format.
 
 Routes are lists of lane center IDs that cover the ground truth trajectory
-and explore different possible paths through the road network.
+by selecting the best root lane and greedily extending it.
 
 Algorithm Overview:
 ------------------
-The route computation uses a 3-step graph-based approach:
+The route computation uses a 3-step approach:
 
-1. Validation: Check if agent has sufficient trajectory points and is on lanes (not parked)
-2. Root Lane Selection: Find the current lane using sample trajectory points
-3. Graph Building: Build full reachability graph from root lane (no pruning)
-4. Path Extraction: Enumerate all paths, score each using geometric distance to GT trajectory
-
-Multiple route paths are generated to represent different possible paths through
-exit lanes (e.g., at highway interchanges or intersections).
+1. Root Lane Candidates: Find 1-3 candidate root lanes using sample trajectory points
+   - Only candidates with score >= ROOT_LANE_MIN_SCORE are considered
+   - Sorted by score (alignment + distance)
+2. Greedy Extension: For each candidate, iteratively pick exit lane that best covers trajectory
+   - Stop when no valid exits OR max length reached
+3. Best Route Selection: Score all candidate routes and return the best one
 
 Geometric Scoring:
 -----------------
-Each route path is scored by:
+Each candidate route is scored by:
 1. Concatenating lane polylines into a single route polyline
 2. Computing distance from each GT trajectory point to the route polyline
 3. Calculating coverage (% of trajectory within LANE_WIDTH_THRESHOLD)
 4. Calculating distance_score (1 / (1 + avg_distance) for covered points)
 5. Final score = coverage × distance_score
 
-Routes are ranked by score (higher is better), with an optional heading alignment
-filter to reject routes where the agent travels in the wrong direction.
+Routes with heading misalignment (agent traveling wrong direction) are rejected.
 """
-
-from collections import deque
 
 import numpy as np
 
@@ -42,17 +38,16 @@ logger = logger_utils.get_logger(__name__)
 
 # Constants for route computation
 # Physical thresholds
-LANE_WIDTH_THRESHOLD = 4.0  # Meters - maximum distance from lane center to consider agent "on lane"
+LANE_WIDTH_THRESHOLD = 6.0  # Meters - maximum distance from lane center to consider agent "on lane"
 ALIGNMENT_THRESHOLD = 0.3  # Cosine similarity threshold for direction alignment
 # Value of 0.3 corresponds to ~72.5° angle deviation (arccos(0.3) ≈ 72.5°)
 # Allows moderate heading mismatch while filtering out wrong-way or perpendicular lanes
 # Range: [-1, 1] where 1 = perfect alignment, 0 = perpendicular, -1 = opposite direction
 
 # Algorithm parameters
-MAX_GRAPH_DEPTH = 10  # Maximum depth when building reachability graph from root lane
-ROOT_LANE_POINTS = 3  # Number of initial trajectory points used to determine current lane
 MAX_PATH_LENGTH = 10  # Maximum number of lanes per route path
-MAX_ROUTES = 10  # Maximum number of route paths to generate per agent
+MAX_ROOT_CANDIDATES = 3  # Maximum number of root lane candidates to try
+ROOT_LANE_MIN_SCORE = 0.3  # Minimum score for root lane candidate to be considered
 
 # Root lane selection weights
 # These weights are used only for finding the initial root lane (current lane)
@@ -78,29 +73,25 @@ def compute_agent_route(
     static_map_elements: dict,
     lane_data: tuple,
     min_route_valid_points: int = 0,
-    max_routes: int = 10,
     route_check_timestep: int = 0,
 ) -> list[list[int]]:
     """
-    Compute routes (lists of lane IDs) for an agent based on ground truth trajectory.
+    Compute single route (list of lane IDs) for an agent based on ground truth trajectory.
 
     Algorithm:
-    1. Find root lane using sample trajectory points
-    2. Build full reachability graph from root (no pruning)
-    3. Enumerate all paths and score each using geometric distance to GT trajectory
-
-    Multiple route paths are generated to explore different exit lane possibilities.
+    1. Find 1-3 root lane candidates using sample trajectory points
+    2. For each candidate, greedily extend route by picking best exit lane
+    3. Score each complete route and return the best one
 
     Args:
         agent_data: Tuple of (agent_id, position, heading, valid, length, width)
         static_map_elements: Dict of static map elements (lanes, boundaries, etc.)
         lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths)
         min_route_valid_points: Minimum valid trajectory points required (0 = no filtering)
-        max_routes: Maximum number of route paths to generate (default: 10)
         route_check_timestep: Timestep to check if agent is offroad (default: 0)
 
     Returns:
-        List of routes, where each route is a list of lane center IDs
+        List containing single best route, where route is a list of lane center IDs
     """
     agent_id, agent_trajectory, agent_heading, agent_valid, agent_length, agent_width = agent_data
 
@@ -136,24 +127,35 @@ def compute_agent_route(
         logger.debug(f"{agent_str}: Off-road at timestep {route_check_timestep}")
         return []
 
-    # Step 1: Find current lane (root)
-    root_lane = _find_root_lane(valid_trajectory, valid_heading, lane_data)
+    # Step 1: Find 1-3 root lane candidates
+    root_candidates = _find_root_lane_candidates(valid_trajectory, valid_heading, lane_data)
 
-    if not root_lane:
+    if not root_candidates:
         logger.debug(f"{agent_str}: No current lane found")
         return []
 
-    # Step 2: Build reachability graph from root lane (no pruning)
-    graph = _build_graph(root_lane, static_map_elements)
+    # Step 2: For each candidate, compute route and score it
+    best_route = None
+    best_score = 0.0
 
-    if not graph:
-        logger.debug(f"{agent_str}: No reachable lanes from root {root_lane}")
-        return [[root_lane]]
+    for root_lane, root_score in root_candidates:
+        # Compute greedy route from this root
+        candidate_route = _compute_route(root_lane, static_map_elements, lane_data, valid_trajectory, valid_heading)
 
-    # Step 3: Extract top N paths using geometric GT coverage metric
-    routes = extract_top_n_paths(graph, root_lane, lane_data, valid_trajectory, valid_heading, n=max_routes)
+        # Score the complete route
+        route_score = _score_route_geometric(candidate_route, lane_data, valid_trajectory, valid_heading)
 
-    return routes
+        # Update best if this is better
+        if route_score > best_score:
+            best_score = route_score
+            best_route = candidate_route
+
+    # Return best route
+    if best_route is None:
+        logger.debug(f"{agent_str}: No valid route found from candidates")
+        return []
+
+    return [best_route]
 
 
 def extract_lane_centers(static_map_elements: dict) -> tuple[list, np.ndarray, dict, np.ndarray]:
@@ -374,150 +376,100 @@ def _score_route_geometric(
     return final_score
 
 
-def _build_graph(
+def _compute_route(
     root_lane: int | str,
     static_map_elements: dict,
-    max_depth: int = MAX_GRAPH_DEPTH,
-) -> dict[int | str, list]:
+    lane_data: tuple,
+    trajectory: np.ndarray,
+    heading: np.ndarray,
+    max_length: int = MAX_PATH_LENGTH,
+) -> list:
     """
-    Build complete reachability graph from root lane with no pruning.
+    Compute single route using greedy lane selection.
 
-    Explores all exit lanes up to max_depth using BFS with cycle detection.
-    Returns adjacency list representation of the lane connectivity graph.
+    Starting from root lane, iteratively picks exit lane that best covers
+    trajectory when added to route. Stops when no valid exits OR max length reached.
 
     Args:
         root_lane: Starting lane ID
         static_map_elements: Dict of static map elements
-        max_depth: Maximum depth to explore from root
-
-    Returns:
-        Dict mapping lane_id to list of exit lane IDs: {lane_id: [exit_ids]}
-    """
-    graph = {}
-    visited_lanes = {root_lane}
-    queue = deque([(root_lane, 0)])
-
-    while queue:
-        lane_id, depth = queue.popleft()
-
-        if depth >= max_depth:
-            continue
-
-        if lane_id not in static_map_elements:
-            continue
-
-        exit_lanes = static_map_elements[lane_id]["exit_lanes"]
-        graph[lane_id] = []
-
-        for exit_id in exit_lanes:
-            if exit_id in static_map_elements:
-                graph[lane_id].append(exit_id)
-
-                if exit_id not in visited_lanes:
-                    visited_lanes.add(exit_id)
-                    queue.append((exit_id, depth + 1))
-
-    return graph
-
-
-def _gt_coverage_metric(
-    path: list,
-    lane_data: tuple,
-    trajectory: np.ndarray,
-    heading: np.ndarray,
-) -> float:
-    """
-    Calculate GT coverage score for a path using geometric distance.
-
-    Delegates to _score_route_geometric which computes coverage × distance_score.
-
-    Args:
-        path: List of lane IDs
-        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata)
-        trajectory: Valid trajectory points (M, 2/3)
-        heading: Valid headings (M,)
-
-    Returns:
-        Score value where higher is better (0.0 if route doesn't match trajectory)
-    """
-    return _score_route_geometric(path, lane_data, trajectory, heading)
-
-
-def extract_top_n_paths(
-    graph: dict,
-    root_lane: int | str,
-    lane_data: tuple,
-    trajectory: np.ndarray,
-    heading: np.ndarray,
-    n: int = MAX_ROUTES,
-    max_length: int = MAX_PATH_LENGTH,
-) -> list[list]:
-    """
-    Extract top N paths from graph using geometric GT coverage metric.
-
-    Enumerates paths via DFS with per-path cycle detection, scores each
-    path using geometric distance from trajectory to route polyline, and
-    returns the best N paths.
-
-    Args:
-        graph: Adjacency list from _build_graph
-        root_lane: Starting lane ID
         lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths)
         trajectory: Valid trajectory points (M, 2/3)
         heading: Valid headings (M,)
-        n: Number of top paths to return
-        max_length: Maximum path length in number of lanes
+        max_length: Maximum number of lanes in route (default: 10)
 
     Returns:
-        List of N best paths, each path is a list of lane IDs
+        List of lane IDs forming the route
     """
-    complete_paths = []
-    queue = [([root_lane], {root_lane})]
+    route = [root_lane]
+    current_lane = root_lane
+    visited = {root_lane}
 
-    while queue:
-        path, visited = queue.pop(0)
-        current = path[-1]
+    for _ in range(max_length - 1):  # Already have root lane
+        # Get exit lanes
+        if current_lane not in static_map_elements:
+            break
 
-        if len(path) >= max_length or current not in graph:
-            complete_paths.append(path)
-            continue
+        exit_lanes = static_map_elements[current_lane]["exit_lanes"]
 
-        exits = graph.get(current, [])
-        if not exits:
-            complete_paths.append(path)
-            continue
+        if not exit_lanes:
+            break
 
-        has_valid_exit = False
-        for exit_id in exits:
-            if exit_id not in visited:
-                has_valid_exit = True
-                queue.append((path + [exit_id], visited | {exit_id}))
+        # Find best exit lane
+        best_exit = None
+        best_score = 0.0
 
-        if not has_valid_exit:
-            complete_paths.append(path)
+        for exit_id in exit_lanes:
+            # Skip already visited lanes (cycle prevention)
+            if exit_id in visited:
+                continue
 
-    if not complete_paths:
-        return [[root_lane]]
+            # Skip lanes not in map
+            if exit_id not in static_map_elements:
+                continue
 
-    scored_paths = [(_gt_coverage_metric(path, lane_data, trajectory, heading), path) for path in complete_paths]
-    scored_paths.sort(reverse=True)
+            # Score candidate route with this exit
+            candidate_route = route + [exit_id]
+            score = _score_route_geometric(candidate_route, lane_data, trajectory, heading)
 
-    return [path for _, path in scored_paths[:n]]
+            if score > best_score:
+                best_score = score
+                best_exit = exit_id
+
+        # Stop if no valid exit found
+        if best_exit is None:
+            break
+
+        # Add best exit to route
+        route.append(best_exit)
+        visited.add(best_exit)
+        current_lane = best_exit
+
+    return route
 
 
-def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tuple) -> int | None:
+def _find_root_lane_candidates(
+    trajectory: np.ndarray,
+    heading: np.ndarray,
+    lane_data: tuple,
+    max_candidates: int = MAX_ROOT_CANDIDATES,
+    min_score: float = ROOT_LANE_MIN_SCORE,
+) -> list[tuple[int | str, float]]:
     """
-    Find the current lane where the agent is located using strategic sample points.
+    Find top 1-3 root lane candidates using strategic sample points.
 
     Uses 1st, 3rd, 5th, middle, and last valid points for better direction estimation.
+    Returns candidates with score >= min_score, sorted by score (best first).
 
     Args:
         trajectory: Valid trajectory points (M, 2/3)
         heading: Valid headings (M,)
-        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths) from extract_lane_centers
+        lane_data: Tuple of (lane_ids, lane_polylines, lane_metadata, lane_lengths)
+        max_candidates: Maximum number of candidates to return (default: 3)
+        min_score: Minimum score threshold for candidates (default: 0.3)
 
     Returns:
-        The current lane ID (root lane) or None if no lane is found
+        List of (lane_id, score) tuples, sorted by score descending (1-3 candidates)
     """
     lane_ids, lane_polylines, _, _ = lane_data
 
@@ -566,12 +518,30 @@ def _find_root_lane(trajectory: np.ndarray, heading: np.ndarray, lane_data: tupl
     scores_all_masked = np.where(valid_mask, scores_all, 0.0)
     lane_total_scores = np.sum(scores_all_masked, axis=0)
 
-    # Find the lane with the highest total score
-    if np.max(lane_total_scores) == 0:
-        return None
+    # Find lanes with score >= min_score
+    valid_lane_indices = np.where(lane_total_scores >= min_score)[0]
 
-    best_lane_idx = np.argmax(lane_total_scores)
-    return lane_ids[best_lane_idx]
+    if len(valid_lane_indices) == 0:
+        return []
+
+    # Get scores for valid lanes
+    valid_scores = lane_total_scores[valid_lane_indices]
+
+    # Sort by score (descending)
+    sorted_indices = np.argsort(valid_scores)[::-1]
+
+    # Take top max_candidates
+    top_indices = sorted_indices[:max_candidates]
+
+    # Build result list
+    candidates = []
+    for idx in top_indices:
+        lane_idx = valid_lane_indices[idx]
+        lane_id = lane_ids[lane_idx]
+        score = lane_total_scores[lane_idx]
+        candidates.append((lane_id, score))
+
+    return candidates
 
 
 def _points_to_polylines_distance(
@@ -719,12 +689,17 @@ def _is_offroad_at_init(
     length = lengths[route_check_timestep]
     width = widths[route_check_timestep]
 
+    # Is stationary vehicle?
+    valid_positions = positions[valid]
+    has_movement = np.any(np.linalg.norm(valid_positions[-1] - valid_positions[0], axis=0) > 0.5)
+    OFFROAD_DISTANCE_THRESHOLD_LOCAL = OFFROAD_DISTANCE_THRESHOLD if has_movement else 1.0
+
     # Check 1: Distance from closest lane > threshold
     if len(lane_polylines) > 0:
         position_2d = position.reshape(1, 2)
         min_distances = _points_to_polylines_distance(position_2d, lane_polylines, return_indices=False)
         min_dist_to_lane = np.min(min_distances)
-        if min_dist_to_lane > OFFROAD_DISTANCE_THRESHOLD:
+        if min_dist_to_lane > OFFROAD_DISTANCE_THRESHOLD_LOCAL:
             return True
 
     # Check 2: Bounding box crosses road edges
