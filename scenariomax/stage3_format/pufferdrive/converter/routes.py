@@ -115,7 +115,7 @@ def compute_agent_route(
         )
         return []
 
-    lane_ids, lane_polylines, _, _ = lane_data
+    lane_ids, lane_polylines, _, lane_lengths = lane_data
 
     if len(lane_ids) == 0:
         logger.debug(f"{agent_str}: No lane centers found in map")
@@ -123,7 +123,13 @@ def compute_agent_route(
 
     # Check if agent is offroad at check timestep (bbox crosses road edge OR >5m from lane)
     offroad_agent_data = (agent_id, agent_trajectory, agent_heading, agent_valid, agent_length, agent_width)
-    if _is_offroad_at_init(offroad_agent_data, static_map_elements, lane_polylines, route_check_timestep):
+    if _is_offroad_at_init(
+        offroad_agent_data,
+        static_map_elements,
+        lane_polylines,
+        lane_lengths,
+        route_check_timestep,
+    ):
         logger.debug(f"{agent_str}: Off-road at timestep {route_check_timestep}")
         return []
 
@@ -139,11 +145,14 @@ def compute_agent_route(
     best_score = 0.0
 
     for root_lane, root_score in root_candidates:
-        # Compute greedy route from this root
-        candidate_route = _compute_route(root_lane, static_map_elements, lane_data, valid_trajectory, valid_heading)
-
-        # Score the complete route
-        route_score = _score_route_geometric(candidate_route, lane_data, valid_trajectory, valid_heading)
+        # Compute greedy route from this root (returns route and final score)
+        candidate_route, route_score = _compute_route(
+            root_lane,
+            static_map_elements,
+            lane_data,
+            valid_trajectory,
+            valid_heading,
+        )
 
         # Update best if this is better
         if route_score > best_score:
@@ -267,7 +276,8 @@ def _check_route_heading_alignment(
         route_polyline: Route polyline (N_points, 2)
         trajectory: Trajectory points (M, 2)
         heading: Trajectory headings (M,)
-        min_alignment_ratio: Minimum fraction of trajectory samples that must align with route direction (default 0.7 = 70% of points)
+        min_alignment_ratio: Minimum fraction of samples that must align with route direction
+            (default 0.7 = 70% of points)
 
     Returns:
         True if route direction generally matches trajectory heading, False otherwise
@@ -283,9 +293,14 @@ def _check_route_heading_alignment(
 
     # Reshape route polyline for distance calculation
     route_polyline_batch = route_polyline[np.newaxis, :, :]  # (1, N_points, 2)
+    route_lengths = np.array([len(route_polyline)], dtype=np.int32)
 
     # Find closest route segment for each sample
-    _, closest_indices = _points_to_polylines_distance(sample_positions, route_polyline_batch)
+    _, closest_indices = _points_to_polylines_distance(
+        sample_positions,
+        route_polyline_batch,
+        polyline_lengths=route_lengths,
+    )
     closest_indices = closest_indices[:, 0]  # Squeeze to 1D
 
     # Get route directions at closest segments
@@ -336,7 +351,16 @@ def _score_route_geometric(
     # Build route polyline
     route_polyline = _build_route_polyline(route_path, lane_data)
 
-    if len(route_polyline) < 2:
+    return _score_route_polyline(route_polyline, trajectory_2d, heading)
+
+
+def _score_route_polyline(
+    route_polyline: np.ndarray,
+    trajectory_2d: np.ndarray,
+    heading: np.ndarray,
+) -> float:
+    """Score a pre-built route polyline against a trajectory."""
+    if len(route_polyline) < 2 or len(trajectory_2d) == 0:
         return 0.0
 
     # Apply heading alignment filter
@@ -345,9 +369,15 @@ def _score_route_geometric(
 
     # Reshape route polyline for distance calculation
     route_polyline_batch = route_polyline[np.newaxis, :, :]  # (1, N_points, 2)
+    route_lengths = np.array([len(route_polyline)], dtype=np.int32)
 
     # Compute distances from all trajectory points to route polyline
-    min_distances = _points_to_polylines_distance(trajectory_2d, route_polyline_batch, return_indices=False)
+    min_distances = _points_to_polylines_distance(
+        trajectory_2d,
+        route_polyline_batch,
+        polyline_lengths=route_lengths,
+        return_indices=False,
+    )
     min_distances = min_distances[:, 0]  # Squeeze to 1D (N_traj_points,)
 
     # Compute coverage: percentage of trajectory within threshold
@@ -365,7 +395,7 @@ def _score_route_geometric(
     if not np.isfinite(avg_distance):
         raise ValueError(
             f"Invalid route distance: {avg_distance}. "
-            "This may indicate degenerate polylines (zero-length segments) in the route."
+            "This may indicate degenerate polylines (zero-length segments) in the route.",
         )
 
     distance_score = 1.0 / (1.0 + avg_distance)
@@ -383,7 +413,7 @@ def _compute_route(
     trajectory: np.ndarray,
     heading: np.ndarray,
     max_length: int = MAX_PATH_LENGTH,
-) -> list:
+) -> tuple[list, float]:
     """
     Compute single route using greedy lane selection.
 
@@ -399,11 +429,36 @@ def _compute_route(
         max_length: Maximum number of lanes in route (default: 10)
 
     Returns:
-        List of lane IDs forming the route
+        Tuple containing:
+        - List of lane IDs forming the route
+        - Final geometric score for the constructed route
     """
+    lane_ids, lane_polylines, _, lane_lengths = lane_data
+    lane_id_to_idx = {lane_id: idx for idx, lane_id in enumerate(lane_ids)}
+
+    def _lane_polyline(lane_id: int | str) -> np.ndarray:
+        idx = lane_id_to_idx.get(lane_id)
+        if idx is None:
+            return np.zeros((0, 2), dtype=np.float32)
+        length = lane_lengths[idx]
+        return lane_polylines[idx, :length, :]
+
+    def _append_polyline(base: np.ndarray, addition: np.ndarray) -> np.ndarray:
+        if len(addition) == 0:
+            return base.copy()
+        if len(base) == 0:
+            return addition.copy()
+        if np.allclose(base[-1], addition[0]):
+            return np.vstack((base, addition[1:]))
+        return np.vstack((base, addition))
+
+    trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
+
     route = [root_lane]
     current_lane = root_lane
     visited = {root_lane}
+    route_polyline = _lane_polyline(root_lane)
+    current_score = _score_route_polyline(route_polyline, trajectory_2d, heading)
 
     for _ in range(max_length - 1):  # Already have root lane
         # Get exit lanes
@@ -417,7 +472,8 @@ def _compute_route(
 
         # Find best exit lane
         best_exit = None
-        best_score = 0.0
+        best_exit_score = 0.0
+        best_exit_polyline = None
 
         for exit_id in exit_lanes:
             # Skip already visited lanes (cycle prevention)
@@ -429,23 +485,30 @@ def _compute_route(
                 continue
 
             # Score candidate route with this exit
-            candidate_route = route + [exit_id]
-            score = _score_route_geometric(candidate_route, lane_data, trajectory, heading)
+            exit_polyline = _lane_polyline(exit_id)
+            if len(exit_polyline) == 0:
+                continue
 
-            if score > best_score:
-                best_score = score
+            candidate_polyline = _append_polyline(route_polyline, exit_polyline)
+            score = _score_route_polyline(candidate_polyline, trajectory_2d, heading)
+
+            if score > best_exit_score:
+                best_exit_score = score
                 best_exit = exit_id
+                best_exit_polyline = candidate_polyline
 
         # Stop if no valid exit found
-        if best_exit is None:
+        if best_exit is None or best_exit_polyline is None:
             break
 
         # Add best exit to route
         route.append(best_exit)
         visited.add(best_exit)
         current_lane = best_exit
+        route_polyline = best_exit_polyline
+        current_score = best_exit_score
 
-    return route
+    return route, current_score
 
 
 def _find_root_lane_candidates(
@@ -471,7 +534,7 @@ def _find_root_lane_candidates(
     Returns:
         List of (lane_id, score) tuples, sorted by score descending (1-3 candidates)
     """
-    lane_ids, lane_polylines, _, _ = lane_data
+    lane_ids, lane_polylines, _, lane_lengths = lane_data
 
     # Extract 2D positions
     trajectory_2d = trajectory[:, :2] if trajectory.shape[1] == 3 else trajectory
@@ -481,19 +544,42 @@ def _find_root_lane_candidates(
     sample_indices = []
 
     # Add indices if they exist and are unique
-    for idx in [0, 2, 4, traj_len // 2, -1]:
+    for idx in [0, 2, 4, 6]:
         # Normalize negative indices
         actual_idx = idx if idx >= 0 else traj_len + idx
         if 0 <= actual_idx < traj_len and actual_idx not in sample_indices:
             sample_indices.append(actual_idx)
 
+    if not sample_indices:
+        return []
+
     # Extract sample points and headings
     first_points = trajectory_2d[sample_indices]
     first_headings = heading[sample_indices]
 
+    # Deduplicate nearly identical points to avoid overweighting stationary agents
+    if len(first_points) > 1:
+        keep_mask = np.ones(len(first_points), dtype=bool)
+        unique_points = []
+        for idx, point in enumerate(first_points):
+            if any(np.linalg.norm(point - seen) < 1e-3 for seen in unique_points):
+                keep_mask[idx] = False
+            else:
+                unique_points.append(point)
+
+        first_points = first_points[keep_mask]
+        first_headings = first_headings[keep_mask]
+
+    if len(first_points) == 0:
+        return []
+
     # Vectorized: Calculate distances and directions for all points at once
     # Shape: (num_points, num_lanes)
-    min_distances_all, closest_indices_all = _points_to_polylines_distance(first_points, lane_polylines)
+    min_distances_all, closest_indices_all = _points_to_polylines_distance(
+        first_points,
+        lane_polylines,
+        polyline_lengths=lane_lengths,
+    )
 
     # Shape: (num_points, num_lanes, 2)
     lane_directions_all = _get_lane_directions_at_indices_batch(lane_polylines, closest_indices_all)
@@ -547,8 +633,9 @@ def _find_root_lane_candidates(
 def _points_to_polylines_distance(
     points: np.ndarray,
     polylines: np.ndarray,
+    polyline_lengths: np.ndarray | None = None,
     return_indices: bool = True,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
     Vectorized calculation of minimum distances and closest segment indices from multiple points to polylines.
 
@@ -557,6 +644,7 @@ def _points_to_polylines_distance(
     Args:
         points: 2D points array (N_points, 2)
         polylines: Array of polylines (N_lanes, max_points, 2) - padded with [0, 0]
+        polyline_lengths: Optional array with the number of valid points per polyline (N_lanes,)
 
     Returns:
         Tuple of:
@@ -567,16 +655,28 @@ def _points_to_polylines_distance(
     n_lanes = len(polylines)
     max_segments = polylines.shape[1] - 1
 
+    if n_points == 0 or n_lanes == 0 or max_segments <= 0:
+        empty_distances = np.zeros((n_points, n_lanes), dtype=np.float32)
+        empty_indices = np.zeros((n_points, n_lanes), dtype=np.int32)
+        return (empty_distances, empty_indices) if return_indices else empty_distances
+
     # Extract segment endpoints: (N_lanes, max_segments, 2)
     seg_starts = polylines[:, :-1, :]
     seg_ends = polylines[:, 1:, :]
 
-    # Detect valid segments (exclude padding and transitions to padding)
-    # A segment is valid only if BOTH endpoints are non-zero
-    # Shape: (N_lanes, max_segments)
-    starts_nonzero = np.any(seg_starts != 0, axis=2)  # True if start point is not [0, 0]
-    ends_nonzero = np.any(seg_ends != 0, axis=2)  # True if end point is not [0, 0]
-    valid_segs = starts_nonzero & ends_nonzero  # Both must be non-zero
+    if polyline_lengths is not None:
+        polyline_lengths = np.asarray(polyline_lengths, dtype=np.int32)
+        if len(polyline_lengths) != n_lanes:
+            raise ValueError("polyline_lengths must match number of polylines")
+        seg_counts = np.clip(polyline_lengths - 1, 0, max_segments)
+        segment_indices = np.arange(max_segments)[np.newaxis, :]
+        valid_segs = segment_indices < seg_counts[:, np.newaxis]
+    else:
+        # Detect valid segments (exclude padding and transitions to padding)
+        # A segment is valid only if BOTH endpoints are non-zero
+        starts_nonzero = np.any(seg_starts != 0, axis=2)
+        ends_nonzero = np.any(seg_ends != 0, axis=2)
+        valid_segs = starts_nonzero & ends_nonzero
 
     # Compute segment vectors and squared lengths
     seg_vecs = seg_ends - seg_starts  # (N_lanes, max_segments, 2)
@@ -587,10 +687,10 @@ def _points_to_polylines_distance(
     seg_lens_sq_safe = seg_lens_sq + 1e-10  # Avoid division by zero
 
     # Reshape for broadcasting
-    seg_starts_bc = seg_starts.reshape(1, n_lanes, max_segments, 2)  # (1, N_lanes, max_segments, 2)
-    seg_vecs_bc = seg_vecs.reshape(1, n_lanes, max_segments, 2)  # (1, N_lanes, max_segments, 2)
-    seg_lens_sq_bc = seg_lens_sq_safe.reshape(1, n_lanes, max_segments)  # (1, N_lanes, max_segments)
-    valid_segs_bc = valid_segs.reshape(1, n_lanes, max_segments)  # (1, N_lanes, max_segments)
+    seg_starts_bc = seg_starts.reshape(1, n_lanes, max_segments, 2)
+    seg_vecs_bc = seg_vecs.reshape(1, n_lanes, max_segments, 2)
+    seg_lens_sq_bc = seg_lens_sq_safe.reshape(1, n_lanes, max_segments)
+    valid_segs_bc = valid_segs.reshape(1, n_lanes, max_segments)
     points_bc = points.reshape(n_points, 1, 1, 2)  # (N_points, 1, 1, 2)
 
     # Project each point onto each segment
@@ -663,6 +763,7 @@ def _is_offroad_at_init(
     agent_data: tuple,
     static_map_elements: dict,
     lane_polylines: np.ndarray,
+    lane_lengths: np.ndarray,
     route_check_timestep: int = 0,
 ) -> bool:
     """
@@ -674,6 +775,7 @@ def _is_offroad_at_init(
         agent_data: Tuple of (agent_id, position, heading, valid, length, width)
         static_map_elements: Dict of static map elements (lanes, boundaries, road edges)
         lane_polylines: Precomputed lane polylines array (N_lanes, max_points, 2)
+        lane_lengths: Number of valid points in each lane polyline (N_lanes,)
         route_check_timestep: Timestep to check (default: 0)
 
     Returns:
@@ -691,13 +793,22 @@ def _is_offroad_at_init(
 
     # Is stationary vehicle?
     valid_positions = positions[valid]
-    has_movement = np.any(np.linalg.norm(valid_positions[-1] - valid_positions[0], axis=0) > 0.5)
+    if len(valid_positions) >= 2:
+        displacement = np.linalg.norm(valid_positions[-1, :2] - valid_positions[0, :2])
+    else:
+        displacement = 0.0
+    has_movement = displacement > 0.5
     OFFROAD_DISTANCE_THRESHOLD_LOCAL = OFFROAD_DISTANCE_THRESHOLD if has_movement else 1.0
 
     # Check 1: Distance from closest lane > threshold
     if len(lane_polylines) > 0:
         position_2d = position.reshape(1, 2)
-        min_distances = _points_to_polylines_distance(position_2d, lane_polylines, return_indices=False)
+        min_distances = _points_to_polylines_distance(
+            position_2d,
+            lane_polylines,
+            polyline_lengths=lane_lengths,
+            return_indices=False,
+        )
         min_dist_to_lane = np.min(min_distances)
         if min_dist_to_lane > OFFROAD_DISTANCE_THRESHOLD_LOCAL:
             return True
@@ -811,9 +922,17 @@ def _segments_intersect(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray, p4: np.n
 
     denom = cross_2d(d1, d2)
 
-    # Parallel segments (no intersection)
+    # Parallel segments
     if abs(denom) < 1e-10:
-        return False
+        # Check if collinear
+        if abs(cross_2d(p3 - p1, d1)) > 1e-10 or abs(cross_2d(p4 - p1, d1)) > 1e-10:
+            return False
+
+        # Collinear overlap test using bounding boxes
+        def ranges_overlap(a1, a2, b1, b2) -> bool:
+            return max(min(a1, a2), min(b1, b2)) <= min(max(a1, a2), max(b1, b2)) + 1e-10
+
+        return ranges_overlap(p1[0], p2[0], p3[0], p4[0]) and ranges_overlap(p1[1], p2[1], p3[1], p4[1])
 
     t = cross_2d(p3 - p1, d2) / denom
     u = cross_2d(p3 - p1, d1) / denom
