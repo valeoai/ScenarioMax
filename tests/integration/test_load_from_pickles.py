@@ -5,10 +5,6 @@ Tests common workflow of starting Stage 2 or Stage 3 from pre-converted pickles.
 This was previously completely untested but is a very common use case.
 """
 
-from pathlib import Path
-
-import pytest
-
 from scenariomax.core import pipeline
 
 

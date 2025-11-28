@@ -22,7 +22,6 @@ import logging
 import os
 import sys
 import warnings
-from pathlib import Path
 
 import hydra
 from omegaconf import DictConfig, OmegaConf

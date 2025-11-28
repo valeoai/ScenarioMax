@@ -67,7 +67,6 @@ ROAD_EDGE_TYPES = {
 }
 
 
-
 def compute_agent_route(
     agent_data: tuple,
     static_map_elements: dict,
@@ -820,12 +819,14 @@ def _is_offroad_at_init(
     half_width = width / 2
 
     # Corners in local frame (front-right, front-left, rear-left, rear-right)
-    local_corners = np.array([
-        [half_len, -half_width],
-        [half_len, half_width],
-        [-half_len, half_width],
-        [-half_len, -half_width],
-    ])
+    local_corners = np.array(
+        [
+            [half_len, -half_width],
+            [half_len, half_width],
+            [-half_len, half_width],
+            [-half_len, -half_width],
+        ],
+    )
 
     # Rotate and translate to global frame
     rotation_matrix = np.array([[cos_h, -sin_h], [sin_h, cos_h]])

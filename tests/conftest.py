@@ -105,11 +105,13 @@ def sample_unified_scenario() -> UnifiedScenario:
     scenario = UnifiedScenario(scenario_id="test_scenario_001", dataset_name="test")
 
     # Add metadata
-    scenario["metadata"].update({
-        "scenario_length": 10,
-        "sdc_index": 0,
-        "timesteps": np.arange(10, dtype=np.float32),
-    })
+    scenario["metadata"].update(
+        {
+            "scenario_length": 10,
+            "sdc_index": 0,
+            "timesteps": np.arange(10, dtype=np.float32),
+        },
+    )
 
     # Add one agent
     scenario["dynamic_agents"][1] = {
@@ -193,7 +195,7 @@ def nuplan_unified_pickles(tmp_path_factory, nuplan_test_data, setup_nuplan_env)
             "path": str(nuplan_test_data),
             "metadata_dir": str(nuplan_test_data),
             "version": "v1.1",
-        }
+        },
     }
 
     pipeline.convert_raw_to_unified(
@@ -239,7 +241,7 @@ def traffic_lights_config() -> dict:
     return {
         "traffic_lights": {
             "generate_missing": True,
-        }
+        },
     }
 
 
@@ -249,7 +251,7 @@ def polyline_interpolation_config() -> dict:
     return {
         "polyline_interpolation": {
             "max_segment_length": 1.0,
-        }
+        },
     }
 
 
@@ -260,7 +262,7 @@ def validation_config() -> dict:
         "validation": {
             "validation_level": 2,
             "strict_keys": False,
-        }
+        },
     }
 
 

@@ -5,7 +5,6 @@ Tests individual processor functions and configurations without full pipeline in
 """
 
 import numpy as np
-import pytest
 
 from scenariomax.core import types
 from scenariomax.core.unified_scenario import UnifiedScenario
@@ -217,11 +216,13 @@ class TestTrafficLightsProcessor:
     def test_traffic_lights_with_no_lanes(self):
         """Test traffic lights processor with scenario having no lanes."""
         scenario = UnifiedScenario(scenario_id="test_no_lanes", dataset_name="test")
-        scenario["metadata"].update({
-            "scenario_length": 10,
-            "sdc_index": 0,
-            "timesteps": np.arange(10, dtype=np.float32),
-        })
+        scenario["metadata"].update(
+            {
+                "scenario_length": 10,
+                "sdc_index": 0,
+                "timesteps": np.arange(10, dtype=np.float32),
+            },
+        )
 
         # Add only agents, no map elements
         scenario["dynamic_agents"][1] = {

@@ -150,17 +150,17 @@ def puffer_dict_to_binary(puffer_dict: dict, map_id: int = 0) -> bytes:  # noqa:
         if len(length) != trajectory_length:
             raise ValueError(
                 f"Agent {agent_id}: length array has {len(length)} elements "
-                f"but trajectory has {trajectory_length} timesteps"
+                f"but trajectory has {trajectory_length} timesteps",
             )
         if len(width) != trajectory_length:
             raise ValueError(
                 f"Agent {agent_id}: width array has {len(width)} elements "
-                f"but trajectory has {trajectory_length} timesteps"
+                f"but trajectory has {trajectory_length} timesteps",
             )
         if len(height) != trajectory_length:
             raise ValueError(
                 f"Agent {agent_id}: height array has {len(height)} elements "
-                f"but trajectory has {trajectory_length} timesteps"
+                f"but trajectory has {trajectory_length} timesteps",
             )
 
         for j in range(trajectory_length):

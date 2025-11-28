@@ -546,7 +546,7 @@ def _postprocess_pufferdrive(output_path: str) -> None:
     # Convert each JSON to binary with map_id
     for idx, json_file in enumerate(all_json_files):
         # Load JSON
-        with open(json_file, "r") as f:
+        with open(json_file) as f:
             puffer_dict = json.load(f)
 
         # Convert to binary with map_id

@@ -4,8 +4,6 @@ Integration tests for Stage 1: Convert raw datasets to unified format.
 Tests conversion from Waymo TFRecords and nuPlan DBs to unified pickle format.
 """
 
-from pathlib import Path
-
 import pytest
 
 from scenariomax.core import pipeline, utils
@@ -317,7 +315,7 @@ class TestConversionErrors:
             "waymo": {
                 "path": "/nonexistent/path",
                 "version": "v1.2",
-            }
+            },
         }
 
         with pytest.raises((FileNotFoundError, ValueError)):

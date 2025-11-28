@@ -5,8 +5,6 @@ Tests applying validation, traffic_lights, and polyline_interpolation processors
 to unified pickles.
 """
 
-from pathlib import Path
-
 import pytest
 
 from scenariomax.core import pipeline, utils
@@ -178,7 +176,7 @@ class TestProcessorConfigs:
             "validation": {
                 "validation_level": 3,  # Strict level
                 "strict_keys": True,
-            }
+            },
         }
 
         stats = pipeline.process_unified_scenarios(
@@ -197,7 +195,7 @@ class TestProcessorConfigs:
         config = {
             "polyline_interpolation": {
                 "max_segment_length": 0.5,  # Very dense interpolation
-            }
+            },
         }
 
         stats = pipeline.process_unified_scenarios(
