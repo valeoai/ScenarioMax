@@ -660,7 +660,7 @@ def visualize_scenarios(
                 scatter_map=scatter_map,
                 field_radius=field_radius,
             )
-        elif output_format == "video":
+        elif output_format == "mp4":
             output_file = os.path.join(output_path, f"{scenario_id}.mp4")
             # Render video
             render_scenario_video(

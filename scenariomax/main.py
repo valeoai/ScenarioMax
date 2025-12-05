@@ -61,7 +61,6 @@ def validate_config(cfg: DictConfig) -> None:
             [
                 cfg.datasets.waymo.path,
                 cfg.datasets.nuplan.path,
-                cfg.datasets.nuscenes.path,
                 cfg.datasets.openscenes.path,
             ],
         )
