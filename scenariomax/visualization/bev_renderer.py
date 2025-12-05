@@ -75,9 +75,9 @@ def render_scenario_bev(
     ax.set_xlabel("X (meters)", fontsize=12)
     ax.set_ylabel("Y (meters)", fontsize=12)
 
-    metadata = scenario.get("metadata", {})
-    scenario_id = metadata.get("scenario_id", "unknown")
-    dataset_name = metadata.get("dataset_name", "unknown")
+    metadata = scenario["metadata"]
+    scenario_id = metadata["scenario_id"]
+    dataset_name = metadata["dataset_name"]
 
     ax.set_title(
         f"BEV Visualization - {dataset_name}\nScenario: {scenario_id}",
@@ -131,22 +131,22 @@ def _render_static_map(ax: plt.Axes, scenario: dict[str, Any], scatter_map: bool
         scenario: Unified scenario dict
         scatter_map: If True, render road map elements as scattered points instead of lines
     """
-    static_map = scenario.get("static_map_elements", {})
+    static_map = scenario["static_map_elements"]
 
     for _, element in static_map.items():
-        element_type = element.get("type", 0)
+        element_type = element["type"]
         if types.is_road_map_element(element_type):
-            polyline = np.array(element.get("polyline", []))
+            polyline = np.array(element["polyline"])
             x, y = polyline[:, 0], polyline[:, 1]
         elif element_type in [types.CROSSWALK, types.SPEED_BUMP, types.DRIVEWAY]:
-            polygon = np.array(element.get("polygon", []))
+            polygon = np.array(element["polygon"])
             x, y = polygon[:, 0], polygon[:, 1]
             # Close the polygon if not already closed
             if not np.array_equal(polygon[0], polygon[-1]):
                 x = np.append(x, x[0])
                 y = np.append(y, y[0])
         elif element_type == types.STOP_SIGN:
-            position = np.array(element.get("position", []))
+            position = np.array(element["position"])
             x, y = position[0], position[1]
         else:
             logger.warning(f"Unknown static map element type: {element_type}")
@@ -196,7 +196,7 @@ def _render_traffic_lights(ax: plt.Axes, scenario: dict[str, Any], timestep: int
         scenario: Unified scenario dict
         timestep: Current timestep for traffic light state
     """
-    dynamic_map = scenario.get("dynamic_map_elements", {})
+    dynamic_map = scenario["dynamic_map_elements"]
 
     TRAFFIC_LIGHT_COLORS = {
         types.TRAFFIC_LIGHT_UNKNOWN: "#808080",
@@ -211,20 +211,20 @@ def _render_traffic_lights(ax: plt.Axes, scenario: dict[str, Any], timestep: int
     }
 
     for _, element in dynamic_map.items():
-        element_type = element.get("type", 0)
+        element_type = element["type"]
 
         # Only render traffic lights (type 1)
         if element_type != types.TRAFFIC_LIGHT:
             continue
 
-        position = element.get("position", [])
+        position = element["position"]
         if len(position) < 2:
             continue
 
         x, y = position[0], position[1]
 
         # Get traffic light state at current timestep
-        traffic_light_states = element.get("states", {})
+        traffic_light_states = element["states"]
 
         # Bounds check for timestep
         state = traffic_light_states[timestep] if timestep < len(traffic_light_states) else types.TRAFFIC_LIGHT_UNKNOWN
@@ -253,24 +253,24 @@ def _render_dynamic_agents(
     show_trajectory: bool,
 ) -> None:
     """Render dynamic agents (vehicles, pedestrians, cyclists)."""
-    dynamic_agents = scenario.get("dynamic_agents", {})
-    sdc_index = scenario.get("metadata", {}).get("sdc_index")
+    dynamic_agents = scenario["dynamic_agents"]
+    sdc_index = scenario["metadata"]["sdc_index"]
 
-    for agent_id, agent in dynamic_agents.items():
-        agent_type = agent.get("type", 1)
-        states = agent.get("states", {})
+    for i, (agent_id, agent) in enumerate(dynamic_agents.items()):
+        agent_type = agent["type"]
+        states = agent["states"]
 
         # Get states for current timestep
-        positions = states.get("position", [])
-        headings = states.get("heading", [])
-        valids = states.get("valid", [])
-        lengths = states.get("length", [4.5])
-        widths = states.get("width", [2.0])
+        positions = states["position"]
+        headings = states["heading"]
+        valids = states["valid"]
+        lengths = states["length"]
+        widths = states["width"]
 
-        if timestep >= len(positions) or not valids[timestep]:
+        if not valids[timestep]:
             continue
 
-        is_ego = agent_id == sdc_index
+        is_ego = i == sdc_index
         color = COLORS["ego"] if is_ego else COLORS.get(AGENT_TYPE_NAMES.get(agent_type, "vehicle"), "#000000")
 
         # Current position and heading
@@ -397,8 +397,8 @@ def _add_legend(ax: plt.Axes, scenario: dict[str, Any]) -> None:
     ]
 
     # Add traffic light legend if present
-    dynamic_map = scenario.get("dynamic_map_elements", {})
-    has_traffic_lights = any(elem.get("type") == types.TRAFFIC_LIGHT for elem in dynamic_map.values())
+    dynamic_map = scenario["dynamic_map_elements"]
+    has_traffic_lights = any(elem["type"] == types.TRAFFIC_LIGHT for elem in dynamic_map.values())
     if has_traffic_lights:
         legend_elements.extend(
             [
@@ -438,10 +438,10 @@ def render_scenario_video(
     """
     import matplotlib.animation as animation
 
-    metadata = scenario.get("metadata", {})
-    scenario_id = metadata.get("scenario_id", "unknown")
-    dataset_name = metadata.get("dataset_name", "unknown")
-    scenario_length = metadata.get("scenario_length", 0)
+    metadata = scenario["metadata"]
+    scenario_id = metadata["scenario_id"]
+    dataset_name = metadata["dataset_name"]
+    scenario_length = metadata["scenario_length"]
 
     if scenario_length == 0:
         logger.warning(f"Scenario {scenario_id} has no timesteps, skipping video")
@@ -530,22 +530,22 @@ def _calculate_scenario_bounds(scenario: dict[str, Any]) -> tuple[float, float, 
     y_coords = []
 
     # Get bounds from static map
-    static_map = scenario.get("static_map_elements", {})
+    static_map = scenario["static_map_elements"]
     for element in static_map.values():
-        element_type = element.get("type", 0)
+        element_type = element["type"]
         if types.is_road_map_element(element_type):
-            polyline = element.get("polyline", [])
+            polyline = element["polyline"]
             if len(polyline) > 0:
                 polyline = np.array(polyline)
                 x_coords.extend(polyline[:, 0])
                 y_coords.extend(polyline[:, 1])
 
     # Get bounds from dynamic agents
-    dynamic_agents = scenario.get("dynamic_agents", {})
+    dynamic_agents = scenario["dynamic_agents"]
     for agent in dynamic_agents.values():
-        states = agent.get("states", {})
-        positions = states.get("position", [])
-        valids = states.get("valid", [])
+        states = agent["states"]
+        positions = states["position"]
+        valids = states["valid"]
         for pos, valid in zip(positions, valids):
             if valid:
                 x_coords.append(pos[0])
@@ -568,19 +568,19 @@ def _get_ego_position(scenario: dict[str, Any], timestep: int) -> tuple | None:
     Returns:
         (x, y) position tuple, or None if ego not found
     """
-    metadata = scenario.get("metadata", {})
-    sdc_index = metadata.get("sdc_index")
+    metadata = scenario["metadata"]
+    sdc_index = metadata["sdc_index"]
 
     if sdc_index is None:
         return None
 
-    dynamic_agents = scenario.get("dynamic_agents", {})
+    dynamic_agents = scenario["dynamic_agents"]
 
     if sdc_index in dynamic_agents:
         agent = dynamic_agents[sdc_index]
-        states = agent.get("states", {})
-        positions = np.array(states.get("position", []))
-        valid = np.array(states.get("valid", []))
+        states = agent["states"]
+        positions = np.array(states["position"])
+        valid = np.array(states["valid"])
 
         if timestep < len(positions) and valid[timestep]:
             return (positions[timestep][0], positions[timestep][1])
@@ -645,7 +645,7 @@ def visualize_scenarios(
             scenario = pickle.load(f)
 
         # Generate output filename
-        scenario_id = scenario.get("metadata", {}).get("scenario_id", os.path.basename(pickle_file))
+        scenario_id = scenario["metadata"]["scenario_id"]
         # Clean scenario_id for filename
         scenario_id = scenario_id.replace("/", "_").replace("\\", "_")
 

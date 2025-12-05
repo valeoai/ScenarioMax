@@ -114,7 +114,7 @@ formatting:
 # Visualization Configuration
 # ═══════════════════════════════════════════════════════════════════════════
 visualization:
-  format: "png"                        # Output format: png | mp4
+  format: "mp4"                        # Output format: png | mp4
   fps: 10                              # Frames per second for video output
   max_scenarios: null                  # Maximum number of scenarios to visualize (null = all)
   show_trajectory: true                # Show agent trajectory history
