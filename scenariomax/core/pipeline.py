@@ -448,7 +448,7 @@ def format_unified_to_target(
     if format == FORMAT_WAYMAX:
         _postprocess_waymax(output_path, format_config)
     elif format == FORMAT_GPUDRIVE:
-        logger.info("✅ JSON files ready")
+        _postprocess_gpudrive(output_path)
     elif format == FORMAT_PUFFERDRIVE:
         _postprocess_pufferdrive(output_path)
 
@@ -569,6 +569,23 @@ def _postprocess_pufferdrive(output_path: str) -> None:
                 logger.info(f"  Removed empty directory: {subdir}")
 
     logger.info(f"✅ Puffer binaries ready: map_000.bin to map_{len(all_json_files) - 1:03d}.bin")
+
+
+def _postprocess_gpudrive(output_path: str) -> None:
+    """Merge JSON files from dataset subdirectories into output root."""
+    from scenariomax.stage3_format.gpudrive.postprocess import merge_multiple_datasets
+
+    logger.info("🔄 Merging GPUDrive JSON files")
+
+    # Collect all subdirectories
+    subdirs = [d for d in os.listdir(output_path) if os.path.isdir(os.path.join(output_path, d))]
+
+    if subdirs:
+        logger.info(f"Found {len(subdirs)} dataset subdirectories: {subdirs}")
+        merge_multiple_datasets(output_path)
+        logger.info("✅ JSON files merged to output root")
+    else:
+        logger.info("No subdirectories found - JSON files already in output root")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -701,7 +718,7 @@ def run_all_pipeline(
     if format == FORMAT_WAYMAX:
         _postprocess_waymax(output_path, format_config)
     elif format == FORMAT_GPUDRIVE:
-        logger.info("✅ JSON files ready")  # No postprocessing needed for JSON format
+        _postprocess_gpudrive(output_path)
     elif format == FORMAT_PUFFERDRIVE:
         _postprocess_pufferdrive(output_path)
 

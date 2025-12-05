@@ -138,20 +138,20 @@ Stage 3: Format   - Unified pickles → Target format (waymax/gpudrive/pufferdri
 
 ```bash
 # Stage 1: Convert raw dataset to unified format
-scenariomax command=convert datasets.waymo.path=/data/waymo paths.output_dir=/output execution.num_workers=16
+scenariomax command=convert datasets.waymo.path=/data/waymo output_dir=/output execution.num_workers=16
 
 # Stage 2: Process unified scenarios (add traffic lights, validate, etc.)
-scenariomax command=process paths.input_dir=/output/unified paths.output_dir=/output \
+scenariomax command=process input_dir=/output/unified output_dir=/output \
             processing.processors=[validation,traffic_lights]
 
 # Stage 3: Convert to target format
-scenariomax command=format paths.input_dir=/output/processed paths.output_dir=/output/waymax \
+scenariomax command=format input_dir=/output/processed output_dir=/output/waymax \
             formatting.target_format=waymax formatting.waymax.num_shards=10
-scenariomax command=format paths.input_dir=/output/processed paths.output_dir=/output/gpudrive formatting.target_format=gpudrive
-scenariomax command=format paths.input_dir=/output/processed paths.output_dir=/output/pufferdrive formatting.target_format=pufferdrive
+scenariomax command=format input_dir=/output/processed output_dir=/output/gpudrive formatting.target_format=gpudrive
+scenariomax command=format input_dir=/output/processed output_dir=/output/pufferdrive formatting.target_format=pufferdrive
 
 # Or run all 3 stages at once (file-by-file streaming, memory efficient)
-scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+scenariomax command=pipeline datasets.waymo.path=/data/waymo output_dir=/output \
             formatting.target_format=waymax execution.num_workers=16
 
 # Visualize unified scenarios (BEV PNG/video)
@@ -164,7 +164,7 @@ scenariomax command=viz input_path=/output/unified output.dst=/output/viz
 
 ```bash
 # Convert Waymo to Waymax format (file-by-file streaming)
-scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+scenariomax command=pipeline datasets.waymo.path=/data/waymo output_dir=/output \
             formatting.target_format=waymax execution.num_workers=8
 ```
 
@@ -173,7 +173,7 @@ scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/o
 ```bash
 # Combine Waymo and nuPlan datasets into single output
 scenariomax command=pipeline datasets.waymo.path=/data/waymo datasets.nuplan.path=/data/nuplan \
-            paths.output_dir=/output formatting.target_format=waymax formatting.waymax.num_shards=10 \
+            output_dir=/output formatting.target_format=waymax formatting.waymax.num_shards=10 \
             execution.num_workers=16
 ```
 
@@ -181,7 +181,7 @@ scenariomax command=pipeline datasets.waymo.path=/data/waymo datasets.nuplan.pat
 
 ```bash
 # Add traffic light processing with strict validation
-scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+scenariomax command=pipeline datasets.waymo.path=/data/waymo output_dir=/output \
             formatting.target_format=waymax processing.processors=[validation,traffic_lights] \
             processing.validation.mode=strict execution.num_workers=8
 ```
@@ -190,7 +190,7 @@ scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/o
 
 ```bash
 # Convert to PufferDrive simulator format
-scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+scenariomax command=pipeline datasets.waymo.path=/data/waymo output_dir=/output \
             formatting.target_format=pufferdrive execution.num_workers=16
 ```
 
@@ -207,14 +207,14 @@ scenariomax command=process input_path=/output/unified output.dst=/tmp/validatio
 
 ```bash
 # Stage 1: Convert to unified format
-scenariomax command=convert datasets.waymo.path=/data/waymo paths.output_dir=/output \
+scenariomax command=convert datasets.waymo.path=/data/waymo output_dir=/output \
             execution.num_workers=8
 
 # Visualize scenarios
-scenariomax command=viz paths.input_dir=/output/unified paths.output_dir=/viz
+scenariomax command=viz input_dir=/output/unified output_dir=/viz
 
 # Stage 3: Convert to target format
-scenariomax command=format paths.input_dir=/output/unified paths.output_dir=/output formatting.target_format=gpudrive \
+scenariomax command=format input_dir=/output/unified output_dir=/output formatting.target_format=gpudrive \
             execution.num_workers=8
 ```
 
@@ -235,14 +235,14 @@ scenariomax command=format paths.input_dir=/output/unified paths.output_dir=/out
 scenariomax command=pipeline \
   datasets.nuscenes.path=/data/nuscenes \
   datasets.nuscenes.split=v1.0-trainval \
-  paths.output_dir=/output \
+  output_dir=/output \
   formatting.target_format=waymax
 
 # nuPlan with direct log parsing
 scenariomax command=pipeline \
   datasets.nuplan.path=/data/nuplan \
   datasets.nuplan.direct_from_logs=true \
-  paths.output_dir=/output \
+  output_dir=/output \
   formatting.target_format=gpudrive
 ```
 
@@ -283,7 +283,7 @@ formatting.target_format=pufferdrive
 
 ```bash
 # Automatically created during Stage 1 (convert)
-scenariomax command=convert datasets.waymo.path=/data/waymo paths.output_dir=/output
+scenariomax command=convert datasets.waymo.path=/data/waymo output_dir=/output
 ```
 
 - **Use Case**: Intermediate format for custom processing and debugging
@@ -445,11 +445,11 @@ Fast, lightweight validation that checks data structure:
 
 ```bash
 # During processing
-scenariomax command=process paths.input_dir=/output/unified paths.output_dir=/output \
+scenariomax command=process input_dir=/output/unified output_dir=/output \
             processing.processors=[validation]
 
 # In full pipeline
-scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+scenariomax command=pipeline datasets.waymo.path=/data/waymo output_dir=/output \
             formatting.target_format=waymax processing.processors=[validation]
 ```
 
@@ -465,12 +465,12 @@ Comprehensive validation that checks physical consistency:
 
 ```bash
 # During processing with strict validation config
-scenariomax command=process paths.input_dir=/output/unified paths.output_dir=/output \
+scenariomax command=process input_dir=/output/unified output_dir=/output \
             processing.processors=[validation] \
             processing.validation.mode=strict processing.validation.level=3
 
 # In full pipeline
-scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+scenariomax command=pipeline datasets.waymo.path=/data/waymo output_dir=/output \
             formatting.target_format=waymax processing.processors=[validation] \
             processing.validation.mode=strict
 ```
@@ -512,14 +512,14 @@ except ValidationError as e:
 # Enable checkpointing
 scenariomax command=pipeline \
   datasets.waymo.path=/data/waymo \
-  paths.output_dir=/output \
+  output_dir=/output \
   formatting.target_format=waymax \
   execution.checkpoint=true
 
 # If interrupted, re-run the same command - it will resume from checkpoint
 scenariomax command=pipeline \
   datasets.waymo.path=/data/waymo \
-  paths.output_dir=/output \
+  output_dir=/output \
   formatting.target_format=waymax \
   execution.checkpoint=true
 ```
@@ -530,7 +530,7 @@ scenariomax command=pipeline \
 # Generate validation_report.json with error statistics
 scenariomax command=pipeline \
   datasets.waymo.path=/data/waymo \
-  paths.output_dir=/output \
+  output_dir=/output \
   formatting.target_format=waymax \
   processing.validation_report=true
 ```
@@ -547,13 +547,13 @@ scenariomax command=pipeline \
 # Enabled by default - checks if sufficient disk space available
 scenariomax command=pipeline \
   datasets.waymo.path=/data/waymo \
-  paths.output_dir=/output \
+  output_dir=/output \
   formatting.target_format=waymax
 
 # Skip disk check if needed (not recommended for production)
 scenariomax command=pipeline \
   datasets.waymo.path=/data/waymo \
-  paths.output_dir=/output \
+  output_dir=/output \
   formatting.target_format=waymax \
   execution.no_disk_check=true
 ```
@@ -564,7 +564,7 @@ Control shuffle seed for deterministic TFRecord shuffling:
 
 ```bash
 export SCENARIOMAX_SHUFFLE_SEED=42
-scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output formatting.target_format=waymax
+scenariomax command=pipeline datasets.waymo.path=/data/waymo output_dir=/output formatting.target_format=waymax
 ```
 ```
 

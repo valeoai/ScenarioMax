@@ -9,18 +9,18 @@
 #
 # Usage Examples:
 #   # Stage 1: Convert raw → unified
-#   scenariomax command=convert datasets.waymo.path=/data/waymo paths.output_dir=/output
+#   scenariomax command=convert datasets.waymo.path=/data/waymo output_dir=/output
 #
 #   # Stage 2: Process unified scenarios
-#   scenariomax command=process paths.input_dir=/output/unified paths.output_dir=/processed \
+#   scenariomax command=process input_dir=/output/unified output_dir=/processed \
 #               processing.processors=[validation,traffic_lights]
 #
 #   # Stage 3: Format unified → target
-#   scenariomax command=format paths.input_dir=/output/unified paths.output_dir=/final \
+#   scenariomax command=format input_dir=/output/unified output_dir=/final \
 #               formatting.target_format=pufferdrive
 #
 #   # Full pipeline (all 3 stages)
-#   scenariomax command=pipeline datasets.waymo.path=/data/waymo paths.output_dir=/output \
+#   scenariomax command=pipeline datasets.waymo.path=/data/waymo output_dir=/output \
 #               formatting.target_format=pufferdrive processing.processors=[validation]
 #
 # ═══════════════════════════════════════════════════════════════════════════
@@ -47,13 +47,6 @@ datasets:
 
   nuplan:
     path: null           # Path to nuPlan dataset
-    split: null          # Dataset split: train | val | test
-    num_files: null
-    direct_from_logs: false  # Parse directly from logs (slower but more flexible)
-
-  nuscenes:
-    path: null           # Path to nuScenes dataset (WIP)
-    split: "v1.0-trainval"  # Dataset split
     num_files: null
 
   openscenes:
@@ -65,10 +58,8 @@ datasets:
 # ═══════════════════════════════════════════════════════════════════════════
 # Input/Output Paths
 # ═══════════════════════════════════════════════════════════════════════════
-paths:
-  input_dir: null        # Input directory for process/format/viz commands
-                         # If null, will attempt to use output_dir/unified
-  output_dir: "./output" # Output directory for all commands
+input_dir: null        # Input directory for process/format/viz commands (defaults to output_dir/unified)
+output_dir: "./output" # Output directory for all commands
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -112,13 +103,11 @@ formatting:
     num_shards: 1                      # Number of output .tfrecord files
     base_filename: "training"          # Filename prefix for sharded files
 
-  gpudrive:
-    pretty_print: false                # Human-readable JSON formatting
+  gpudrive: {}                           # No config options currently
 
   pufferdrive:
     min_route_valid_points: 0          # Min valid trajectory points for route computation (0 = no filtering)
     route_check_timestep: 0            # Timestep where agent must be valid for route computation
-    max_routes: 10                     # Number of route paths to generate per agent
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -138,7 +127,7 @@ visualization:
 # Execution Configuration
 # ═══════════════════════════════════════════════════════════════════════════
 execution:
-  num_workers: 8                       # Number of parallel workers
+  num_workers: 1                       # Number of parallel workers
   batch_size: 1                        # Files per worker batch
                                        # Higher = better DB reuse (nuPlan)
                                        # Lower = better load balancing (Waymo)

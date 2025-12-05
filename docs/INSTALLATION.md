@@ -124,7 +124,7 @@ Download Waymo Open Motion Dataset from: https://waymo.com/open/download/
 source .venv/bin/activate
 scenariomax command=convert \
     datasets.waymo.path=/data/waymo/training \
-    paths.output_dir=/output/waymo
+    output_dir=/output/waymo
 ```
 
 ---
@@ -176,7 +176,7 @@ $NUPLAN_MAPS_ROOT/
 source .venv/bin/activate
 scenariomax command=convert \
     datasets.nuplan.path=$NUPLAN_DATA_ROOT/nuplan-v1.1 \
-    paths.output_dir=/output/nuplan
+    output_dir=/output/nuplan
 ```
 
 ---

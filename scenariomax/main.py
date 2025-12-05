@@ -75,8 +75,8 @@ def validate_config(cfg: DictConfig) -> None:
 
     if command in ["process", "format", "viz"]:  # noqa: SIM102
         # These commands require input_dir to read scenarios from
-        if not cfg.paths.input_dir:
-            raise ValueError(f"Command '{command}' requires paths.input_dir to be set")
+        if not cfg.input_dir:
+            raise ValueError(f"Command '{command}' requires input_dir to be set")
 
     # OpenScenes requires metadata_dir
     if cfg.datasets.openscenes.path and not cfg.datasets.openscenes.metadata_dir:
@@ -95,8 +95,6 @@ def build_datasets_dict(cfg: DictConfig) -> dict[str, dict]:
         datasets["waymo"] = OmegaConf.to_container(cfg.datasets.waymo, resolve=True)
     if cfg.datasets.nuplan.path:
         datasets["nuplan"] = OmegaConf.to_container(cfg.datasets.nuplan, resolve=True)
-    if cfg.datasets.nuscenes.path:
-        datasets["nuscenes"] = OmegaConf.to_container(cfg.datasets.nuscenes, resolve=True)
     if cfg.datasets.openscenes.path:
         datasets["openscenes"] = OmegaConf.to_container(cfg.datasets.openscenes, resolve=True)
 
@@ -111,7 +109,7 @@ def handle_convert_command(cfg: DictConfig):
 
     stats = pipeline.convert_raw_to_unified(
         datasets=datasets,
-        output_path=cfg.paths.output_dir,
+        output_path=cfg.output_dir,
         num_workers=cfg.execution.num_workers,
         batch_size=cfg.execution.batch_size,
     )
@@ -146,8 +144,8 @@ def handle_process_command(cfg: DictConfig):
         processor_configs = None
 
     # Determine input and output paths
-    input_path = cfg.paths.input_dir if cfg.paths.input_dir else f"{cfg.paths.output_dir}/unified"
-    output_path = cfg.paths.output_dir
+    input_path = cfg.input_dir if cfg.input_dir else f"{cfg.output_dir}/unified"
+    output_path = cfg.output_dir
 
     stats = pipeline.process_unified_scenarios(
         input_path=input_path,
@@ -155,6 +153,7 @@ def handle_process_command(cfg: DictConfig):
         processors=processors,
         processor_configs=processor_configs,
         num_workers=cfg.execution.num_workers,
+        batch_size=cfg.execution.batch_size,
     )
 
     logger.info(f"✅ Stage 2 completed: {stats}")
@@ -166,8 +165,8 @@ def handle_format_command(cfg: DictConfig):
     logger.info("🚀 Executing command: format (Stage 3)")
 
     # Determine input and output paths
-    input_path = cfg.paths.input_dir if cfg.paths.input_dir else f"{cfg.paths.output_dir}/unified"
-    output_path = cfg.paths.output_dir
+    input_path = cfg.input_dir if cfg.input_dir else f"{cfg.output_dir}/unified"
+    output_path = cfg.output_dir
 
     # Handle optional processors during formatting
     processors = None
@@ -203,8 +202,8 @@ def handle_viz_command(cfg: DictConfig):
     from scenariomax.visualization import visualize_scenarios
 
     # Determine input and output paths
-    input_path = cfg.paths.input_dir if cfg.paths.input_dir else f"{cfg.paths.output_dir}/unified"
-    output_path = cfg.paths.output_dir
+    input_path = cfg.input_dir if cfg.input_dir else f"{cfg.output_dir}/unified"
+    output_path = cfg.output_dir
 
     stats = visualize_scenarios(
         input_path=input_path,
@@ -240,7 +239,7 @@ def handle_pipeline_command(cfg: DictConfig):
 
     stats = pipeline.run_all_pipeline(
         datasets=datasets,
-        output_path=cfg.paths.output_dir,
+        output_path=cfg.output_dir,
         format=target_format,
         processors=processors,
         processor_configs=processor_configs,
