@@ -26,13 +26,14 @@ def calculate_area(p1: dict, p2: dict, p3: dict) -> float:
     return 0.5 * abs((p1["x"] - p3["x"]) * (p2["y"] - p1["y"]) - (p1["x"] - p2["x"]) * (p3["y"] - p1["y"]))
 
 
-def simplify_polyline(geometry: list[dict], polyline_reduction_threshold: float) -> list[dict]:
+def simplify_polyline(geometry: list[dict], polyline_reduction_threshold: float, dist_threshold: float) -> list[dict]:
     """
     Simplify the given polyline using a method inspired by Visvalingham-Whyatt, optimized for Python.
 
     Args:
         geometry: List of point dicts with 'x' and 'y' keys
         polyline_reduction_threshold: Minimum triangle area threshold for point removal
+        dist_threshold: Maximum distance between endpoints to consider for simplification
 
     Returns:
         Simplified polyline (list of point dicts)
@@ -64,8 +65,11 @@ def simplify_polyline(geometry: list[dict], polyline_reduction_threshold: float)
             point2 = geometry[k_1]
             point3 = geometry[k_2]
             area = calculate_area(point1, point2, point3)
+            dist = np.linalg.norm(
+                np.array([point1["x"], point1["y"]]) - np.array([point3["x"], point3["y"]]),
+            )
 
-            if area < polyline_reduction_threshold:
+            if area < polyline_reduction_threshold and dist < dist_threshold:
                 skip[k_1] = True
                 skip_changed = True
                 k = k_2
@@ -75,7 +79,11 @@ def simplify_polyline(geometry: list[dict], polyline_reduction_threshold: float)
     return [geometry[i] for i in range(num_points) if not skip[i]]
 
 
-def convert_road_map_elements(static_map_elements: dict, polyline_reduction_threshold: float = 0.1) -> list[dict]:
+def convert_road_map_elements(
+    static_map_elements: dict,
+    polyline_reduction_threshold: float = 0.1,
+    dist_threshold: float = 10.0,
+) -> list[dict]:
     """
     Convert static map elements from unified format to Puffer road_map_elements.
 
@@ -83,6 +91,7 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
         static_map_elements: Dict of static map elements from unified scenario
         polyline_reduction_threshold: Minimum triangle area threshold for polyline simplification.
                                        If 0.0 (default), no simplification is applied.
+        dist_threshold: Maximum distance between endpoints to consider for simplification
 
     Returns:
         List of road map element dictionaries in Puffer format
@@ -115,7 +124,7 @@ def convert_road_map_elements(static_map_elements: dict, polyline_reduction_thre
             if polyline_reduction_threshold > 0.0 and len(xyz) >= 3:
                 # Convert numpy array to list of dicts for simplification algorithm
                 geometry = [{"x": float(p[0]), "y": float(p[1]), "z": float(p[2])} for p in xyz]
-                simplified_geometry = simplify_polyline(geometry, polyline_reduction_threshold)
+                simplified_geometry = simplify_polyline(geometry, polyline_reduction_threshold, dist_threshold)
                 # Convert back to numpy array
                 xyz = np.array([[p["x"], p["y"], p["z"]] for p in simplified_geometry])
         else:

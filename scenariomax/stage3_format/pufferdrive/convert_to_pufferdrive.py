@@ -16,6 +16,7 @@ logger = logger_utils.get_logger(__name__)
 def convert(
     unified_scenario,
     polyline_reduction_threshold: float = 0.1,
+    dist_threshold: float = 10.0,
     min_route_valid_points: int = 0,
     route_check_timestep: int = 0,
 ) -> dict:
@@ -26,6 +27,7 @@ def convert(
         unified_scenario: UnifiedScenario object or dict
         polyline_reduction_threshold: Minimum triangle area threshold for roadgraph polyline simplification.
                                        If 0.0 (default), no simplification is applied.
+        dist_threshold: Maximum distance between endpoints to consider for simplification
         min_route_valid_points: Minimum valid trajectory points required for route computation (0 = no filtering)
         route_check_timestep: Timestep at which agent must be valid for route computation (default: 0)
 
@@ -51,6 +53,7 @@ def convert(
     road_map_elements = roadgraph.convert_road_map_elements(
         unified_scenario["static_map_elements"],
         polyline_reduction_threshold,
+        dist_threshold,
     )
 
     # Convert dynamic agents
