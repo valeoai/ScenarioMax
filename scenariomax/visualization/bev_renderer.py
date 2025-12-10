@@ -574,16 +574,15 @@ def _get_ego_position(scenario: dict[str, Any], timestep: int) -> tuple | None:
     if sdc_index is None:
         return None
 
-    dynamic_agents = scenario["dynamic_agents"]
+    dynamic_agents_id = list(scenario["dynamic_agents"])
+    ego_id = dynamic_agents_id[sdc_index]
+    agent = scenario["dynamic_agents"][ego_id]
+    states = agent["states"]
+    positions = np.array(states["position"])
+    valid = np.array(states["valid"])
 
-    if sdc_index in dynamic_agents:
-        agent = dynamic_agents[sdc_index]
-        states = agent["states"]
-        positions = np.array(states["position"])
-        valid = np.array(states["valid"])
-
-        if timestep < len(positions) and valid[timestep]:
-            return (positions[timestep][0], positions[timestep][1])
+    if timestep < len(positions) and valid[timestep]:
+        return (positions[timestep][0], positions[timestep][1])
 
     return None
 
